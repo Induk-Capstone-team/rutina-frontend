@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "capstone-app",
-    "slug": "capstone-app",
+    "name": "rutina-frontend",
+    "slug": "rutina-frontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "capstoneapp",
+    "scheme": "rutinafrontend",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
