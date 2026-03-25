@@ -7,10 +7,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Link } from 'expo-router';
 
-///index.tsx 파일명을 건드릴 경우 routing이 꼬여서 오류 발생
-///그래서 파일명은 유지하면서 내부 이름만 수정해서 사용해야함
-///가장 첫번째인 타임 테이블 스크린
-export default function HomeScreen() {
+///두번째 화면인 일정 스크린
+export default function ScheduleScreen() {
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
