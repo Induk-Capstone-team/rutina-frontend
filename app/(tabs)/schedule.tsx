@@ -172,7 +172,6 @@ export default function ScheduleScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        ''
         {/* 헤더의 activeTab="right"로 오른쪽 점 활성화 */}
         <Header activeTab="right" />
         <ScrollView
