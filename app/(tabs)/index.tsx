@@ -1,23 +1,65 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const days = ['월', '화', '수', '목', '금', '토', '일'];
+import { Header } from "@/app/(tabs)/_header";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+const days = ["월", "화", "수", "목", "금", "토", "일"];
 
 const eventTypes = {
-  기상: { bg: '#FAEEEE', dot: '#E79A95', text: '#5D4645' },
-  운동: { bg: '#FDF4EC', dot: '#EFB996', text: '#675141' },
-  공부: { bg: '#F1F1FB', dot: '#9FA2D6', text: '#3E426F' },
-  명상: { bg: '#F1F7EE', dot: '#A8CD9B', text: '#4C5D44' },
-  저녁: { bg: '#FEF9EE', dot: '#E6CF8A', text: '#685A3F' },
+  기상: { bg: "#FAEEEE", dot: "#E79A95", text: "#5D4645" },
+  운동: { bg: "#FDF4EC", dot: "#EFB996", text: "#675141" },
+  공부: { bg: "#F1F1FB", dot: "#9FA2D6", text: "#3E426F" },
+  명상: { bg: "#F1F7EE", dot: "#A8CD9B", text: "#4C5D44" },
+  저녁: { bg: "#FEF9EE", dot: "#E6CF8A", text: "#685A3F" },
 };
 
 // Mock schedule demonstrating horizontal 10-minute precision blocks.
 const mockSchedule = [
-  { id: '1', title: '기상', startHour: 6, startMinute: 0, durationMinutes: 60, type: '기상' },
-  { id: '2', title: '운동', startHour: 7, startMinute: 0, durationMinutes: 30, type: '운동' }, // 7:00 ~ 7:30 (3 units)
-  { id: '3', title: '공부', startHour: 8, startMinute: 20, durationMinutes: 100, type: '공부' }, // 8:20 ~ 10:00 (spans 2 hours)
-  { id: '4', title: '명상', startHour: 12, startMinute: 10, durationMinutes: 40, type: '명상' }, // 12:10 ~ 12:50
-  { id: '5', title: '저녁', startHour: 19, startMinute: 0, durationMinutes: 60, type: '저녁' },
+  {
+    id: "1",
+    title: "기상",
+    startHour: 6,
+    startMinute: 0,
+    durationMinutes: 60,
+    type: "기상",
+  },
+  {
+    id: "2",
+    title: "운동",
+    startHour: 7,
+    startMinute: 0,
+    durationMinutes: 30,
+    type: "운동",
+  }, // 7:00 ~ 7:30 (3 units)
+  {
+    id: "3",
+    title: "공부",
+    startHour: 8,
+    startMinute: 20,
+    durationMinutes: 100,
+    type: "공부",
+  }, // 8:20 ~ 10:00 (spans 2 hours)
+  {
+    id: "4",
+    title: "명상",
+    startHour: 12,
+    startMinute: 10,
+    durationMinutes: 40,
+    type: "명상",
+  }, // 12:10 ~ 12:50
+  {
+    id: "5",
+    title: "저녁",
+    startHour: 19,
+    startMinute: 0,
+    durationMinutes: 60,
+    type: "저녁",
+  },
 ];
 
 export default function HomeScreen() {
@@ -30,7 +72,10 @@ export default function HomeScreen() {
   const endHour = 24;
   const hourHeight = 60; // Row height
 
-  const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
+  const hours = Array.from(
+    { length: endHour - startHour },
+    (_, i) => startHour + i,
+  );
   const columns = [0, 1, 2, 3, 4, 5]; // 6 columns for 60 mins -> 10 mins each
 
   const scrollViewRef = useRef<ScrollView>(null);
@@ -55,17 +100,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.logoText}>Rutia</Text>
-          <View style={styles.headerRight}>
-            <View style={[styles.dot, { backgroundColor: '#405886' }]} />
-            <View style={[styles.dot, { backgroundColor: '#E2E5EC' }]} />
-            <View style={styles.profileIcon}>
-              <Text style={styles.profileText}>나</Text>
-            </View>
-          </View>
-        </View>
+        <Header />
 
         {/* Main Card */}
         <View style={styles.mainCard}>
@@ -79,7 +114,12 @@ export default function HomeScreen() {
                   onPress={() => setSelectedDay(day)}
                   style={styles.dayButtonContainer}
                 >
-                  <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>
+                  <Text
+                    style={[
+                      styles.dayText,
+                      isSelected && styles.dayTextSelected,
+                    ]}
+                  >
                     {day}
                   </Text>
                   {isSelected && <View style={styles.activeDayIndicator} />}
@@ -89,12 +129,19 @@ export default function HomeScreen() {
           </View>
 
           {/* Timetable Grid */}
-          <ScrollView ref={scrollViewRef} style={styles.timetableContainer} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.timetableContainer}
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.timetableInner}>
               {/* Left Time Axis */}
               <View style={styles.timeAxis}>
                 {hours.map((hour) => (
-                  <View key={hour} style={[styles.timeLabelContainer, { height: hourHeight }]}>
+                  <View
+                    key={hour}
+                    style={[styles.timeLabelContainer, { height: hourHeight }]}
+                  >
                     <Text style={styles.timeLabel}>{hour}</Text>
                   </View>
                 ))}
@@ -103,7 +150,10 @@ export default function HomeScreen() {
               {/* Grid Area with rows being hours and columns being 10 mins */}
               <View style={styles.gridArea}>
                 {hours.map((hour) => (
-                  <View key={hour} style={[styles.hourRow, { height: hourHeight }]}>
+                  <View
+                    key={hour}
+                    style={[styles.hourRow, { height: hourHeight }]}
+                  >
                     {/* 6 vertical grid columns per hour row */}
                     {columns.map((col) => (
                       <View
@@ -117,7 +167,8 @@ export default function HomeScreen() {
 
                     {/* Events inside this hour row */}
                     {mockSchedule.map((event) => {
-                      const eventStart = event.startHour * 60 + event.startMinute;
+                      const eventStart =
+                        event.startHour * 60 + event.startMinute;
                       const eventEnd = eventStart + event.durationMinutes;
                       const hourStart = hour * 60;
                       const hourEnd = hourStart + 60;
@@ -137,7 +188,9 @@ export default function HomeScreen() {
                       const leftPercent = (startOffsetMin / 60) * 100;
                       const widthPercent = (durationInHour / 60) * 100;
 
-                      const typeStyles = eventTypes[event.type as keyof typeof eventTypes] || eventTypes['공부'];
+                      const typeStyles =
+                        eventTypes[event.type as keyof typeof eventTypes] ||
+                        eventTypes["공부"];
                       const isStartOfEvent = overlapStart === eventStart;
 
                       return (
@@ -154,7 +207,12 @@ export default function HomeScreen() {
                         >
                           {/* Only render text if this is the beginning of the event */}
                           {isStartOfEvent && (
-                            <Text style={[styles.eventTitle, { color: typeStyles.text }]}>
+                            <Text
+                              style={[
+                                styles.eventTitle,
+                                { color: typeStyles.text },
+                              ]}
+                            >
                               {event.title}
                             </Text>
                           )}
@@ -183,7 +241,12 @@ export default function HomeScreen() {
               const typeData = eventTypes[key as keyof typeof eventTypes];
               return (
                 <View key={key} style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: typeData.dot }]} />
+                  <View
+                    style={[
+                      styles.legendDot,
+                      { backgroundColor: typeData.dot },
+                    ]}
+                  />
                   <Text style={styles.legendText}>{key}</Text>
                 </View>
               );
@@ -198,7 +261,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F3F4F8',
+    backgroundColor: "#F3F4F8",
   },
   container: {
     flex: 1,
@@ -206,92 +269,55 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 2,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 8,
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#2A3C6B',
-    fontFamily: 'Avenir',
-    fontStyle: 'italic',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  profileIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#405886',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 6,
-  },
-  profileText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
+
   mainCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 30,
     paddingBottom: 24,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 12,
     elevation: 3,
   },
   daySelector: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     zIndex: 10,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 4,
   },
   dayButtonContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     width: 36,
   },
   dayText: {
     fontSize: 16,
-    color: '#B4B6C0',
-    fontWeight: '500',
+    color: "#B4B6C0",
+    fontWeight: "500",
     marginBottom: 8,
   },
   dayTextSelected: {
-    color: '#2A3C6B',
-    fontWeight: '700',
+    color: "#2A3C6B",
+    fontWeight: "700",
   },
   activeDayIndicator: {
     width: 24,
     height: 3,
-    backgroundColor: '#2A3C6B',
+    backgroundColor: "#2A3C6B",
     borderRadius: 2,
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
   },
   timetableContainer: {
@@ -299,7 +325,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   timetableInner: {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingHorizontal: 10,
   },
   timeAxis: {
@@ -307,61 +333,61 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   timeLabelContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   timeLabel: {
     fontSize: 14,
-    color: '#A0B0D0',
+    color: "#A0B0D0",
   },
   gridArea: {
     flex: 1,
     borderLeftWidth: 1,
     borderTopWidth: 1,
     borderRightWidth: 1,
-    borderColor: '#EDEEF1',
+    borderColor: "#EDEEF1",
   },
   hourRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     borderBottomWidth: 1,
-    borderColor: '#EDEEF1',
-    position: 'relative',
+    borderColor: "#EDEEF1",
+    position: "relative",
   },
   gridColumn: {
     flex: 1,
     borderLeftWidth: 1,
-    borderColor: 'rgba(237, 238, 241, 0.5)', // Subtle internal grid lines for 10-min slots
+    borderColor: "rgba(237, 238, 241, 0.5)", // Subtle internal grid lines for 10-min slots
   },
   eventBlock: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 8,
   },
   eventTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   currentTimeIndicator: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
     width: 2,
-    backgroundColor: '#FF3B30',
+    backgroundColor: "#FF3B30",
     zIndex: 10,
   },
   legendContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
     gap: 16,
     marginTop: 20,
     paddingHorizontal: 20,
   },
   legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   legendDot: {
@@ -371,7 +397,7 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 13,
-    color: '#8A8C9A',
-    fontWeight: '500',
+    color: "#8A8C9A",
+    fontWeight: "500",
   },
 });
