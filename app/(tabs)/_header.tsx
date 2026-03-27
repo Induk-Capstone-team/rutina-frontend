@@ -1,13 +1,26 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-export function Header() {
+interface HeaderProps {
+  activeTab?: "left" | "right";
+}
+export function Header({ activeTab = "left" }: HeaderProps) {
   return (
     <View style={styles.header}>
       <Text style={styles.logoText}>Rutia</Text>
       <View style={styles.headerRight}>
-        <View style={[styles.dot, { backgroundColor: "#405886" }]} />
-        <View style={[styles.dot, { backgroundColor: "#E2E5EC" }]} />
+        <View
+          style={[
+            styles.dot,
+            { backgroundColor: activeTab === "left" ? "#405886" : "#E2E5EC" },
+          ]}
+        />
+        <View
+          style={[
+            styles.dot,
+            { backgroundColor: activeTab === "right" ? "#405886" : "#E2E5EC" },
+          ]}
+        />
         <View style={styles.profileIcon}>
           <Text style={styles.profileText}>나</Text>
         </View>
