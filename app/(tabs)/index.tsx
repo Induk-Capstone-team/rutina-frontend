@@ -7,8 +7,21 @@ import {
   Text,
   TouchableOpacity,
   View,
+  PanResponder,
 } from "react-native";
-const days = ["월", "화", "수", "목", "금", "토", "일"];
+
+import { format, startOfWeek, addDays, isSameDay, parse } from "date-fns";
+import { ko } from "date-fns/locale";
+import { Calendar, LocaleConfig } from "react-native-calendars";
+
+LocaleConfig.locales["ko"] = {
+  monthNames: ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"],
+  monthNamesShort: ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"],
+  dayNames: ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"],
+  dayNamesShort: ["일", "월", "화", "수", "목", "금", "토"],
+  today: "오늘",
+};
+LocaleConfig.defaultLocale = "ko";
 
 const eventTypes = {
   기상: { bg: "#FAEEEE", dot: "#E79A95", text: "#5D4645" },
@@ -18,68 +31,49 @@ const eventTypes = {
   저녁: { bg: "#FEF9EE", dot: "#E6CF8A", text: "#685A3F" },
 };
 
-// Mock schedule demonstrating horizontal 10-minute precision blocks.
-const mockSchedule = [
-  {
-    id: "1",
-    title: "기상",
-    startHour: 6,
-    startMinute: 0,
-    durationMinutes: 60,
-    type: "기상",
-  },
-  {
-    id: "2",
-    title: "운동",
-    startHour: 7,
-    startMinute: 0,
-    durationMinutes: 30,
-    type: "운동",
-  }, // 7:00 ~ 7:30 (3 units)
-  {
-    id: "3",
-    title: "공부",
-    startHour: 8,
-    startMinute: 20,
-    durationMinutes: 100,
-    type: "공부",
-  }, // 8:20 ~ 10:00 (spans 2 hours)
-  {
-    id: "4",
-    title: "명상",
-    startHour: 12,
-    startMinute: 10,
-    durationMinutes: 40,
-    type: "명상",
-  }, // 12:10 ~ 12:50
-  {
-    id: "5",
-    title: "저녁",
-    startHour: 19,
-    startMinute: 0,
-    durationMinutes: 60,
-    type: "저녁",
-  },
-];
-
+// Mock schedule data is now generated dynamically inside the component to match today's date
 export default function HomeScreen() {
-  const now = new Date();
-  const dayIndex = now.getDay(); // 0: 일, 1: 월, ..., 6: 토
-  const currentDay = days[dayIndex];
-  const [selectedDay, setSelectedDay] = useState(currentDay);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [isCalendarVisible, setIsCalendarVisible] = useState(false);
+
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const mockSchedule = [
+    { id: "1", title: "기상", startTime: `${todayStr} 06:00`, endTime: `${todayStr} 07:00`, type: "기상" },
+    { id: "2", title: "운동", startTime: `${todayStr} 07:00`, endTime: `${todayStr} 07:30`, type: "운동" },
+    { id: "3", title: "공부", startTime: `${todayStr} 08:20`, endTime: `${todayStr} 10:00`, type: "공부" },
+    { id: "4", title: "명상", startTime: `${todayStr} 12:10`, endTime: `${todayStr} 12:50`, type: "명상" },
+    { id: "5", title: "저녁", startTime: `${todayStr} 19:00`, endTime: `${todayStr} 20:00`, type: "저녁" },
+  ];
 
   const startHour = 0;
   const endHour = 24;
   const hourHeight = 60; // Row height
 
-  const hours = Array.from(
-    { length: endHour - startHour },
-    (_, i) => startHour + i,
-  );
+  const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
   const columns = [0, 1, 2, 3, 4, 5]; // 6 columns for 60 mins -> 10 mins each
 
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Generate the week days (Sunday started)
+  const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 0 });
+  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(startOfCurrentWeek, i));
+
+  // Pan Responder for Swiping down to reveal calendar
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 40) {
+          setIsCalendarVisible(true);
+        } else if (gestureState.dy < -40) {
+          setIsCalendarVisible(false);
+        }
+      },
+    })
+  ).current;
 
   useEffect(() => {
     // Auto scroll on mount
@@ -95,7 +89,7 @@ export default function HomeScreen() {
       setCurrentTime(new Date());
     }, 60000);
     return () => clearInterval(interval);
-  }, []); // Run only on mount
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -104,28 +98,98 @@ export default function HomeScreen() {
 
         {/* Main Card */}
         <View style={styles.mainCard}>
-          {/* Day Selector */}
-          <View style={styles.daySelector}>
-            {days.map((day) => {
-              const isSelected = day === selectedDay;
-              return (
-                <TouchableOpacity
-                  key={day}
-                  onPress={() => setSelectedDay(day)}
-                  style={styles.dayButtonContainer}
-                >
-                  <Text
-                    style={[
-                      styles.dayText,
-                      isSelected && styles.dayTextSelected,
-                    ]}
+          
+          {/* Top Panel (Day Selector + Calendar) capturing swipes */}
+          <View style={styles.topPanel} {...panResponder.panHandlers}>
+            {/* Day Selector */}
+            <View style={styles.daySelector}>
+              {weekDays.map((date) => {
+                const isSelected = isSameDay(date, currentDate);
+                const isSunday = date.getDay() === 0;
+                const isSaturday = date.getDay() === 6;
+                
+                const dayStr = format(date, "E", { locale: ko });
+                const dayNum = format(date, "d");
+
+                // Determine emphasized color for weekends
+                let emphasizedColor: { color?: string } = {};
+                if (isSunday) {
+                  emphasizedColor = { color: isSelected ? "#E74C3C" : "#F1948A" };
+                } else if (isSaturday) {
+                  emphasizedColor = { color: isSelected ? "#2E86C1" : "#85C1E9" };
+                }
+
+                return (
+                  <TouchableOpacity
+                    key={date.toISOString()}
+                    onPress={() => setCurrentDate(date)}
+                    style={styles.dayButtonContainer}
                   >
-                    {day}
-                  </Text>
-                  {isSelected && <View style={styles.activeDayIndicator} />}
+                    <Text style={[styles.dayText, isSelected && styles.dayTextSelected, emphasizedColor]}>
+                      {dayStr}
+                    </Text>
+                    <View style={styles.dateCircle}>
+                      <Text style={[styles.dateText, isSelected && styles.dateTextSelected, emphasizedColor]}>
+                        {dayNum}
+                      </Text>
+                    </View>
+                    {isSelected && <View style={[styles.activeDayIndicator, isSunday || isSaturday ? { backgroundColor: emphasizedColor.color } : {}]} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Handle & Today Button */}
+            <View style={styles.handleRow}>
+              <TouchableOpacity
+                style={styles.swipeHandleContainer}
+                activeOpacity={0.7}
+                onPress={() => setIsCalendarVisible(!isCalendarVisible)}
+              >
+                <View style={styles.swipeHandle} />
+              </TouchableOpacity>
+
+              {!isSameDay(currentDate, new Date()) && (
+                <TouchableOpacity 
+                  style={styles.todayButton}
+                  onPress={() => {
+                    setCurrentDate(new Date());
+                    setIsCalendarVisible(false);
+                  }}
+                >
+                  <Text style={styles.todayButtonText}>오늘</Text>
                 </TouchableOpacity>
-              );
-            })}
+              )}
+            </View>
+
+            {/* Collapsible Calendar */}
+            {isCalendarVisible && (
+              <View style={styles.calendarWrapper}>
+                <Calendar
+                  current={format(currentDate, "yyyy-MM-dd")}
+                  onDayPress={(day: any) => {
+                    setCurrentDate(new Date(day.timestamp));
+                    setIsCalendarVisible(false);
+                  }}
+                  monthFormat={"yyyy년 M월"}
+                  theme={{
+                    backgroundColor: "#ffffff",
+                    calendarBackground: "#ffffff",
+                    textSectionTitleColor: "#8A8C9A",
+                    selectedDayBackgroundColor: "#2A3C6B",
+                    selectedDayTextColor: "#ffffff",
+                    todayTextColor: "#E79A95",
+                    dayTextColor: "#2d4150",
+                    textDisabledColor: "#d9e1e8",
+                    dotColor: "#00adf5",
+                    selectedDotColor: "#ffffff",
+                    arrowColor: "#2A3C6B",
+                    monthTextColor: "#2A3C6B",
+                    indicatorColor: "#2A3C6B",
+                  }}
+                />
+              </View>
+            )}
           </View>
 
           {/* Timetable Grid */}
@@ -150,35 +214,34 @@ export default function HomeScreen() {
               {/* Grid Area with rows being hours and columns being 10 mins */}
               <View style={styles.gridArea}>
                 {hours.map((hour) => (
-                  <View
-                    key={hour}
-                    style={[styles.hourRow, { height: hourHeight }]}
-                  >
+                  <View key={hour} style={[styles.hourRow, { height: hourHeight }]}>
                     {/* 6 vertical grid columns per hour row */}
                     {columns.map((col) => (
                       <View
                         key={col}
                         style={[
                           styles.gridColumn,
-                          col === 0 && { borderLeftWidth: 0 }, // First column doesn't need extra left border
+                          col === 0 && { borderLeftWidth: 0 },
                         ]}
                       />
                     ))}
 
                     {/* Events inside this hour row */}
                     {mockSchedule.map((event) => {
-                      const eventStart =
-                        event.startHour * 60 + event.startMinute;
-                      const eventEnd = eventStart + event.durationMinutes;
+                      const startDateObj = parse(event.startTime, "yyyy-MM-dd HH:mm", new Date());
+                      const endDateObj = parse(event.endTime, "yyyy-MM-dd HH:mm", new Date());
+
+                      // Only show events that belong to the currently selected calendar date
+                      if (!isSameDay(startDateObj, currentDate)) return null;
+
+                      const eventStart = startDateObj.getHours() * 60 + startDateObj.getMinutes();
+                      const eventEnd = endDateObj.getHours() * 60 + endDateObj.getMinutes();
+
                       const hourStart = hour * 60;
                       const hourEnd = hourStart + 60;
 
-                      // Check if event overlaps with this hour
-                      if (eventStart >= hourEnd || eventEnd <= hourStart) {
-                        return null;
-                      }
+                      if (eventStart >= hourEnd || eventEnd <= hourStart) return null;
 
-                      // Calculate visual bounds in this hour row
                       const overlapStart = Math.max(eventStart, hourStart);
                       const overlapEnd = Math.min(eventEnd, hourEnd);
 
@@ -205,14 +268,8 @@ export default function HomeScreen() {
                             },
                           ]}
                         >
-                          {/* Only render text if this is the beginning of the event */}
                           {isStartOfEvent && (
-                            <Text
-                              style={[
-                                styles.eventTitle,
-                                { color: typeStyles.text },
-                              ]}
-                            >
+                            <Text style={[styles.eventTitle, { color: typeStyles.text }]}>
                               {event.title}
                             </Text>
                           )}
@@ -221,7 +278,7 @@ export default function HomeScreen() {
                     })}
 
                     {/* Current Time Indicator */}
-                    {hour === currentTime.getHours() && (
+                    {isSameDay(currentDate, new Date()) && hour === currentTime.getHours() && (
                       <View
                         style={[
                           styles.currentTimeIndicator,
@@ -241,12 +298,7 @@ export default function HomeScreen() {
               const typeData = eventTypes[key as keyof typeof eventTypes];
               return (
                 <View key={key} style={styles.legendItem}>
-                  <View
-                    style={[
-                      styles.legendDot,
-                      { backgroundColor: typeData.dot },
-                    ]}
-                  />
+                  <View style={[styles.legendDot, { backgroundColor: typeData.dot }]} />
                   <Text style={styles.legendText}>{key}</Text>
                 </View>
               );
@@ -269,7 +321,6 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 2,
   },
-
   mainCard: {
     flex: 1,
     backgroundColor: "#FFFFFF",
@@ -281,12 +332,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3,
   },
-  daySelector: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 20,
+  topPanel: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
@@ -297,20 +343,57 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  todayButton: {
+    position: 'absolute',
+    top: 10,
+    right: 20,
+    backgroundColor: '#F3F4F8',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    zIndex: 20,
+  },
+  todayButtonText: {
+    fontSize: 12,
+    color: '#2A3C6B',
+    fontWeight: '700',
+  },
+  daySelector: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 10,
+  },
   dayButtonContainer: {
     alignItems: "center",
     justifyContent: "center",
-    width: 36,
+    width: 38,
   },
   dayText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#B4B6C0",
-    fontWeight: "500",
-    marginBottom: 8,
+    fontWeight: "600",
+    marginBottom: 4,
   },
   dayTextSelected: {
     color: "#2A3C6B",
+  },
+  dateCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  dateText: {
+    fontSize: 16,
+    color: "#333333",
     fontWeight: "700",
+  },
+  dateTextSelected: {
+    color: "#2A3C6B",
   },
   activeDayIndicator: {
     width: 24,
@@ -319,6 +402,26 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     position: "absolute",
     bottom: 0,
+  },
+  handleRow: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingBottom: 18,
+  },
+  swipeHandleContainer: {
+    padding: 10,
+  },
+  swipeHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: "#E2E5EC",
+    borderRadius: 2,
+  },
+  calendarWrapper: {
+    paddingHorizontal: 10,
+    paddingBottom: 20,
   },
   timetableContainer: {
     paddingTop: 15,
@@ -356,14 +459,15 @@ const styles = StyleSheet.create({
   gridColumn: {
     flex: 1,
     borderLeftWidth: 1,
-    borderColor: "rgba(237, 238, 241, 0.5)", // Subtle internal grid lines for 10-min slots
+    borderColor: "rgba(237, 238, 241, 0.5)",
   },
   eventBlock: {
     position: "absolute",
-    top: 0,
-    bottom: 0,
+    top: 6,
+    bottom: 6,
+    borderRadius: 12, // Rounded corners
     justifyContent: "center",
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
   },
   eventTitle: {
     fontSize: 13,
