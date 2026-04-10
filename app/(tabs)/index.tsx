@@ -1,16 +1,16 @@
-import { Header } from "@/app/(tabs)/_header";
+import { Header } from "@/components/ui/_header";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  PanResponder,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  PanResponder,
 } from "react-native";
 
-import { format, startOfWeek, addDays, isSameDay, parse } from "date-fns";
+import { addDays, format, isSameDay, parse, startOfWeek } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Calendar, LocaleConfig } from "react-native-calendars";
 
@@ -98,7 +98,7 @@ export default function HomeScreen() {
 
         {/* Main Card */}
         <View style={styles.mainCard}>
-          
+
           {/* Top Panel (Day Selector + Calendar) capturing swipes */}
           <View style={styles.topPanel} {...panResponder.panHandlers}>
             {/* Day Selector */}
@@ -107,7 +107,7 @@ export default function HomeScreen() {
                 const isSelected = isSameDay(date, currentDate);
                 const isSunday = date.getDay() === 0;
                 const isSaturday = date.getDay() === 6;
-                
+
                 const dayStr = format(date, "E", { locale: ko });
                 const dayNum = format(date, "d");
 
@@ -150,7 +150,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
 
               {!isSameDay(currentDate, new Date()) && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.todayButton}
                   onPress={() => {
                     setCurrentDate(new Date());

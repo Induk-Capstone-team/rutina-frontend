@@ -1,4 +1,4 @@
-import { Header } from "@/app/(tabs)/_header";
+import { Header } from "@/components/ui/_header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import type { CalendarDay, ScheduleRoutine } from "@/types/routine";
 import React, { useState } from "react";
