@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Switch, Alert } from 'react-native';
+import { useAuthViewModel } from '@/hooks/useAuthViewModel';
 
 type SettingItemProps = {
   icon: string;
@@ -45,6 +46,25 @@ const SettingItem = ({ icon, title, value, type = 'link', onToggle = () => {} }:
 export default function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
+  const { logout } = useAuthViewModel();
+
+  const handleLogout = () => {
+    Alert.alert(
+      "로그아웃",
+      "정말 로그아웃 하시겠습니까?",
+      [
+        {
+          text: "취소",
+          style: "cancel"
+        },
+        {
+          text: "로그아웃",
+          onPress: () => logout(),
+          style: "destructive"
+        }
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -105,7 +125,7 @@ export default function SettingsScreen() {
           <View style={styles.divider} />
           <SettingItem 
             icon="📦" 
-            title="카테고리 편집" 
+            title="카테고 편집" 
           />
         </View>
 
@@ -132,7 +152,7 @@ export default function SettingsScreen() {
 
         {/* Account Actions */}
         <View style={styles.accountActionsRow}>
-          <TouchableOpacity style={styles.logoutButton}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutText}>로그아웃</Text>
           </TouchableOpacity>
         </View>

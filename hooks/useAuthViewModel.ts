@@ -14,20 +14,39 @@ export const useAuthViewModel = () => {
     setError(null);
     try {
       const data = await authApi.login(email, password);
-      console.log("로그인 성공:", data);
 
-      // 서버에서 응답받은 데이터에 토큰이 있다면 AsyncStorage에 저장
-      if (data && data.token) {
-        await AsyncStorage.setItem("userToken", data.token);
-      } else if (data && data.accessToken) {
-        await AsyncStorage.setItem("userToken", data.accessToken);
+      const token =
+        data?.token ||
+        data?.accessToken ||
+        data?.data?.token ||
+        data?.data?.accessToken;
+
+      // 토큰이 없으나 응답 메시지에 "성공"이 들어있다면 성공으로 간주
+      const isSuccess =
+        token ||
+        (data?.message && data.message.includes("성공")) ||
+        data?.success;
+
+      if (!isSuccess) {
+        throw new Error(data?.message || "로그인에 실패했습니다.");
+      }
+
+      console.log("로그인 성공 응답 전체:", JSON.stringify(data));
+
+      if (token) {
+        await AsyncStorage.setItem("userToken", token);
       }
 
       authStore.setLoggedIn(true);
       router.replace("/(tabs)"); // 메인 화면으로 이동
-    } catch (err) {
-      console.error("로그인 에러:", err);
-      setError("이메일 또는 비밀번호를 확인해주세요.");
+    } catch (err: any) {
+      console.log("로그인 에러:", err);
+      // 서버에서 보내는 에러 메시지가 있다면 사용하고, 없다면 기본 메시지 출력
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "이메일 또는 비밀번호를 확인해주세요.";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -41,7 +60,7 @@ export const useAuthViewModel = () => {
       console.log("회원가입 성공:", data);
       return true; // 성공 여부 반환
     } catch (err: any) {
-      console.error("회원가입 에러:", err);
+      console.log("회원가입 에러:", err);
       setError(err.response.data.message);
       return false;
     } finally {
@@ -49,5 +68,21 @@ export const useAuthViewModel = () => {
     }
   };
 
-  return { login, signup, isLoading, error, setError };
+  const logout = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authApi.logout();
+      await AsyncStorage.removeItem("userToken");
+      authStore.setLoggedIn(false);
+      router.replace("/login");
+    } catch (err: any) {
+      console.log("로그아웃 에러:", err);
+      setError(err.response.data.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return { login, signup, logout, isLoading, error, setError };
 };
