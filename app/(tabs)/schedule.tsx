@@ -1,5 +1,5 @@
-import { Header } from "@/app/(tabs)/_header";
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
+import { Header } from "@/components/ui/_header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { RoutineStorage } from "@/lib/storage";
 import type { CalendarDay, ScheduleRoutine } from "@/types/routine";
