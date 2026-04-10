@@ -1,23 +1,49 @@
-// 루틴 카테고리 공통 타입 분리
-export type RoutineType = "기상" | "운동" | "공부" | "명상" | "저녁" | "기타";
+export type NotifyOption = "NONE" | "ON_TIME";
+export type RepeatOption = "NONE" | "DAILY" | "CUSTOM";
+export type RepeatUnit = "DAY" | "WEEK" | "MONTH" | "YEAR";
 
-// 일정 화면 타입
+// 일정 화면과 저장소에서 공통으로 사용하는 루틴 타입
 export interface ScheduleRoutine {
-  id: string;
+  id: number;
   title: string;
-  type: RoutineType;
-  startHour?: number;
-  startMinute?: number;
-  durationMinutes?: number;
-  completed: boolean;
+  categoryId?: number | null;
+  categoryName?: string;
+  color?: string;
   date: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  alarm: boolean;
+  state: boolean;
+  completed: boolean;
+  cronExpression?: string | null;
+  repeatOption?: RepeatOption;
+  customRepeatEvery?: number;
+  customRepeatUnit?: RepeatUnit;
 }
-
-// 캘린더 날짜 타입
+//날짜 선택 시 사용하는 타입
 export interface CalendarDay {
   dateString: string;
   day: number;
   month: number;
   year: number;
   timestamp: number;
+}
+
+// 저장 시 모달 화면에서 넘겨주는 옵션 타입
+export interface SaveRoutineOptions {
+  notifyOption: NotifyOption;
+  customNotifyDay: string;
+  customNotifyHour: string;
+  customNotifyMinute: string;
+  repeatOption: RepeatOption;
+  customRepeatEvery: string;
+  customRepeatUnit: RepeatUnit;
+}
+
+// 시간 선택 모달에서 사용하는 시간 범위 타입
+export interface RoutineTimeRange {
+  startHour: string;
+  startMinute: string;
+  endHour: string;
+  endMinute: string;
 }
