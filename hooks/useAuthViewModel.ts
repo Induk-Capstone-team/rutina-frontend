@@ -15,15 +15,14 @@ export const useAuthViewModel = () => {
     try {
       const data = await authApi.login(email, password);
 
-      const token =
-        data?.token ||
-        data?.accessToken ||
-        data?.data?.token ||
-        data?.data?.accessToken;
+      const accessToken =
+        data?.data?.accessToken || data?.accessToken || data?.token;
+
+      const refreshToken = data?.data?.refreshToken || data?.refreshToken;
 
       // 토큰이 없으나 응답 메시지에 "성공"이 들어있다면 성공으로 간주
       const isSuccess =
-        token ||
+        accessToken ||
         (data?.message && data.message.includes("성공")) ||
         data?.success;
 
@@ -33,8 +32,12 @@ export const useAuthViewModel = () => {
 
       console.log("로그인 성공 응답 전체:", JSON.stringify(data));
 
-      if (token) {
-        await AsyncStorage.setItem("userToken", token);
+      if (accessToken) {
+        await AsyncStorage.setItem("userToken", accessToken);
+      }
+
+      if (refreshToken) {
+        await AsyncStorage.setItem("refreshToken", refreshToken);
       }
 
       authStore.setLoggedIn(true);
@@ -74,6 +77,7 @@ export const useAuthViewModel = () => {
     try {
       await authApi.logout();
       await AsyncStorage.removeItem("userToken");
+      await AsyncStorage.removeItem("refreshToken");
       authStore.setLoggedIn(false);
       router.replace("/login");
     } catch (err: any) {

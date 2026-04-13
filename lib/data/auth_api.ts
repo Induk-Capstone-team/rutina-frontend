@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
 const api = axios.create({
@@ -23,7 +24,20 @@ export const authApi = {
 
   /// 로그아웃 요청
   logout: async () => {
-    const { data } = await api.post("/api/v1/auth/logout");
+    const token = await AsyncStorage.getItem("userToken");
+    const refreshToken = await AsyncStorage.getItem("refreshToken");
+
+    const { data } = await api.post(
+      "/api/v1/auth/logout",
+      {
+        refreshToken: refreshToken, // 로그아웃 시 리프레쉬 토큰도 함께 보내서 서버에서 만료시킴
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
     return data;
   },
 };
