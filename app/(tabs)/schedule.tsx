@@ -595,6 +595,9 @@ export default function ScheduleScreen() {
             setShowDetailModal(false);
             setSelectedRoutine(null);
           }}
+          onUpdated={async () => {
+            await loadRoutines();
+          }}
         />
       </View>
     </SafeAreaView>
