@@ -70,7 +70,9 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <View style={styles.linksContainer}>
-              <TouchableOpacity onPress={() => router.push("/signup")}>
+              <TouchableOpacity
+                onPress={() => router.push("/onboarding/signup")}
+              >
                 <Text style={styles.linkText}>회원가입</Text>
               </TouchableOpacity>
               <Text style={styles.linkDivider}>|</Text>
@@ -98,7 +100,7 @@ export default function LoginScreen() {
                 onPress={() => {}}
               >
                 <Image
-                  source={require("../assets/images/google_icon.png")}
+                  source={require("../../assets/images/google_icon.png")}
                   style={styles.socialIcon}
                   resizeMode="contain"
                 />
@@ -112,7 +114,7 @@ export default function LoginScreen() {
                 onPress={() => {}}
               >
                 <Image
-                  source={require("../assets/images/apple_icon.png")}
+                  source={require("../../assets/images/apple_icon.png")}
                   style={styles.socialIcon}
                   resizeMode="contain"
                 />
@@ -126,7 +128,7 @@ export default function LoginScreen() {
                 onPress={() => {}}
               >
                 <Image
-                  source={require("../assets/images/naver_icon.png")}
+                  source={require("../../assets/images/naver_icon.png")}
                   style={styles.socialIcon}
                 />
                 <Text style={[styles.socialText, { color: "#FFFFFF" }]}>
@@ -139,7 +141,7 @@ export default function LoginScreen() {
                 onPress={() => {}}
               >
                 <Image
-                  source={require("../assets/images/kakao_icon.png")}
+                  source={require("../../assets/images/kakao_icon.png")}
                   style={styles.socialIcon}
                   resizeMode="contain"
                 />

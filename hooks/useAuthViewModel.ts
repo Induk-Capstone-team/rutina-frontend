@@ -64,7 +64,7 @@ export const useAuthViewModel = () => {
       return true; // 성공 여부 반환
     } catch (err: any) {
       console.log("회원가입 에러:", err);
-      setError(err.response.data.message);
+      setError(err.response?.data?.message || err.message || "회원가입 실패");
       return false;
     } finally {
       setIsLoading(false);
@@ -76,14 +76,15 @@ export const useAuthViewModel = () => {
     setError(null);
     try {
       await authApi.logout();
+    } catch (err: any) {
+      console.log("서버 로그아웃 에러:", err);
+      // 서버 오류가 나더라도 디바이스 내부에서는 무조건 로그아웃 처리
+      setError(err.response?.data?.message || "서버 로그아웃 중 예외가 발생했습니다.");
+    } finally {
       await AsyncStorage.removeItem("userToken");
       await AsyncStorage.removeItem("refreshToken");
       authStore.setLoggedIn(false);
       router.replace("/login");
-    } catch (err: any) {
-      console.log("로그아웃 에러:", err);
-      setError(err.response.data.message);
-    } finally {
       setIsLoading(false);
     }
   };

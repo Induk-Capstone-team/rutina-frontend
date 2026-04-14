@@ -171,21 +171,26 @@ export default function HomeScreen() {
                     setCurrentDate(new Date(day.timestamp));
                     setIsCalendarVisible(false);
                   }}
-                  monthFormat={"yyyy년 M월"}
+                  monthFormat={"yyyy년 MM월"}
+                  markedDates={{
+                    [format(currentDate, "yyyy-MM-dd")]: {
+                      selected: true,
+                      selectedColor: "#F1F1FB",
+                    },
+                  }}
                   theme={{
-                    backgroundColor: "#ffffff",
-                    calendarBackground: "#ffffff",
-                    textSectionTitleColor: "#8A8C9A",
-                    selectedDayBackgroundColor: "#2A3C6B",
-                    selectedDayTextColor: "#ffffff",
-                    todayTextColor: "#E79A95",
-                    dayTextColor: "#2d4150",
-                    textDisabledColor: "#d9e1e8",
-                    dotColor: "#00adf5",
-                    selectedDotColor: "#ffffff",
-                    arrowColor: "#2A3C6B",
+                    backgroundColor: "#F8F9FB",
+                    calendarBackground: "#F8F9FB",
+                    textSectionTitleColor: "#B4B6C0",
+                    selectedDayTextColor: "#2A3C6B",
+                    todayTextColor: "#405886",
+                    dayTextColor: "#2A3C6B",
+                    textDisabledColor: "#D9E1E8",
+                    arrowColor: "#A0B0D0",
                     monthTextColor: "#2A3C6B",
-                    indicatorColor: "#2A3C6B",
+                    textDayFontWeight: "600",
+                    textMonthFontWeight: "bold",
+                    textDayHeaderFontWeight: "600",
                   }}
                 />
               </View>
@@ -420,8 +425,12 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   calendarWrapper: {
-    paddingHorizontal: 10,
-    paddingBottom: 20,
+    backgroundColor: "#F8F9FB",
+    borderRadius: 20,
+    marginBottom: 20,
+    overflow: "hidden",
+    paddingBottom: 10,
+    marginHorizontal: 16,
   },
   timetableContainer: {
     paddingTop: 15,
