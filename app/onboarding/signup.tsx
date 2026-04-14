@@ -24,6 +24,17 @@ export default function SignupScreen() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
 
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [agreeProfile, setAgreeProfile] = useState(false);
+  const [agreePush, setAgreePush] = useState(false);
+
+  const handleAllAgree = () => {
+    const allAgreed = agreePrivacy && agreeProfile && agreePush;
+    setAgreePrivacy(!allAgreed);
+    setAgreeProfile(!allAgreed);
+    setAgreePush(!allAgreed);
+  };
+
   const handleSignup = async () => {
     if (password !== passwordConfirm) {
       setError("비밀번호가 일치하지 않습니다.");
@@ -31,6 +42,10 @@ export default function SignupScreen() {
     }
     if (!email || !password || !nickname) {
       setError("모든 필드를 입력해주세요.");
+      return;
+    }
+    if (!agreePrivacy) {
+      setError("필수 개인정보 수집 및 이용에 동의해주세요.");
       return;
     }
 
@@ -103,6 +118,91 @@ export default function SignupScreen() {
               secureTextEntry
               placeholderTextColor="#A0B0D0"
             />
+
+            <View style={styles.agreementSection}>
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={handleAllAgree}
+              >
+                <Ionicons
+                  name={
+                    agreePrivacy && agreeProfile && agreePush
+                      ? "checkmark-circle"
+                      : "ellipse-outline"
+                  }
+                  size={24}
+                  color={
+                    agreePrivacy && agreeProfile && agreePush
+                      ? "#2A3C6B"
+                      : "#A0B0D0"
+                  }
+                />
+                <Text style={styles.agreementAllText}>약관 전체 동의</Text>
+              </TouchableOpacity>
+
+              <View style={styles.divider} />
+
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  onPress={() => setAgreePrivacy(!agreePrivacy)}
+                >
+                  <Ionicons
+                    name={agreePrivacy ? "checkmark-circle" : "ellipse-outline"}
+                    size={24}
+                    color={agreePrivacy ? "#2A3C6B" : "#A0B0D0"}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => router.push("/onboarding/privacy")}
+                  style={styles.agreementTextContainer}
+                >
+                  <Text style={styles.agreementText}>
+                    [필수] 개인정보 수집 및 이용 동의
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color="#A0B0D0" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  onPress={() => setAgreeProfile(!agreeProfile)}
+                >
+                  <Ionicons
+                    name={agreeProfile ? "checkmark-circle" : "ellipse-outline"}
+                    size={24}
+                    color={agreeProfile ? "#2A3C6B" : "#A0B0D0"}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => router.push("/onboarding/profile")}
+                  style={styles.agreementTextContainer}
+                >
+                  <Text style={styles.agreementText}>
+                    [선택] 프로필 정보 수집 및 이용 동의
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color="#A0B0D0" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity onPress={() => setAgreePush(!agreePush)}>
+                  <Ionicons
+                    name={agreePush ? "checkmark-circle" : "ellipse-outline"}
+                    size={24}
+                    color={agreePush ? "#2A3C6B" : "#A0B0D0"}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => router.push("/onboarding/push")}
+                  style={styles.agreementTextContainer}
+                >
+                  <Text style={styles.agreementText}>
+                    [선택] 푸시 알림 수신 동의
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color="#A0B0D0" />
+                </TouchableOpacity>
+              </View>
+            </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -196,5 +296,37 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "700",
+  },
+  agreementSection: {
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  checkboxContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  agreementAllText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#2A3C6B",
+    marginLeft: 8,
+  },
+  agreementTextContainer: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  agreementText: {
+    fontSize: 15,
+    color: "#5C5E6A",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#EDEEF1",
+    marginVertical: 8,
   },
 });
