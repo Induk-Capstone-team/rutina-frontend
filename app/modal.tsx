@@ -1491,7 +1491,9 @@ const styles = StyleSheet.create({
   },
 
   innerOptionRow: {
+    minHeight: 60,
     paddingTop: 12,
+    paddingBottom: 10,
     borderTopWidth: 1,
     borderTopColor: "#EEF1F5",
   },
