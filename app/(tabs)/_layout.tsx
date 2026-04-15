@@ -60,11 +60,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="ai_analysis"
         options={{
-          title: "설정",
+          title: "AI분석",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="gearshape" color={color} />
+            <IconSymbol size={28} name="sparkles" color={color} />
           ),
         }}
       />

@@ -47,3 +47,10 @@ export interface RoutineTimeRange {
   endHour: string;
   endMinute: string;
 }
+
+export interface DailyTargetRecord {
+  id: number;
+  routineId: number;
+  targetDate: string;
+  isCompleted: boolean;
+}
