@@ -2,9 +2,15 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import TimePickerModal from "@/components/time_picker_modal";
+import AppCalendar from "@/components/ui/app_calendar";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRoutineForm } from "@/hooks/use_routine_form";
-import type { NotifyOption, RepeatOption, RepeatUnit } from "@/types/routine";
+import type {
+  NotifyOption,
+  RepeatOption,
+  RepeatUnit,
+  SaveRoutineOptions,
+} from "@/types/routine";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -22,7 +28,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Calendar, DateData } from "react-native-calendars";
+import { DateData } from "react-native-calendars";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ColorPicker, {
   HueSlider,
@@ -307,6 +313,9 @@ export default function ModalScreen() {
   );
   const [showColorPickerModal, setShowColorPickerModal] = useState(false);
   const [pickerColor, setPickerColor] = useState("#405886");
+  const [activeDateField, setActiveDateField] = useState<"start" | "end">(
+    "start",
+  );
   //바텀시트 드래그 애니메이션
   const translateY = useRef(new Animated.Value(0)).current;
   const closeThreshold = 120;
@@ -335,6 +344,14 @@ export default function ModalScreen() {
     handleSave,
   } = useRoutineForm(() => router.dismiss());
 
+  const [startDate, setStartDate] = useState(selectedDate);
+  const [endDate, setEndDate] = useState(selectedDate);
+
+  useEffect(() => {
+    // form 훅의 기준 날짜를 시작 날짜와 맞춰줌
+    setSelectedDate(startDate);
+  }, [startDate, setSelectedDate]);
+
   //저장 시 넘길 알림 값
   const notifyOption: NotifyOption = isNotify ? "ON_TIME" : "NONE";
   const customNotifyDay = "0";
@@ -344,6 +361,7 @@ export default function ModalScreen() {
   const [repeatOption, setRepeatOption] = useState<RepeatOption>("NONE");
   const [customRepeatEvery, setCustomRepeatEvery] = useState("1");
   const [customRepeatUnit, setCustomRepeatUnit] = useState<RepeatUnit>("DAY");
+
   //커스텀 카테고리 이름 -> 색상 맵
   const customCategoryColorMap = useMemo(() => {
     return customCategories.reduce<Record<string, string>>((acc, item) => {
@@ -351,6 +369,7 @@ export default function ModalScreen() {
       return acc;
     }, {});
   }, [customCategories]);
+
   //전체 카테고리 목록
   const categoryList = useMemo(() => {
     return [
@@ -358,15 +377,29 @@ export default function ModalScreen() {
       ...customCategories.map((item) => item.name),
     ];
   }, [customCategories]);
+
   //선택 날짜 표시
   const markedDates = useMemo(() => {
+    if (startDate === endDate) {
+      return {
+        [startDate]: {
+          selected: true,
+          selectedColor: CALENDAR_SELECTED_COLOR,
+        },
+      };
+    }
+
     return {
-      [selectedDate]: {
+      [startDate]: {
         selected: true,
         selectedColor: CALENDAR_SELECTED_COLOR,
       },
+      [endDate]: {
+        selected: true,
+        selectedColor: "#9FA2D6",
+      },
     };
-  }, [selectedDate]);
+  }, [startDate, endDate]);
 
   const notifyLabel = useMemo(() => {
     return getNotifyLabel(isNotify);
@@ -375,6 +408,11 @@ export default function ModalScreen() {
   const repeatLabel = useMemo(() => {
     return getRepeatLabel(repeatOption, customRepeatEvery, customRepeatUnit);
   }, [repeatOption, customRepeatEvery, customRepeatUnit]);
+
+  const isInvalidDateRange = useMemo(() => {
+    // 종료일이 시작일보다 빠른지 미리 검사
+    return endDate < startDate;
+  }, [startDate, endDate]);
 
   //저장된 사용자 색상 불러오기
   useEffect(() => {
@@ -401,7 +439,12 @@ export default function ModalScreen() {
 
   //날짜 선택
   const handleDayPress = (day: DateData) => {
-    setSelectedDate(day.dateString);
+    if (activeDateField === "start") {
+      setStartDate(day.dateString);
+    } else {
+      setEndDate(day.dateString);
+    }
+
     setShowDatePicker(false);
   };
   //저장된 사용자 카테고리 불러오기
@@ -619,6 +662,17 @@ export default function ModalScreen() {
     return true;
   };
 
+  const validateDateRange = () => {
+    if (endDate < startDate) {
+      Alert.alert(
+        "날짜 설정 확인",
+        "종료 날짜는 시작 날짜보다 빠를 수 없어요.",
+      );
+      return false;
+    }
+
+    return true;
+  };
   //저장 전 최종 검증
   const validateBeforeSubmit = () => {
     if (!repeatOption || repeatOption === "NONE") {
@@ -628,7 +682,9 @@ export default function ModalScreen() {
       );
       return false;
     }
-
+    if (!validateDateRange()) {
+      return false;
+    }
     if (!validateTimeRange()) {
       return false;
     }
@@ -639,7 +695,7 @@ export default function ModalScreen() {
   const handleSubmit = () => {
     if (!validateBeforeSubmit()) return;
 
-    handleSave({
+    const saveOptions = {
       notifyOption,
       customNotifyDay,
       customNotifyHour,
@@ -647,7 +703,11 @@ export default function ModalScreen() {
       repeatOption,
       customRepeatEvery,
       customRepeatUnit,
-    });
+      startDate,
+      endDate,
+    } as SaveRoutineOptions & { startDate: string; endDate: string };
+
+    handleSave(saveOptions);
   };
   //시간 모달에서 값 적용
   const handleApplyTime = (time: {
@@ -771,32 +831,88 @@ export default function ModalScreen() {
               placeholderTextColor="#B4B6C0"
               autoFocus
             />
-            {/* 날짜 선택 */}
+            {/* 시작/종료 날짜 선택 */}
             <View style={styles.section}>
-              <ThemedText style={styles.label}>날짜</ThemedText>
+              <ThemedText style={styles.label}>기간</ThemedText>
 
-              <TouchableOpacity
-                style={styles.selectorButton}
-                onPress={() => setShowDatePicker((prev) => !prev)}
-              >
-                <View style={styles.selectorLeft}>
-                  <IconSymbol name="calendar" size={18} color="#405886" />
-                  <ThemedText style={styles.selectorText}>
-                    {formatDateLabel(selectedDate)}
-                  </ThemedText>
-                </View>
+              <View style={styles.dateRangeColumn}>
+                <TouchableOpacity
+                  style={[
+                    styles.selectorButton,
+                    activeDateField === "start" && styles.dateSelectorActive,
+                  ]}
+                  onPress={() => {
+                    setActiveDateField("start");
+                    setShowDatePicker((prev) =>
+                      activeDateField === "start" ? !prev : true,
+                    );
+                  }}
+                >
+                  <View style={styles.selectorLeft}>
+                    <IconSymbol name="calendar" size={18} color="#405886" />
+                    <ThemedText style={styles.selectorText}>
+                      시작 날짜 · {formatDateLabel(startDate)}
+                    </ThemedText>
+                  </View>
 
-                <IconSymbol
-                  name={showDatePicker ? "chevron.up" : "chevron.down"}
-                  size={16}
-                  color="#A0B0D0"
-                />
-              </TouchableOpacity>
+                  <IconSymbol
+                    name={
+                      showDatePicker && activeDateField === "start"
+                        ? "chevron.up"
+                        : "chevron.down"
+                    }
+                    size={16}
+                    color="#A0B0D0"
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.selectorButton,
+                    activeDateField === "end" && styles.dateSelectorActive,
+                  ]}
+                  onPress={() => {
+                    setActiveDateField("end");
+                    setShowDatePicker((prev) =>
+                      activeDateField === "end" ? !prev : true,
+                    );
+                  }}
+                >
+                  <View style={styles.selectorLeft}>
+                    <IconSymbol name="calendar" size={18} color="#9FA2D6" />
+                    <ThemedText style={styles.selectorText}>
+                      종료 날짜 · {formatDateLabel(endDate)}
+                    </ThemedText>
+                  </View>
+
+                  <IconSymbol
+                    name={
+                      showDatePicker && activeDateField === "end"
+                        ? "chevron.up"
+                        : "chevron.down"
+                    }
+                    size={16}
+                    color="#A0B0D0"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {isInvalidDateRange && (
+                <ThemedText style={styles.errorText}>
+                  종료 날짜는 시작 날짜보다 빠를 수 없어요.
+                </ThemedText>
+              )}
 
               {showDatePicker && (
                 <View style={styles.calendarCard}>
-                  <Calendar
-                    current={selectedDate}
+                  <ThemedText style={styles.calendarHelperText}>
+                    {activeDateField === "start"
+                      ? "시작 날짜를 선택해 주세요"
+                      : "종료 날짜를 선택해 주세요"}{" "}
+                  </ThemedText>
+
+                  <AppCalendar
+                    current={activeDateField === "start" ? startDate : endDate}
                     markedDates={markedDates}
                     onDayPress={handleDayPress}
                     enableSwipeMonths={true}
@@ -806,6 +922,7 @@ export default function ModalScreen() {
                 </View>
               )}
             </View>
+
             {/* 사용자 색상 선택 */}
             <View style={styles.section}>
               <View style={styles.rowBetween}>
@@ -1709,5 +1826,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#405886",
+  },
+  dateRangeColumn: {
+    gap: 10,
+  },
+
+  dateSelectorActive: {
+    borderWidth: 1.5,
+    borderColor: "#D7E4FF",
+  },
+
+  errorText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#D06C68",
+  },
+
+  calendarHelperText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#7A87A6",
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
 });

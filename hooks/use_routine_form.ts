@@ -20,14 +20,17 @@ export const useRoutineForm = (onSuccess: () => void) => {
   // 일정 저장 함수
   const handleSave = async (options: SaveRoutineOptions) => {
     if (!title.trim()) return;
+    const resolvedStartDate = options.startDate || selectedDate;
+    const resolvedEndDate = options.endDate || selectedDate;
 
     const newRoutine: ScheduleRoutine = {
       id: Date.now(),
       title: title.trim(),
       categoryName: category,
       color: selectedColor,
-      completed: false,
-      date: selectedDate,
+      completedDates: [],
+      startDate: resolvedStartDate,
+      endDate: resolvedEndDate,
       alarm: isNotify,
       state: true,
       repeatOption: options.repeatOption,
@@ -38,10 +41,6 @@ export const useRoutineForm = (onSuccess: () => void) => {
       ...(isTimed && {
         startTime: `${startHour.padStart(2, "0")}:${startMinute.padStart(2, "0")}:00`,
         endTime: `${endHour.padStart(2, "0")}:${endMinute.padStart(2, "0")}:00`,
-        startHour: Number(startHour || 0),
-        startMinute: Number(startMinute || 0),
-        endHour: Number(endHour || 0),
-        endMinute: Number(endMinute || 0),
       }),
     };
 
