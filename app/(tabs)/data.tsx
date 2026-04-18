@@ -1,8 +1,8 @@
+import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { Header } from "@/components/ui/_header";
 import { RoutineStorage } from "@/lib/storage";
 import type { ScheduleRoutine } from "@/types/routine";
 import { useFocusEffect } from "@react-navigation/native";
-import { router } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Pressable,
@@ -13,7 +13,6 @@ import {
   View,
 } from "react-native";
 
-// [수정] WEEK 추가
 type ViewMode = "YEAR" | "MONTH" | "WEEK";
 
 type GroupedRoutine = {
@@ -26,6 +25,13 @@ type HeatmapCell = {
   filled: boolean;
 };
 
+type CalendarCell = {
+  key: string;
+  filled: boolean;
+  label: string;
+  isEmpty?: boolean;
+};
+
 type EventTypeStyle = {
   bg: string;
   dot: string;
@@ -33,6 +39,7 @@ type EventTypeStyle = {
 };
 
 const DEFAULT_CATEGORY_NAME = "기타";
+const MAIN_COLOR = "#405886";
 
 const eventTypes: Record<string, EventTypeStyle> = {
   기상: { bg: "#FAEEEE", dot: "#E79A95", text: "#5D4645" },
@@ -86,7 +93,7 @@ function getCategoryStyle(item: ScheduleRoutine): EventTypeStyle {
   if (fixedStyle) {
     return fixedStyle;
   }
-
+  // 커스텀 카테고리 색상 적용
   if (item.color) {
     return {
       bg: hexToRgba(item.color, 0.14),
@@ -96,39 +103,6 @@ function getCategoryStyle(item: ScheduleRoutine): EventTypeStyle {
   }
 
   return eventTypes[DEFAULT_CATEGORY_NAME];
-}
-
-function isSameYear(dateString: string, year: number) {
-  const date = new Date(dateString);
-  return date.getFullYear() === year;
-}
-
-function isSameMonth(dateString: string, year: number, month: number) {
-  const date = new Date(dateString);
-  return date.getFullYear() === year && date.getMonth() === month;
-}
-
-function isSameDay(
-  dateString: string,
-  year: number,
-  month: number,
-  day: number,
-) {
-  const date = new Date(dateString);
-
-  return (
-    date.getFullYear() === year &&
-    date.getMonth() === month &&
-    date.getDate() === day
-  );
-}
-
-function isSameDate(dateA: Date, dateB: Date) {
-  return (
-    dateA.getFullYear() === dateB.getFullYear() &&
-    dateA.getMonth() === dateB.getMonth() &&
-    dateA.getDate() === dateB.getDate()
-  );
 }
 
 function getWeekStart(date: Date) {
@@ -141,45 +115,125 @@ function getWeekStart(date: Date) {
 function getWeekEnd(date: Date) {
   const end = new Date(getWeekStart(date));
   end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
   return end;
 }
 
-function isSameWeek(dateString: string, selectedDate: Date) {
-  const targetDate = new Date(dateString);
-  const weekStart = getWeekStart(selectedDate);
-  const weekEnd = getWeekEnd(selectedDate);
+function parseDateValue(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
 
-  return targetDate >= weekStart && targetDate <= weekEnd;
+  const [year, month, day] = value.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  const date = new Date(year, month - 1, day);
+
+  date.setHours(0, 0, 0, 0);
+
+  return date;
 }
 
-function buildYearCells(routine: ScheduleRoutine, year: number): HeatmapCell[] {
-  return Array.from({ length: 12 }, (_, index) => {
-    const filled =
-      Boolean(routine.completed) && isSameMonth(routine.date, year, index);
-
-    return {
-      key: `${routine.id}-year-${index}`,
-      filled,
-    };
-  });
+function formatDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function getRoutineStartDate(routine: ScheduleRoutine) {
+  return parseDateValue(routine.startDate) || null;
 }
 
-function buildMonthCells(
+function getRoutineEndDate(routine: ScheduleRoutine) {
+  return parseDateValue(routine.endDate) || getRoutineStartDate(routine);
+}
+function isDateInRoutineRange(routine: ScheduleRoutine, targetDate: Date) {
+  const startDate = getRoutineStartDate(routine);
+  const endDate = getRoutineEndDate(routine);
+
+  if (!startDate || !endDate) {
+    return false;
+  }
+
+  const normalizedTarget = new Date(targetDate);
+  normalizedTarget.setHours(0, 0, 0, 0);
+  // 시작일~종료일 범위 안에 있는 날짜인지 확인
+  return normalizedTarget >= startDate && normalizedTarget <= endDate;
+}
+function isRoutineCompletedOnDate(routine: ScheduleRoutine, targetDate: Date) {
+  const targetDateKey = formatDateKey(targetDate);
+  const completedDates = routine.completedDates ?? [];
+  // 해당 날짜가 완료 기록에 포함되어 있는지 확인
+  return completedDates.includes(targetDateKey);
+}
+function doesRoutineOverlapPeriod(
+  routine: ScheduleRoutine,
+  periodStart: Date,
+  periodEnd: Date,
+) {
+  const startDate = getRoutineStartDate(routine);
+  const endDate = getRoutineEndDate(routine);
+
+  if (!startDate || !endDate) {
+    return false;
+  }
+
+  const normalizedStart = new Date(periodStart);
+  normalizedStart.setHours(0, 0, 0, 0);
+
+  const normalizedEnd = new Date(periodEnd);
+  normalizedEnd.setHours(23, 59, 59, 999);
+  // 루틴 기간과 현재 보는 기간이 겹치는지 확인
+  return startDate <= normalizedEnd && endDate >= normalizedStart;
+}
+
+function isRoutineInSameYear(routine: ScheduleRoutine, year: number) {
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31);
+  return doesRoutineOverlapPeriod(routine, yearStart, yearEnd);
+}
+
+function isRoutineInSameMonth(
   routine: ScheduleRoutine,
   year: number,
   month: number,
-): HeatmapCell[] {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+) {
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 0);
+  return doesRoutineOverlapPeriod(routine, monthStart, monthEnd);
+}
 
-  return Array.from({ length: daysInMonth }, (_, index) => {
-    const day = index + 1;
+function isRoutineInSameWeek(routine: ScheduleRoutine, selectedDate: Date) {
+  const weekStart = getWeekStart(selectedDate);
+  const weekEnd = getWeekEnd(selectedDate);
+  return doesRoutineOverlapPeriod(routine, weekStart, weekEnd);
+}
 
-    return {
-      key: `${routine.id}-month-${day}`,
+function buildYearCells(routine: ScheduleRoutine, year: number): HeatmapCell[] {
+  const startDate = new Date(year, 0, 1);
+  const endDate = new Date(year, 11, 31);
+  const cells: HeatmapCell[] = [];
+
+  const current = new Date(startDate);
+
+  while (current <= endDate) {
+    const currentYear = current.getFullYear();
+    const currentMonth = current.getMonth();
+    const currentDay = current.getDate();
+
+    cells.push({
+      key: `${routine.id}-year-${currentYear}-${currentMonth + 1}-${currentDay}`,
       filled:
-        Boolean(routine.completed) && isSameDay(routine.date, year, month, day),
-    };
-  });
+        isDateInRoutineRange(routine, current) &&
+        isRoutineCompletedOnDate(routine, current),
+    });
+    current.setDate(current.getDate() + 1);
+  }
+
+  return cells;
 }
 
 function buildWeekCells(
@@ -192,14 +246,57 @@ function buildWeekCells(
     const currentDate = new Date(weekStart);
     currentDate.setDate(weekStart.getDate() + index);
 
-    const routineDate = new Date(routine.date);
-
     return {
       key: `${routine.id}-week-${index}`,
       filled:
-        Boolean(routine.completed) && isSameDate(routineDate, currentDate),
+        isDateInRoutineRange(routine, currentDate) &&
+        isRoutineCompletedOnDate(routine, currentDate),
     };
   });
+}
+
+function buildMonthCalendarCells(
+  routine: ScheduleRoutine,
+  year: number,
+  month: number,
+): CalendarCell[] {
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startWeekday = firstDay.getDay();
+
+  const cells: CalendarCell[] = [];
+
+  for (let i = 0; i < startWeekday; i++) {
+    cells.push({
+      key: `${routine.id}-month-empty-start-${i}`,
+      filled: false,
+      label: "",
+      isEmpty: true,
+    });
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const currentDate = new Date(year, month, day);
+
+    cells.push({
+      key: `${routine.id}-month-${day}`,
+      filled:
+        isDateInRoutineRange(routine, currentDate) &&
+        isRoutineCompletedOnDate(routine, currentDate),
+      label: String(day),
+    });
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push({
+      key: `${routine.id}-month-empty-end-${cells.length}`,
+      filled: false,
+      label: "",
+      isEmpty: true,
+    });
+  }
+
+  return cells;
 }
 
 function groupByCategory(routines: ScheduleRoutine[]): GroupedRoutine[] {
@@ -207,6 +304,7 @@ function groupByCategory(routines: ScheduleRoutine[]): GroupedRoutine[] {
 
   routines.forEach((routine) => {
     const categoryName = normalizeCategoryName(routine.categoryName);
+
     const prev = groupedMap.get(categoryName) || [];
     groupedMap.set(categoryName, [...prev, routine]);
   });
@@ -256,17 +354,20 @@ function HeatmapRow({
 }) {
   const categoryStyle = getCategoryStyle(routine);
 
-  const cells = useMemo(() => {
-    if (viewMode === "YEAR") {
-      return buildYearCells(routine, selectedYear);
-    }
+  const yearCells = useMemo(() => {
+    if (viewMode !== "YEAR") return [];
+    return buildYearCells(routine, selectedYear);
+  }, [routine, viewMode, selectedYear]);
 
-    if (viewMode === "MONTH") {
-      return buildMonthCells(routine, selectedYear, selectedMonth);
-    }
+  const monthCells = useMemo(() => {
+    if (viewMode !== "MONTH") return [];
+    return buildMonthCalendarCells(routine, selectedYear, selectedMonth);
+  }, [routine, viewMode, selectedYear, selectedMonth]);
 
+  const weekCells = useMemo(() => {
+    if (viewMode !== "WEEK") return [];
     return buildWeekCells(routine, selectedWeekDate);
-  }, [routine, viewMode, selectedYear, selectedMonth, selectedWeekDate]);
+  }, [routine, viewMode, selectedWeekDate]);
 
   return (
     <Pressable style={styles.routineCard} onPress={() => onPress(routine)}>
@@ -282,39 +383,99 @@ function HeatmapRow({
         </Text>
       </View>
 
-      <View style={styles.heatmapWrap}>
-        {cells.map((cell) => (
-          <View
-            key={cell.key}
-            style={[
-              styles.heatmapCell,
-              cell.filled && {
-                backgroundColor: categoryStyle.dot,
-                borderColor: categoryStyle.dot,
-              },
-            ]}
-          />
-        ))}
-      </View>
-
       {viewMode === "YEAR" && (
-        <View style={styles.monthLabelRow}>
-          {MONTH_LABELS.map((label) => (
-            <Text key={label} style={styles.monthLabel}>
-              {label}
-            </Text>
-          ))}
-        </View>
+        <>
+          <View style={styles.yearHeatmapWrap}>
+            {yearCells.map((cell) => (
+              <View
+                key={cell.key}
+                style={[
+                  styles.yearHeatmapCell,
+                  cell.filled && {
+                    backgroundColor: categoryStyle.dot,
+                    borderColor: categoryStyle.dot,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
+          <View style={styles.yearLegendRow}>
+            {MONTH_LABELS.map((label) => (
+              <Text key={label} style={styles.yearLegendText}>
+                {label}
+              </Text>
+            ))}
+          </View>
+        </>
+      )}
+
+      {viewMode === "MONTH" && (
+        <>
+          <View style={styles.monthWeekLabelRow}>
+            {WEEK_LABELS.map((label) => (
+              <Text key={label} style={styles.monthWeekLabel}>
+                {label}
+              </Text>
+            ))}
+          </View>
+          <View style={styles.monthCalendarWrap}>
+            {monthCells.map((cell) => (
+              <View
+                key={cell.key}
+                style={[
+                  styles.monthCalendarCell,
+                  cell.isEmpty && styles.monthCalendarCellEmpty,
+                  cell.filled && {
+                    backgroundColor: categoryStyle.bg,
+                    borderColor: categoryStyle.dot,
+                  },
+                ]}
+              >
+                {!cell.isEmpty && (
+                  <View style={styles.monthCalendarTextWrap}>
+                    <Text
+                      style={[
+                        styles.monthCalendarCellText,
+                        cell.filled && styles.monthCalendarCellTextFilled,
+                      ]}
+                    >
+                      {cell.label}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        </>
       )}
 
       {viewMode === "WEEK" && (
-        <View style={styles.weekLabelRow}>
-          {WEEK_LABELS.map((label) => (
-            <Text key={label} style={styles.weekLabel}>
-              {label}
-            </Text>
-          ))}
-        </View>
+        <>
+          <View style={styles.weekContainer}>
+            <View style={styles.weekHeatmapWrap}>
+              {weekCells.map((cell) => (
+                <View
+                  key={cell.key}
+                  style={[
+                    styles.weekHeatmapCell,
+                    cell.filled && {
+                      backgroundColor: categoryStyle.dot,
+                      borderColor: categoryStyle.dot,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+          <View style={styles.weekLabelRow}>
+            {WEEK_LABELS.map((label) => (
+              <Text key={label} style={styles.weekLabel}>
+                {label}
+              </Text>
+            ))}
+          </View>
+        </>
       )}
     </Pressable>
   );
@@ -327,11 +488,13 @@ export default function DataScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>("YEAR");
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
-  const [selectedWeekDate, setSelectedWeekDate] = useState(today); // [추가]
+  const [selectedWeekDate, setSelectedWeekDate] = useState(today);
   const [expandedCategories, setExpandedCategories] = useState<
     Record<string, boolean>
   >({});
-
+  const [selectedRoutine, setSelectedRoutine] =
+    useState<ScheduleRoutine | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const loadRoutines = useCallback(async () => {
     try {
       const stored = await RoutineStorage.getAll();
@@ -341,7 +504,7 @@ export default function DataScreen() {
       setRoutines([]);
     }
   }, []);
-
+  // 화면으로 다시 돌아올 때마다 최신 루틴 불러오기
   useFocusEffect(
     useCallback(() => {
       loadRoutines();
@@ -351,18 +514,18 @@ export default function DataScreen() {
   const filteredRoutines = useMemo(() => {
     if (viewMode === "YEAR") {
       return routines.filter((routine) =>
-        isSameYear(routine.date, selectedYear),
+        isRoutineInSameYear(routine, selectedYear),
       );
     }
 
     if (viewMode === "MONTH") {
       return routines.filter((routine) =>
-        isSameMonth(routine.date, selectedYear, selectedMonth),
+        isRoutineInSameMonth(routine, selectedYear, selectedMonth),
       );
     }
 
     return routines.filter((routine) =>
-      isSameWeek(routine.date, selectedWeekDate),
+      isRoutineInSameWeek(routine, selectedWeekDate),
     );
   }, [routines, viewMode, selectedYear, selectedMonth, selectedWeekDate]);
 
@@ -408,10 +571,9 @@ export default function DataScreen() {
       return nextDate;
     });
   };
-
   const handlePressRoutine = (routine: ScheduleRoutine) => {
-    router.push("/(tabs)/schedule");
-    console.log("선택한 루틴:", routine.id);
+    setSelectedRoutine(routine);
+    setShowDetailModal(true);
   };
 
   return (
@@ -448,6 +610,7 @@ export default function DataScreen() {
                   Week
                 </Text>
               </Pressable>
+
               <Pressable
                 style={[
                   styles.viewTabButton,
@@ -464,6 +627,7 @@ export default function DataScreen() {
                   Month
                 </Text>
               </Pressable>
+
               <Pressable
                 style={[
                   styles.viewTabButton,
@@ -580,59 +744,39 @@ export default function DataScreen() {
           </View>
         </ScrollView>
       </View>
+      <ScheduleDetailModal
+        visible={showDetailModal}
+        routine={selectedRoutine}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedRoutine(null);
+        }}
+        onUpdated={async () => {
+          await loadRoutines();
+        }}
+      />
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F3F4F8",
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  scrollView: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F3F4F8" },
+  container: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
+  scrollView: { flex: 1 },
   card: {
     backgroundColor: "#FFF",
     borderRadius: 32,
     padding: 24,
     marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
   },
-  headerArea: {
-    marginBottom: 18,
-  },
+  headerArea: { marginBottom: 18 },
   screenTitle: {
     fontSize: 24,
     fontWeight: "800",
     color: "#2A3C6B",
     marginBottom: 6,
   },
-  screenSubTitle: {
-    fontSize: 13,
-    color: "#A0B0D0",
-    fontWeight: "500",
-  },
-  viewTabRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 16,
-  },
+  screenSubTitle: { fontSize: 13, color: "#A0B0D0", fontWeight: "500" },
+  viewTabRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
   viewTabButton: {
     flex: 1,
     backgroundColor: "#F3F4F8",
@@ -640,17 +784,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
   },
-  viewTabButtonActive: {
-    backgroundColor: "#405886",
-  },
-  viewTabText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#6D7690",
-  },
-  viewTabTextActive: {
-    color: "#FFF",
-  },
+  viewTabButtonActive: { backgroundColor: MAIN_COLOR },
+  viewTabText: { fontSize: 14, fontWeight: "700", color: "#6D7690" },
+  viewTabTextActive: { color: "#FFF" },
   periodRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -665,30 +801,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  periodMoveText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#405886",
-  },
-  periodText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#2A3C6B",
-  },
+  periodMoveText: { fontSize: 20, fontWeight: "700", color: MAIN_COLOR },
+  periodText: { fontSize: 16, fontWeight: "700", color: "#2A3C6B" },
   emptyBox: {
     backgroundColor: "#F8F9FB",
     borderRadius: 20,
     paddingVertical: 40,
     alignItems: "center",
   },
-  emptyText: {
-    fontSize: 14,
-    color: "#B4B6C0",
-    fontWeight: "600",
-  },
-  categorySection: {
-    marginBottom: 14,
-  },
+  emptyText: { fontSize: 14, color: "#B4B6C0", fontWeight: "600" },
+  categorySection: { marginBottom: 14 },
   categoryHeader: {
     backgroundColor: "#F8F9FB",
     borderRadius: 18,
@@ -698,91 +820,103 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  categoryHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  categoryTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#2A3C6B",
-  },
-  categoryCount: {
-    fontSize: 12,
-    color: "#A0B0D0",
-    fontWeight: "700",
-  },
-  categoryToggle: {
-    fontSize: 13,
-    color: "#405886",
-    fontWeight: "700",
-  },
-  categoryBody: {
-    marginTop: 10,
-    gap: 10,
-  },
+  categoryHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  categoryTitle: { fontSize: 15, fontWeight: "800", color: "#2A3C6B" },
+  categoryCount: { fontSize: 12, color: "#A0B0D0", fontWeight: "700" },
+  categoryToggle: { fontSize: 13, color: MAIN_COLOR, fontWeight: "700" },
+  categoryBody: { marginTop: 8, gap: 6 },
   routineCard: {
     backgroundColor: "#FFF",
     borderRadius: 18,
     padding: 14,
+    paddingBottom: 10,
     borderWidth: 1,
     borderColor: "#F1F3F7",
   },
   routineHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  routineColorDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 99,
-    marginRight: 8,
-  },
-  routineTitle: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#2A3C6B",
-  },
-  heatmapWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  heatmapCell: {
-    width: 18,
-    height: 18,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: "#DADFE8",
-    backgroundColor: "#FFF",
-  },
-  monthLabelRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 8,
-  },
-  monthLabel: {
-    width: 18,
-    textAlign: "center",
-    fontSize: 8,
-    color: "#A0B0D0",
-    fontWeight: "600",
-  },
+  routineColorDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  routineTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: "#2A3C6B" },
 
-  weekLabelRow: {
+  yearHeatmapWrap: { flexDirection: "row", flexWrap: "wrap", gap: 2 },
+  yearHeatmapCell: {
+    width: 7,
+    height: 7,
+    borderRadius: 1.5,
+    borderWidth: 0.5,
+    borderColor: "#DADFE8",
+    backgroundColor: "#F8F9FB",
+  },
+  yearLegendRow: {
     flexDirection: "row",
-    gap: 6,
+    justifyContent: "space-between",
     marginTop: 8,
   },
-  weekLabel: {
-    width: 18,
+  yearLegendText: { fontSize: 8, color: "#A0B0D0" },
+
+  monthWeekLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  monthWeekLabel: {
+    flex: 1,
     textAlign: "center",
     fontSize: 10,
     color: "#A0B0D0",
+    fontWeight: "700",
+  },
+  monthCalendarWrap: { flexDirection: "row", flexWrap: "wrap", rowGap: 2 },
+  monthCalendarCell: {
+    width: "14.28%",
+    aspectRatio: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  monthCalendarCellEmpty: { backgroundColor: "transparent" },
+  monthCalendarTextWrap: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  monthCalendarCellText: {
+    fontSize: 11,
     fontWeight: "600",
+    color: MAIN_COLOR,
+    textAlign: "center",
+    includeFontPadding: false,
+    textAlignVertical: "center",
+  },
+  monthCalendarCellTextFilled: {
+    color: MAIN_COLOR,
+    fontWeight: "800",
+  },
+
+  weekHeatmapWrap: { flexDirection: "row", justifyContent: "space-between" },
+  weekHeatmapCell: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#DADFE8",
+  },
+  weekLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  weekLabel: { width: 20, textAlign: "center", fontSize: 10, color: "#A0B0D0" },
+  weekContainer: {
+    paddingBottom: 8,
+    paddingTop: 4,
   },
 });

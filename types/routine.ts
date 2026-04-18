@@ -9,12 +9,13 @@ export interface ScheduleRoutine {
   categoryId?: number | null;
   categoryName?: string;
   color?: string;
-  date: string;
+  startDate: string;
+  endDate: string;
   startTime?: string | null;
   endTime?: string | null;
   alarm: boolean;
   state: boolean;
-  completed: boolean;
+  completedDates?: string[];
   cronExpression?: string | null;
   repeatOption?: RepeatOption;
   customRepeatEvery?: number;
@@ -38,6 +39,8 @@ export interface SaveRoutineOptions {
   repeatOption: RepeatOption;
   customRepeatEvery: string;
   customRepeatUnit: RepeatUnit;
+  startDate: string;
+  endDate: string;
 }
 
 // 시간 선택 모달에서 사용하는 시간 범위 타입

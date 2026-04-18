@@ -1,5 +1,14 @@
 // components/schedule_detail_modal.tsx
 
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { RoutineStorage } from "@/lib/storage";
+import type {
+  RepeatOption,
+  RepeatUnit,
+  ScheduleRoutine,
+} from "@/types/routine";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -13,59 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { RoutineStorage } from "@/lib/storage";
-import type {
-  RepeatOption,
-  RepeatUnit,
-  ScheduleRoutine,
-} from "@/types/routine";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Calendar, LocaleConfig } from "react-native-calendars";
-
-LocaleConfig.locales["kr"] = {
-  monthNames: [
-    "1월",
-    "2월",
-    "3월",
-    "4월",
-    "5월",
-    "6월",
-    "7월",
-    "8월",
-    "9월",
-    "10월",
-    "11월",
-    "12월",
-  ],
-  monthNamesShort: [
-    "1월",
-    "2월",
-    "3월",
-    "4월",
-    "5월",
-    "6월",
-    "7월",
-    "8월",
-    "9월",
-    "10월",
-    "11월",
-    "12월",
-  ],
-  dayNames: [
-    "일요일",
-    "월요일",
-    "화요일",
-    "수요일",
-    "목요일",
-    "금요일",
-    "토요일",
-  ],
-  dayNamesShort: ["S", "M", "T", "W", "T", "F", "S"],
-  today: "오늘",
-};
-LocaleConfig.defaultLocale = "kr";
+import AppCalendar from "./ui/app_calendar";
 
 type EventTypeStyle = {
   bg: string;
@@ -94,6 +51,7 @@ type ScheduleDetailModalProps = {
   routine: ScheduleRoutine | null;
   onClose: () => void;
   onUpdated: () => Promise<void> | void;
+  onDelete?: (id: number) => Promise<void> | void;
 };
 
 const MINUTE_OPTIONS = ["00", "10", "20", "30", "40", "50"];
@@ -143,10 +101,17 @@ function formatTimeRange(startTime?: string | null, endTime?: string | null) {
   const end = formatTime(endTime);
   return `${start} — ${end}`;
 }
-
 function formatDate(dateString: string) {
   const [year, month, day] = dateString.split("-");
   return `${year}년 ${month}월 ${day}일`;
+}
+
+function formatDateRange(startDate: string, endDate: string) {
+  if (startDate === endDate) {
+    return formatDate(startDate);
+  }
+
+  return `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
 }
 
 function hexToRgba(hex: string, alpha: number) {
@@ -352,25 +317,32 @@ export function ScheduleDetailModal({
   routine,
   onClose,
   onUpdated,
+  onDelete,
 }: ScheduleDetailModalProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTogglingComplete, setIsTogglingComplete] = useState(false);
 
   const [title, setTitle] = useState("");
   const [categoryName, setCategoryName] = useState("기타");
   const [selectedColor, setSelectedColor] = useState("#C4C6D0");
 
-  const [dateYear, setDateYear] = useState("2026");
-  const [dateMonth, setDateMonth] = useState("01");
-  const [dateDay, setDateDay] = useState("01");
+  const [startDateYear, setStartDateYear] = useState("2026");
+  const [startDateMonth, setStartDateMonth] = useState("01");
+  const [startDateDay, setStartDateDay] = useState("01");
+  const [endDateYear, setEndDateYear] = useState("2026");
+  const [endDateMonth, setEndDateMonth] = useState("01");
+  const [endDateDay, setEndDateDay] = useState("01");
   const [showCalendar, setShowCalendar] = useState(false);
-
+  const [calendarTarget, setCalendarTarget] = useState<"start" | "end">(
+    "start",
+  );
   const [startHour, setStartHour] = useState("09");
   const [startMinute, setStartMinute] = useState("00");
   const [endHour, setEndHour] = useState("10");
   const [endMinute, setEndMinute] = useState("00");
 
-  const [repeatOption, setRepeatOption] = useState<RepeatOption>("NONE");
+  const [repeatOption, setRepeatOption] = useState<RepeatOption>("DAILY");
   const [customRepeatEvery, setCustomRepeatEvery] = useState("1");
   const [customRepeatUnit, setCustomRepeatUnit] = useState<RepeatUnit>("DAY");
   const [isNotify, setIsNotify] = useState(false);
@@ -391,6 +363,7 @@ export function ScheduleDetailModal({
 
         const parsed = JSON.parse(stored) as string[] | CustomCategory[];
 
+        // 커스텀 카테고리 데이터를 문자열/객체 형태 모두 허용해서 정규화
         const normalized = Array.isArray(parsed)
           ? uniqueCustomCategories(
               parsed.map((item) => {
@@ -422,20 +395,25 @@ export function ScheduleDetailModal({
   useEffect(() => {
     if (!routine || !visible) return;
 
-    const dateParts = parseDateParts(routine.date);
+    const startDateParts = parseDateParts(routine.startDate);
+    const endDateParts = parseDateParts(routine.endDate ?? routine.startDate);
     const start = splitTime(routine.startTime);
     const end = splitTime(routine.endTime);
 
-    // 모달이 열릴 때 현재 루틴 값으로 수정 폼 초기화
+    // 모달이 열릴 때 전달받은 routine 값으로 수정 폼 상태 초기화
     setIsEditMode(false);
     setShowCalendar(false);
     setTitle(routine.title);
     setCategoryName(routine.categoryName ?? "기타");
     setSelectedColor(routine.color ?? eventTypes["기타"].dot);
 
-    setDateYear(dateParts.year);
-    setDateMonth(dateParts.month);
-    setDateDay(dateParts.day);
+    setStartDateYear(startDateParts.year);
+    setStartDateMonth(startDateParts.month);
+    setStartDateDay(startDateParts.day);
+    setEndDateYear(endDateParts.year);
+    setEndDateMonth(endDateParts.month);
+    setEndDateDay(endDateParts.day);
+    setCalendarTarget("start");
 
     setStartHour(start.hour);
     setStartMinute(MINUTE_OPTIONS.includes(start.minute) ? start.minute : "00");
@@ -465,13 +443,16 @@ export function ScheduleDetailModal({
   const previewRoutine = useMemo(() => {
     if (!routine) return null;
 
+    const nextStartDate = makeDate(startDateYear, startDateMonth, startDateDay);
+    const nextEndDate = makeDate(endDateYear, endDateMonth, endDateDay);
     // 화면에 보여줄 임시 미리보기 데이터
     return {
       ...routine,
       title,
       categoryName,
       color: selectedColor,
-      date: makeDate(dateYear, dateMonth, dateDay),
+      startDate: nextStartDate,
+      endDate: nextEndDate,
       startTime: makeTime(startHour, startMinute),
       endTime: makeTime(endHour, endMinute),
       alarm: isNotify,
@@ -488,9 +469,12 @@ export function ScheduleDetailModal({
     title,
     categoryName,
     selectedColor,
-    dateYear,
-    dateMonth,
-    dateDay,
+    startDateYear,
+    startDateMonth,
+    startDateDay,
+    endDateYear,
+    endDateMonth,
+    endDateDay,
     startHour,
     startMinute,
     endHour,
@@ -502,27 +486,41 @@ export function ScheduleDetailModal({
   ]);
 
   if (!routine || !previewRoutine) return null;
-
   const categoryStyle = getCategoryStyle(previewRoutine);
-  const selectedDateString = makeDate(dateYear, dateMonth, dateDay);
+
+  const selectedStartDateString = makeDate(
+    startDateYear,
+    startDateMonth,
+    startDateDay,
+  );
+  const selectedEndDateString = makeDate(endDateYear, endDateMonth, endDateDay);
+  const selectedCalendarDateString =
+    calendarTarget === "start"
+      ? selectedStartDateString
+      : selectedEndDateString;
 
   const handleEdit = () => {
     setIsEditMode(true);
   };
 
   const handleCancelEdit = () => {
-    const dateParts = parseDateParts(routine.date);
+    const startDateParts = parseDateParts(routine.startDate);
+    const endDateParts = parseDateParts(routine.endDate ?? routine.startDate);
     const start = splitTime(routine.startTime);
     const end = splitTime(routine.endTime);
 
-    // 취소 시 원래 값으로 복원
+    // 수정 취소 시 원본 routine 값으로 다시 되돌림
     setTitle(routine.title);
     setCategoryName(routine.categoryName ?? "기타");
     setSelectedColor(routine.color ?? eventTypes["기타"].dot);
 
-    setDateYear(dateParts.year);
-    setDateMonth(dateParts.month);
-    setDateDay(dateParts.day);
+    setStartDateYear(startDateParts.year);
+    setStartDateMonth(startDateParts.month);
+    setStartDateDay(startDateParts.day);
+    setEndDateYear(endDateParts.year);
+    setEndDateMonth(endDateParts.month);
+    setEndDateDay(endDateParts.day);
+    setCalendarTarget("start");
     setShowCalendar(false);
 
     setStartHour(start.hour);
@@ -537,7 +535,26 @@ export function ScheduleDetailModal({
 
     setIsEditMode(false);
   };
+  const handleDelete = async () => {
+    if (!routine || !onDelete) return;
 
+    Alert.alert("일정 삭제", "이 일정을 삭제할까요?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "삭제",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await onDelete(routine.id);
+            onClose();
+          } catch (error) {
+            console.error("일정 삭제 실패", error);
+            Alert.alert("오류", "일정 삭제 중 문제가 발생했어요.");
+          }
+        },
+      },
+    ]);
+  };
   const handleSave = async () => {
     if (!routine) return;
 
@@ -548,10 +565,15 @@ export function ScheduleDetailModal({
       return;
     }
 
-    const safeMonth = clamp(Number(dateMonth), 1, 12);
-    const safeYear = clamp(Number(dateYear), 2000, 2099);
-    const maxDay = getDaysInMonth(safeYear, safeMonth);
-    const safeDay = clamp(Number(dateDay), 1, maxDay);
+    const safeStartMonth = clamp(Number(startDateMonth), 1, 12);
+    const safeStartYear = clamp(Number(startDateYear), 2000, 2099);
+    const maxStartDay = getDaysInMonth(safeStartYear, safeStartMonth);
+    const safeStartDay = clamp(Number(startDateDay), 1, maxStartDay);
+
+    const safeEndMonth = clamp(Number(endDateMonth), 1, 12);
+    const safeEndYear = clamp(Number(endDateYear), 2000, 2099);
+    const maxEndDay = getDaysInMonth(safeEndYear, safeEndMonth);
+    const safeEndDay = clamp(Number(endDateDay), 1, maxEndDay);
 
     const safeStartHour = clamp(Number(startHour), 0, 23);
     const safeStartMinute = clamp(Number(startMinute), 0, 59);
@@ -571,6 +593,20 @@ export function ScheduleDetailModal({
 
       const prev = await RoutineStorage.getAll();
 
+      const nextStartDate = makeDate(
+        String(safeStartYear),
+        padNumber(safeStartMonth),
+        padNumber(safeStartDay),
+      );
+      const nextEndDate = makeDate(
+        String(safeEndYear),
+        padNumber(safeEndMonth),
+        padNumber(safeEndDay),
+      );
+      if (nextEndDate < nextStartDate) {
+        Alert.alert("안내", "종료 날짜는 시작 날짜보다 빠를 수 없어요.");
+        return;
+      }
       // 현재 선택한 루틴만 찾아서 수정
       const updated = prev.map((item) => {
         if (item.id !== routine.id) return item;
@@ -580,11 +616,8 @@ export function ScheduleDetailModal({
           title: trimmedTitle,
           categoryName,
           color: selectedColor,
-          date: makeDate(
-            String(safeYear),
-            padNumber(safeMonth),
-            padNumber(safeDay),
-          ),
+          startDate: nextStartDate,
+          endDate: nextEndDate,
           startTime: makeTime(
             padNumber(safeStartHour),
             padNumber(safeStartMinute),
@@ -660,6 +693,13 @@ export function ScheduleDetailModal({
                     <Text style={styles.editText}>수정</Text>
                   </TouchableOpacity>
 
+                  <TouchableOpacity
+                    onPress={handleDelete}
+                    style={styles.deleteIconButton}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#D45A68" />
+                  </TouchableOpacity>
+
                   <TouchableOpacity onPress={onClose}>
                     <IconSymbol name="xmark" size={20} color="#B4B6C0" />
                   </TouchableOpacity>
@@ -686,10 +726,9 @@ export function ScheduleDetailModal({
               )}
             </View>
           </View>
-
           {!isEditMode ? (
             <>
-              <View style={styles.titleContainer}>
+              <View style={styles.titleRow}>
                 <Text style={styles.detailRoutineTitle} numberOfLines={2}>
                   {previewRoutine.title}
                 </Text>
@@ -712,7 +751,10 @@ export function ScheduleDetailModal({
                   <View style={styles.infoTextGroup}>
                     <Text style={styles.detailLabel}>날짜</Text>
                     <Text style={styles.detailValue}>
-                      {formatDate(previewRoutine.date)}
+                      {formatDateRange(
+                        previewRoutine.startDate,
+                        previewRoutine.endDate,
+                      )}
                     </Text>
                   </View>
                 </View>
@@ -818,56 +860,86 @@ export function ScheduleDetailModal({
 
               <View style={styles.inputBlock}>
                 <Text style={styles.editSectionLabel}>날짜</Text>
+                <View style={styles.dateRangeBlock}>
+                  <TouchableOpacity
+                    style={styles.dateSelectButton}
+                    onPress={() => {
+                      setCalendarTarget("start");
+                      setShowCalendar((prev) =>
+                        calendarTarget === "start" ? !prev : true,
+                      );
+                    }}
+                  >
+                    <View style={styles.dateSelectLeft}>
+                      <IconSymbol name="calendar" size={18} color="#405886" />
+                      <Text style={styles.dateSelectText}>
+                        시작일 · {formatDate(selectedStartDateString)}
+                      </Text>
+                    </View>
 
-                <TouchableOpacity
-                  style={styles.dateSelectButton}
-                  onPress={() => setShowCalendar((prev) => !prev)}
-                >
-                  <View style={styles.dateSelectLeft}>
-                    <IconSymbol name="calendar" size={18} color="#405886" />
-                    <Text style={styles.dateSelectText}>
-                      {formatDate(selectedDateString)}
-                    </Text>
-                  </View>
+                    <IconSymbol
+                      name={
+                        showCalendar && calendarTarget === "start"
+                          ? "chevron.up"
+                          : "chevron.down"
+                      }
+                      size={16}
+                      color="#A0B0D0"
+                    />
+                  </TouchableOpacity>
 
-                  <IconSymbol
-                    name={showCalendar ? "chevron.up" : "chevron.down"}
-                    size={16}
-                    color="#A0B0D0"
-                  />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.dateSelectButton}
+                    onPress={() => {
+                      setCalendarTarget("end");
+                      setShowCalendar((prev) =>
+                        calendarTarget === "end" ? !prev : true,
+                      );
+                    }}
+                  >
+                    <View style={styles.dateSelectLeft}>
+                      <IconSymbol name="calendar" size={18} color="#405886" />
+                      <Text style={styles.dateSelectText}>
+                        종료일 · {formatDate(selectedEndDateString)}
+                      </Text>
+                    </View>
+
+                    <IconSymbol
+                      name={
+                        showCalendar && calendarTarget === "end"
+                          ? "chevron.up"
+                          : "chevron.down"
+                      }
+                      size={16}
+                      color="#A0B0D0"
+                    />
+                  </TouchableOpacity>
+                </View>
 
                 {showCalendar && (
                   <View style={styles.calendarContainer}>
-                    <Calendar
-                      current={selectedDateString}
-                      onDayPress={(day) => {
-                        const parts = parseDateParts(day.dateString);
-                        setDateYear(parts.year);
-                        setDateMonth(parts.month);
-                        setDateDay(parts.day);
-                        setShowCalendar(false);
-                      }}
-                      monthFormat={"yyyy년 MM월"}
+                    <AppCalendar
+                      current={selectedCalendarDateString}
                       markedDates={{
-                        [selectedDateString]: {
+                        [selectedCalendarDateString]: {
                           selected: true,
                           selectedColor: "#F1F1FB",
                         },
                       }}
-                      theme={{
-                        backgroundColor: "#F8F9FB",
-                        calendarBackground: "#F8F9FB",
-                        textSectionTitleColor: "#B4B6C0",
-                        selectedDayTextColor: "#2A3C6B",
-                        todayTextColor: "#405886",
-                        dayTextColor: "#2A3C6B",
-                        textDisabledColor: "#D9E1E8",
-                        arrowColor: "#A0B0D0",
-                        monthTextColor: "#2A3C6B",
-                        textDayFontWeight: "600",
-                        textMonthFontWeight: "bold",
-                        textDayHeaderFontWeight: "600",
+                      onDayPress={(day) => {
+                        const parts = parseDateParts(day.dateString);
+
+                        if (calendarTarget === "start") {
+                          setStartDateYear(parts.year);
+                          setStartDateMonth(parts.month);
+                          setStartDateDay(parts.day);
+                        } else {
+                          setEndDateYear(parts.year);
+                          setEndDateMonth(parts.month);
+                          setEndDateDay(parts.day);
+                        }
+
+                        setShowCalendar(false);
                       }}
                     />
                   </View>
@@ -941,25 +1013,6 @@ export function ScheduleDetailModal({
                   <TouchableOpacity
                     style={[
                       styles.repeatOptionButton,
-                      repeatOption === "NONE" &&
-                        styles.repeatOptionButtonSelected,
-                    ]}
-                    onPress={() => setRepeatOption("NONE")}
-                  >
-                    <Text
-                      style={[
-                        styles.repeatOptionText,
-                        repeatOption === "NONE" &&
-                          styles.repeatOptionTextSelected,
-                      ]}
-                    >
-                      반복 없음
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.repeatOptionButton,
                       repeatOption === "DAILY" &&
                         styles.repeatOptionButtonSelected,
                     ]}
@@ -995,7 +1048,6 @@ export function ScheduleDetailModal({
                     </Text>
                   </TouchableOpacity>
                 </View>
-
                 {repeatOption === "CUSTOM" && (
                   <View style={styles.customRepeatBox}>
                     <View style={styles.dialRow}>
@@ -1087,20 +1139,34 @@ const styles = StyleSheet.create({
     color: "#B4B6C0",
     letterSpacing: 0.5,
   },
-  titleContainer: {
+  titleRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    flexWrap: "wrap",
+    gap: 8,
     marginBottom: 20,
-    gap: 12,
   },
   detailRoutineTitle: {
-    flex: 1,
     fontSize: 21,
     fontWeight: "800",
     color: "#2A3C6B",
     lineHeight: 28,
+    flexShrink: 1,
   },
+
+  tagBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: "center",
+  },
+
+  tagText: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
   infoList: {
     gap: 16,
     marginBottom: 28,
@@ -1128,6 +1194,7 @@ const styles = StyleSheet.create({
   detailFooter: {
     marginTop: 4,
   },
+
   detailCloseButton: {
     backgroundColor: "#405886",
     borderRadius: 16,
@@ -1138,16 +1205,6 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 16,
     fontWeight: "700",
-  },
-  tagBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginTop: 2,
-  },
-  tagText: {
-    fontSize: 11,
-    fontWeight: "800",
   },
   editScroll: {
     flexGrow: 1,
@@ -1199,7 +1256,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-
+  dateRangeBlock: {
+    gap: 8,
+  },
   dateSelectButton: {
     borderWidth: 1,
     borderColor: "#E4E7EE",
@@ -1382,5 +1441,13 @@ const styles = StyleSheet.create({
   },
   customRepeatBox: {
     marginTop: 12,
+  },
+  deleteIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FCEBEC",
   },
 });
