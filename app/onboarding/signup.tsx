@@ -24,6 +24,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [isEmailValidated, setIsEmailValidated] = useState(false);
 
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [agreeProfile, setAgreeProfile] = useState(false);
@@ -38,6 +39,7 @@ export default function SignupScreen() {
 
   const checkEmail = async (email: string) => {
     setEmailError(null);
+    setIsEmailValidated(false);
     try {
       // Simulate API call to check email uniqueness
       const response = await fetch("http://localhost/api/v1/auth/check-email", {
@@ -52,14 +54,19 @@ export default function SignupScreen() {
 
       if (data.isDuplicate) {
         setEmailError("이미 사용 중인 이메일 주소입니다.");
+        setIsEmailValidated(false);
         return false;
       }
+      
+      setEmailError(null);
+      setIsEmailValidated(true);
       return true;
     } catch (e) {
       console.error("Error checking email:", e);
       setEmailError(
         "이메일 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
       );
+      setIsEmailValidated(false);
       return false;
     }
   };
@@ -80,11 +87,9 @@ export default function SignupScreen() {
       setError("필수 개인정보 수집 및 이용에 동의해주세요.");
       return;
     }
-
-    // 1. Email 중복 확인
-    const isEmailUnique = await checkEmail(email);
-    if (!isEmailUnique) {
-      return; // 중복이거나 에러가 발생하면 가입 진행 안 함
+    if (!isEmailValidated) {
+      setError("유효한 이메일 주소인지 확인해주세요.");
+      return;
     }
 
     // 2. 회원가입 진행
@@ -142,6 +147,18 @@ export default function SignupScreen() {
             {emailError ? (
               <Text style={styles.errorText}>{emailError}</Text>
             ) : null}
+
+            {/* Email Validation Button */}
+            <TouchableOpacity
+              style={styles.checkEmailButton}
+              onPress={() => checkEmail(email)}
+              disabled={!email || isLoading}
+            >
+              <Text style={styles.checkEmailButtonText}>
+                {isLoading ? "확인 중..." : "이메일 중복 확인"}
+              </Text>
+            </TouchableOpacity>
+            {/* End Email Validation Button */}
 
             <TextInput
               style={styles.input}
@@ -251,7 +268,7 @@ export default function SignupScreen() {
             <TouchableOpacity
               style={styles.primaryButton}
               onPress={handleSignup}
-              disabled={isLoading}
+              disabled={isLoading || !isEmailValidated}
             >
               <Text style={styles.primaryButtonText}>
                 {isLoading ? "가입 중..." : "가입하기"}
@@ -321,6 +338,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     alignSelf: "center",
     fontSize: 14,
+  },
+  checkEmailButton: {
+    backgroundColor: "#EBF2FF",
+    padding: 16,
+    marginVertical: 8,
+    borderRadius: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#C3D9FF",
+  },
+  checkEmailButtonText: {
+    color: "#2A3C6B",
+    fontSize: 16,
+    fontWeight: "600",
   },
   primaryButton: {
     backgroundColor: "#2A3C6B",
