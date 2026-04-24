@@ -30,76 +30,74 @@ export default function SignupScreen() {
   const [agreeProfile, setAgreeProfile] = useState(false);
   const [agreePush, setAgreePush] = useState(false);
 
+  const allAgreed = agreePrivacy && agreeProfile && agreePush;
+
   const handleAllAgree = () => {
-    const allAgreed = agreePrivacy && agreeProfile && agreePush;
-    setAgreePrivacy(!allAgreed);
-    setAgreeProfile(!allAgreed);
-    setAgreePush(!allAgreed);
+    const nextState = !allAgreed;
+    setAgreePrivacy(nextState);
+    setAgreeProfile(nextState);
+    setAgreePush(nextState);
   };
 
   const checkEmail = async (email: string) => {
+    if (!email.includes("@")) {
+      setEmailError("유효한 이메일 형식이 아닙니다.");
+      return;
+    }
+
     setEmailError(null);
     setIsEmailValidated(false);
+
     try {
-      // Simulate API call to check email uniqueness
-      const response = await fetch("http://localhost/api/v1/auth/check-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      // API 호출 시뮬레이션
+      const response = await fetch(
+        "http://3.35.117.128:8080/api/v1/auth/check-email",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
         },
-        body: JSON.stringify({ email }),
-      });
+      );
 
       const data = await response.json();
 
       if (data.isDuplicate) {
-        setEmailError("이미 사용 중인 이메일 주소입니다.");
+        setEmailError("이미 사용 중인 이메일입니다.");
         setIsEmailValidated(false);
-        return false;
+      } else {
+        setEmailError(null);
+        setIsEmailValidated(true);
+        Alert.alert("확인", "사용 가능한 이메일입니다.");
       }
-      
-      setEmailError(null);
-      setIsEmailValidated(true);
-      return true;
     } catch (e) {
-      console.error("Error checking email:", e);
-      setEmailError(
-        "이메일 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-      );
-      setIsEmailValidated(false);
-      return false;
+      setEmailError("연결 오류가 발생했습니다.");
     }
   };
 
   const handleSignup = async () => {
-    setError(null);
-    setEmailError(null);
-
-    if (password !== passwordConfirm) {
-      setError("비밀번호가 일치하지 않습니다.");
+    if (!isEmailValidated) {
+      setError("이메일 중복 확인이 필요합니다.");
       return;
     }
-    if (!email || !password || !nickname) {
-      setError("모든 필드를 입력해주세요.");
+    if (password !== passwordConfirm) {
+      setError("비밀번호가 서로 다릅니다.");
       return;
     }
     if (!agreePrivacy) {
-      setError("필수 개인정보 수집 및 이용에 동의해주세요.");
-      return;
-    }
-    if (!isEmailValidated) {
-      setError("유효한 이메일 주소인지 확인해주세요.");
+      setError("필수 약관에 동의해주세요.");
       return;
     }
 
-    // 2. 회원가입 진행
     const success = await signup(email, password, nickname);
     if (success) {
-      Alert.alert("성공", "회원가입이 완료되었습니다!", [
-        { text: "확인", onPress: () => router.back() },
+      Alert.alert("환영합니다!", "회원가입이 완료되었습니다.", [
+        { text: "시작하기", onPress: () => router.replace("/") },
       ]);
     }
   };
+
+  const isFormValid =
+    nickname && isEmailValidated && password && passwordConfirm && agreePrivacy;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -115,163 +113,153 @@ export default function SignupScreen() {
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <Ionicons name="arrow-back" size={24} color="#2A3C6B" />
+            <Ionicons name="arrow-back" size={26} color="#2A3C6B" />
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>회원가입</Text>
+            <Text style={styles.headerTitle}>계정 만들기</Text>
             <Text style={styles.headerSubtitle}>
-              새로운 계정을 만들어보세요.
+              간편하게 가입하고 서비스를 이용해보세요.
             </Text>
           </View>
 
           <View style={styles.card}>
-            <TextInput
-              style={styles.input}
-              placeholder="이름"
-              value={nickname}
-              onChangeText={setName}
-              autoCapitalize="words"
-              placeholderTextColor="#A0B0D0"
-            />
+            {/* 이름 입력 */}
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>이름</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="성함을 입력해주세요"
+                value={nickname}
+                onChangeText={setName}
+                placeholderTextColor="#A0B0D0"
+              />
+            </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="이메일"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              placeholderTextColor="#A0B0D0"
-            />
-            {emailError ? (
-              <Text style={styles.errorText}>{emailError}</Text>
-            ) : null}
+            {/* 이메일 입력 + 중복확인 버튼 통합 */}
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>이메일</Text>
+              <View style={styles.inlineInputContainer}>
+                <TextInput
+                  style={[
+                    styles.inlineInput,
+                    isEmailValidated && styles.validatedInput,
+                  ]}
+                  placeholder="example@mail.com"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    setIsEmailValidated(false);
+                  }}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  placeholderTextColor="#A0B0D0"
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.inlineButton,
+                    (!email || isEmailValidated) && styles.disabledInlineButton,
+                  ]}
+                  onPress={() => checkEmail(email)}
+                  disabled={!email || isLoading || isEmailValidated}
+                >
+                  <Text style={styles.inlineButtonText}>
+                    {isEmailValidated ? "확인됨" : "중복확인"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {emailError && <Text style={styles.errorText}>{emailError}</Text>}
+            </View>
 
-            {/* Email Validation Button */}
-            <TouchableOpacity
-              style={styles.checkEmailButton}
-              onPress={() => checkEmail(email)}
-              disabled={!email || isLoading}
-            >
-              <Text style={styles.checkEmailButtonText}>
-                {isLoading ? "확인 중..." : "이메일 중복 확인"}
-              </Text>
-            </TouchableOpacity>
-            {/* End Email Validation Button */}
+            {/* 비밀번호 입력 */}
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>비밀번호</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="8자 이상 입력"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholderTextColor="#A0B0D0"
+              />
+              <TextInput
+                style={[styles.input, { marginTop: 10 }]}
+                placeholder="비밀번호 재입력"
+                value={passwordConfirm}
+                onChangeText={setPasswordConfirm}
+                secureTextEntry
+                placeholderTextColor="#A0B0D0"
+              />
+            </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="비밀번호"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholderTextColor="#A0B0D0"
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="비밀번호 확인"
-              value={passwordConfirm}
-              onChangeText={setPasswordConfirm}
-              secureTextEntry
-              placeholderTextColor="#A0B0D0"
-            />
-
+            {/* 약관 동의 섹션 */}
             <View style={styles.agreementSection}>
               <TouchableOpacity
-                style={styles.checkboxContainer}
+                style={styles.allAgreeRow}
                 onPress={handleAllAgree}
               >
                 <Ionicons
-                  name={
-                    agreePrivacy && agreeProfile && agreePush
-                      ? "checkmark-circle"
-                      : "ellipse-outline"
-                  }
+                  name={allAgreed ? "checkbox" : "square-outline"}
                   size={24}
-                  color={
-                    agreePrivacy && agreeProfile && agreePush
-                      ? "#2A3C6B"
-                      : "#A0B0D0"
-                  }
+                  color={allAgreed ? "#2A3C6B" : "#A0B0D0"}
                 />
-                <Text style={styles.agreementAllText}>약관 전체 동의</Text>
+                <Text style={styles.allAgreeText}>약관에 모두 동의합니다</Text>
               </TouchableOpacity>
 
               <View style={styles.divider} />
 
-              <View style={styles.checkboxContainer}>
-                <TouchableOpacity
-                  onPress={() => setAgreePrivacy(!agreePrivacy)}
-                >
-                  <Ionicons
-                    name={agreePrivacy ? "checkmark-circle" : "ellipse-outline"}
-                    size={24}
-                    color={agreePrivacy ? "#2A3C6B" : "#A0B0D0"}
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => router.push("/onboarding/privacy")}
-                  style={styles.agreementTextContainer}
-                >
-                  <Text style={styles.agreementText}>
-                    [필수] 개인정보 수집 및 이용 동의
-                  </Text>
-                  <Ionicons name="chevron-forward" size={16} color="#A0B0D0" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.checkboxContainer}>
-                <TouchableOpacity
-                  onPress={() => setAgreeProfile(!agreeProfile)}
-                >
-                  <Ionicons
-                    name={agreeProfile ? "checkmark-circle" : "ellipse-outline"}
-                    size={24}
-                    color={agreeProfile ? "#2A3C6B" : "#A0B0D0"}
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => router.push("/onboarding/profile")}
-                  style={styles.agreementTextContainer}
-                >
-                  <Text style={styles.agreementText}>
-                    [선택] 프로필 정보 수집 및 이용 동의
-                  </Text>
-                  <Ionicons name="chevron-forward" size={16} color="#A0B0D0" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.checkboxContainer}>
-                <TouchableOpacity onPress={() => setAgreePush(!agreePush)}>
-                  <Ionicons
-                    name={agreePush ? "checkmark-circle" : "ellipse-outline"}
-                    size={24}
-                    color={agreePush ? "#2A3C6B" : "#A0B0D0"}
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => router.push("/onboarding/push")}
-                  style={styles.agreementTextContainer}
-                >
-                  <Text style={styles.agreementText}>
-                    [선택] 푸시 알림 수신 동의
-                  </Text>
-                  <Ionicons name="chevron-forward" size={16} color="#A0B0D0" />
-                </TouchableOpacity>
-              </View>
+              {[
+                {
+                  label: "[필수] 개인정보 수집 및 이용",
+                  state: agreePrivacy,
+                  setState: setAgreePrivacy,
+                  link: "/privacy",
+                },
+                {
+                  label: "[선택] 프로필 정보 이용",
+                  state: agreeProfile,
+                  setState: setAgreeProfile,
+                  link: "/profile",
+                },
+                {
+                  label: "[선택] 마케팅 푸시 알림",
+                  state: agreePush,
+                  setState: setAgreePush,
+                  link: "/push",
+                },
+              ].map((item, index) => (
+                <View key={index} style={styles.agreeRow}>
+                  <TouchableOpacity onPress={() => item.setState(!item.state)}>
+                    <Ionicons
+                      name={item.state ? "checkmark-circle" : "ellipse-outline"}
+                      size={22}
+                      color={item.state ? "#2A3C6B" : "#D1D9E6"}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.agreeTextBtn}>
+                    <Text style={styles.agreeText}>{item.label}</Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={14}
+                      color="#A0B0D0"
+                    />
+                  </TouchableOpacity>
+                </View>
+              ))}
             </View>
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error && <Text style={styles.mainErrorText}>{error}</Text>}
 
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={[
+                styles.submitButton,
+                !isFormValid && styles.disabledSubmitButton,
+              ]}
               onPress={handleSignup}
-              disabled={isLoading || !isEmailValidated}
+              disabled={!isFormValid || isLoading}
             >
-              <Text style={styles.primaryButtonText}>
-                {isLoading ? "가입 중..." : "가입하기"}
+              <Text style={styles.submitButtonText}>
+                {isLoading ? "처리 중..." : "가입 완료"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -282,124 +270,113 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F3F4F8",
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 40,
-    justifyContent: "center",
-  },
+  safeArea: { flex: 1, backgroundColor: "#F8FAFF" },
+  scrollContainer: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 40 },
   backButton: {
-    marginBottom: 20,
-    paddingHorizontal: 8,
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    marginBottom: 10,
   },
-  header: {
-    marginBottom: 24,
-    paddingHorizontal: 8,
-  },
+  header: { marginBottom: 30 },
   headerTitle: {
     fontSize: 28,
     fontWeight: "800",
     color: "#2A3C6B",
     marginBottom: 8,
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: "#8A8C9A",
-    fontWeight: "500",
-  },
+  headerSubtitle: { fontSize: 15, color: "#8A8C9A", fontWeight: "500" },
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+    borderRadius: 28,
     padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    shadowColor: "#2A3C6B",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  inputWrapper: { marginBottom: 18 },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#5C6E91",
+    marginBottom: 8,
+    marginLeft: 4,
   },
   input: {
-    backgroundColor: "#F8F9FB",
+    backgroundColor: "#F1F4F9",
     padding: 16,
-    marginVertical: 8,
-    borderRadius: 16,
+    borderRadius: 14,
     fontSize: 16,
-    color: "#333333",
-    borderWidth: 1,
-    borderColor: "#EDEEF1",
+    color: "#333",
   },
-  errorText: {
-    color: "#E74C3C",
-    marginTop: 4,
-    marginBottom: 8,
-    alignSelf: "center",
-    fontSize: 14,
-  },
-  checkEmailButton: {
-    backgroundColor: "#EBF2FF",
+  inlineInputContainer: { flexDirection: "row", alignItems: "center" },
+  inlineInput: {
+    flex: 1,
+    backgroundColor: "#F1F4F9",
     padding: 16,
-    marginVertical: 8,
-    borderRadius: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#C3D9FF",
-  },
-  checkEmailButtonText: {
-    color: "#2A3C6B",
+    borderRadius: 14,
     fontSize: 16,
-    fontWeight: "600",
+    color: "#333",
   },
-  primaryButton: {
+  validatedInput: { backgroundColor: "#EDF9F0", color: "#2E7D32" },
+  inlineButton: {
+    marginLeft: 10,
     backgroundColor: "#2A3C6B",
-    padding: 18,
-    borderRadius: 16,
-    alignItems: "center",
-    marginTop: 16,
-    shadowColor: "#2A3C6B",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
+    paddingHorizontal: 16,
+    height: 54,
+    borderRadius: 14,
+    justifyContent: "center",
   },
-  primaryButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  disabledInlineButton: { backgroundColor: "#D1D9E6" },
+  inlineButtonText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
+  errorText: { color: "#FF5252", fontSize: 12, marginTop: 6, marginLeft: 4 },
   agreementSection: {
-    marginTop: 16,
-    marginBottom: 8,
-    paddingHorizontal: 4,
+    marginTop: 10,
+    padding: 16,
+    backgroundColor: "#F8F9FB",
+    borderRadius: 16,
   },
-  checkboxContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  agreementAllText: {
+  allAgreeRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  allAgreeText: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#2A3C6B",
-    marginLeft: 8,
+    marginLeft: 10,
   },
-  agreementTextContainer: {
+  divider: { height: 1, backgroundColor: "#E0E5ED", marginBottom: 12 },
+  agreeRow: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
+  agreeTextBtn: {
     flex: 1,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginLeft: 8,
+    marginLeft: 10,
   },
-  agreementText: {
-    fontSize: 15,
-    color: "#5C5E6A",
+  agreeText: { fontSize: 14, color: "#5C6E91" },
+  mainErrorText: {
+    color: "#FF5252",
+    textAlign: "center",
+    marginTop: 15,
+    fontWeight: "600",
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#EDEEF1",
-    marginVertical: 8,
+  submitButton: {
+    backgroundColor: "#2A3C6B",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginTop: 25,
+    shadowColor: "#2A3C6B",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
   },
+  disabledSubmitButton: {
+    backgroundColor: "#BCC8E0",
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  submitButtonText: { color: "#FFF", fontSize: 18, fontWeight: "800" },
 });
