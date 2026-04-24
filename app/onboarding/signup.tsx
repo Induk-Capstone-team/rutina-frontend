@@ -42,6 +42,7 @@ export default function SignupScreen() {
   const checkEmail = async (email: string) => {
     if (!email.includes("@")) {
       setEmailError("유효한 이메일 형식이 아닙니다.");
+      setIsEmailValidated(false);
       return;
     }
 
@@ -61,16 +62,22 @@ export default function SignupScreen() {
 
       const data = await response.json();
 
-      if (data.isDuplicate) {
-        setEmailError("이미 사용 중인 이메일입니다.");
+      // API 응답 구조에 맞춰 중복 확인 로직 수정
+      if (data.success && data.data && data.data.isDuplicate) {
+        setEmailError(data.message || "이미 사용 중인 이메일입니다.");
         setIsEmailValidated(false);
-      } else {
+      } else if (data.success && data.data && !data.data.isDuplicate) {
         setEmailError(null);
         setIsEmailValidated(true);
         Alert.alert("확인", "사용 가능한 이메일입니다.");
+      } else {
+        // API 호출 실패 또는 예상치 못한 응답
+        setEmailError("이메일 확인에 실패했습니다. 다시 시도해주세요.");
+        setIsEmailValidated(false);
       }
     } catch (e) {
       setEmailError("연결 오류가 발생했습니다.");
+      setIsEmailValidated(false);
     }
   };
 
