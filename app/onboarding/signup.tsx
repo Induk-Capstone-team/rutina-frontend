@@ -23,6 +23,7 @@ export default function SignupScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [agreeProfile, setAgreeProfile] = useState(false);
@@ -35,7 +36,36 @@ export default function SignupScreen() {
     setAgreePush(!allAgreed);
   };
 
+  const checkEmail = async (email: string) => {
+    setEmailError(null);
+    try {
+      // Simulate API call to check email uniqueness
+      const response = await fetch("http://localhost/api/v1/auth/check-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (data.isDuplicate) {
+        setEmailError("이미 사용 중인 이메일 주소입니다.");
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error("Error checking email:", e);
+      setEmailError("이메일 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+      return false;
+    }
+  };
+
   const handleSignup = async () => {
+    setError(null);
+    setEmailError(null);
+
     if (password !== passwordConfirm) {
       setError("비밀번호가 일치하지 않습니다.");
       return;
@@ -49,6 +79,13 @@ export default function SignupScreen() {
       return;
     }
 
+    // 1. Email 중복 확인
+    const isEmailUnique = await checkEmail(email);
+    if (!isEmailUnique) {
+      return; // 중복이거나 에러가 발생하면 가입 진행 안 함
+    }
+
+    // 2. 회원가입 진행
     const success = await signup(email, password, nickname);
     if (success) {
       Alert.alert("성공", "회원가입이 완료되었습니다!", [
@@ -100,6 +137,9 @@ export default function SignupScreen() {
               keyboardType="email-address"
               placeholderTextColor="#A0B0D0"
             />
+            {emailError ? (
+              <Text style={styles.errorText}>{emailError}</Text>
+            ) : null}
 
             <TextInput
               style={styles.input}
