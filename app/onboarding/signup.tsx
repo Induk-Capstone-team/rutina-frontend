@@ -17,7 +17,7 @@ import {
 
 export default function SignupScreen() {
   const router = useRouter();
-  const { signup, isLoading, error, setError } = useAuthViewModel();
+  const { signup, checkEmail: checkEmailApi, isLoading, error, setError } = useAuthViewModel();
 
   const [nickname, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -40,7 +40,8 @@ export default function SignupScreen() {
   };
 
   const checkEmail = async (email: string) => {
-    if (!email.includes("@")) {
+    // 1. 기본 유효성 검사
+    if (!email || !email.includes("@")) {
       setEmailError("유효한 이메일 형식이 아닙니다.");
       setIsEmailValidated(false);
       return;
@@ -50,33 +51,28 @@ export default function SignupScreen() {
     setIsEmailValidated(false);
 
     try {
-      // API 호출 시뮬레이션
-      const response = await fetch(
-        "http://3.35.117.128:8080/api/v1/auth/check-email",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        },
-      );
+      const data = await checkEmailApi(email);
 
-      const data = await response.json();
-
-      // API 응답 구조에 맞춰 중복 확인 로직 수정
-      if (data.success && data.data && data.data.isDuplicate) {
-        setEmailError(data.message || "이미 사용 중인 이메일입니다.");
-        setIsEmailValidated(false);
-      } else if (data.success && data.data && !data.data.isDuplicate) {
-        setEmailError(null);
-        setIsEmailValidated(true);
-        Alert.alert("확인", "사용 가능한 이메일입니다.");
+      // 3. API 응답 구조 매핑
+      if (data.success) {
+        if (data.data?.isDuplicate) {
+          // 중복된 경우
+          setEmailError("이미 사용 중인 이메일입니다.");
+          setIsEmailValidated(false);
+        } else {
+          // 사용 가능한 경우
+          setEmailError(null);
+          setIsEmailValidated(true);
+          Alert.alert("확인", data.message || "사용 가능한 이메일입니다.");
+        }
       } else {
-        // API 호출 실패 또는 예상치 못한 응답
-        setEmailError("이메일 확인에 실패했습니다. 다시 시도해주세요.");
+        // success가 false로 오는 경우 (서버 에러 등)
+        setEmailError(data.message || "이메일 확인에 실패했습니다.");
         setIsEmailValidated(false);
       }
-    } catch (e) {
-      setEmailError("연결 오류가 발생했습니다.");
+    } catch (e: any) {
+      console.error("Check Email Error:", e);
+      setEmailError(e.response?.data?.message || "연결 오류가 발생했습니다.");
       setIsEmailValidated(false);
     }
   };
