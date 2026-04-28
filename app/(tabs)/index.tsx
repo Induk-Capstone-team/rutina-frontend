@@ -56,7 +56,6 @@ type TimetableEvent = {
 };
 
 function addAlphaToHex(hexColor: string, alpha = "22") {
-  // 사용자 지정 색상을 부드러운 배경색으로 바꾸기
   if (!hexColor.startsWith("#")) return "#F1F1FB";
   if (hexColor.length === 7) return `${hexColor}${alpha}`;
   return hexColor;
@@ -82,52 +81,75 @@ function isDateInRange(targetDate: string, startDate: string, endDate: string) {
   return targetDate >= startDate && targetDate <= endDate;
 }
 
+//선택한 날짜를 요일 값으로 변환
+function getWeekdayValue(date: Date) {
+  const weekdays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] as const;
+  return weekdays[date.getDay()];
+}
+
+//나중에 API에서 repeatDays가 문자열로 와도 처리 가능하게 정리
+function normalizeRepeatDays(
+  repeatDays?: ScheduleRoutine["repeatDays"] | string | null,
+) {
+  if (!repeatDays) return [];
+
+  if (Array.isArray(repeatDays)) {
+    return repeatDays;
+  }
+
+  return repeatDays
+    .split(",")
+    .map((day) => day.trim())
+    .filter(Boolean);
+}
+
 function isRoutineVisibleOnDate(
   routine: ScheduleRoutine,
   targetDateString: string,
 ) {
-  // 시작일~종료일 범위 안인지 먼저 확인
   if (!isDateInRange(targetDateString, routine.startDate, routine.endDate)) {
     return false;
   }
 
-  // 반복 설정이 없으면 범위 안에서만 표시
-  if (!routine.repeatOption || routine.repeatOption === "NONE") {
+  if (!routine.repeatType || routine.repeatType === "NONE") {
     return true;
   }
 
-  // DAILY는 범위 안 모든 날짜 표시
-  if (routine.repeatOption === "DAILY") {
+  if (routine.repeatType === "DAILY") {
     return true;
   }
 
-  // CUSTOM 반복 계산
-  if (routine.repeatOption === "CUSTOM") {
-    const every = routine.customRepeatEvery ?? 1;
+  if (routine.repeatType === "CUSTOM") {
+    const every = routine.repeatInterval ?? 1;
 
     const startDate = new Date(routine.startDate);
     const targetDate = new Date(targetDateString);
 
-    if (routine.customRepeatUnit === "DAY") {
+    if (routine.repeatUnit === "DAY") {
       return differenceInCalendarDays(targetDate, startDate) % every === 0;
     }
 
-    if (routine.customRepeatUnit === "WEEK") {
-      return differenceInCalendarWeeks(targetDate, startDate) % every === 0;
+    if (routine.repeatUnit === "WEEK") {
+      const weekMatched =
+        differenceInCalendarWeeks(targetDate, startDate) % every === 0;
+
+      const selectedWeekday = getWeekdayValue(targetDate);
+      const repeatDays = normalizeRepeatDays(routine.repeatDays);
+
+      return weekMatched && repeatDays.includes(selectedWeekday);
     }
 
-    if (routine.customRepeatUnit === "MONTH") {
+    if (routine.repeatUnit === "MONTH") {
       return differenceInCalendarMonths(targetDate, startDate) % every === 0;
     }
 
-    if (routine.customRepeatUnit === "YEAR") {
+    if (routine.repeatUnit === "YEAR") {
       return differenceInCalendarYears(targetDate, startDate) % every === 0;
     }
   }
 
   return true;
 }
-
 function buildTimetableEvents(
   routines: ScheduleRoutine[],
   targetDateString: string,
@@ -244,7 +266,6 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // 일정 추가/수정 후 돌아오면 다시 불러오기
       loadStoredRoutines();
     }, [loadStoredRoutines]),
   );
@@ -576,8 +597,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 2,
-    backgroundColor: "#F3F5FA",
+    backgroundColor: "#F6F8FC",
   },
   horizontalContent: {
     flexGrow: 1,
@@ -591,6 +611,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 30,
     paddingBottom: 24,
+    marginBottom: 20,
   },
   topPanel: {
     backgroundColor: "#FFFFFF",

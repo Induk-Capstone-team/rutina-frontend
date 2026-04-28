@@ -1,8 +1,13 @@
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { RoutineStorage } from "@/lib/storage";
-import type { CalendarDay, ScheduleRoutine } from "@/types/routine";
+import type {
+  CalendarDay,
+  RepeatWeekday,
+  ScheduleRoutine,
+} from "@/types/routine";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { isSameDay } from "date-fns";
 import React, { useCallback, useState } from "react";
 import {
   ScrollView,
@@ -33,12 +38,45 @@ const eventTypes: Record<string, EventTypeStyle> = {
   기타: { bg: "#F3F4F8", dot: "#C4C6D0", text: "#8A8C9A" },
 };
 
+// repeatDays가 문자열(MON,WED) 또는 배열(["MON", "WED"])로 와도 화면에서 처리되게 변환
+function normalizeRepeatDays(days?: RepeatWeekday[] | string | null) {
+  if (!days) {
+    return [];
+  }
+
+  if (Array.isArray(days)) {
+    return days;
+  }
+
+  return days.split(",").filter(Boolean) as RepeatWeekday[];
+}
+
+const weekdayLabelMap: Record<RepeatWeekday, string> = {
+  SUN: "일",
+  MON: "월",
+  TUE: "화",
+  WED: "수",
+  THU: "목",
+  FRI: "금",
+  SAT: "토",
+};
+
+const weekdayValueMap: RepeatWeekday[] = [
+  "SUN",
+  "MON",
+  "TUE",
+  "WED",
+  "THU",
+  "FRI",
+  "SAT",
+];
+
 function getNotifyText(item: ScheduleRoutine) {
   return item.alarm ? "알림 있음" : "알림 없음";
 }
 
 function getRepeatText(item: ScheduleRoutine) {
-  switch (item.repeatOption) {
+  switch (item.repeatType) {
     case "DAILY":
       return "반복: 매일";
     case "CUSTOM": {
@@ -49,11 +87,20 @@ function getRepeatText(item: ScheduleRoutine) {
         YEAR: "년",
       } as const;
 
-      const unit = item.customRepeatUnit
-        ? unitMap[item.customRepeatUnit]
-        : "일";
+      const interval = item.repeatInterval ?? 1;
+      const unit = item.repeatUnit ?? "DAY";
 
-      return `반복: ${item.customRepeatEvery ?? 1}${unit}마다`;
+      if (unit === "WEEK") {
+        const repeatDays = normalizeRepeatDays(item.repeatDays);
+        const dayText = repeatDays
+          .map((day) => weekdayLabelMap[day])
+          .join(", ");
+        const weekText = interval === 2 ? "격주" : "매주";
+
+        return dayText ? `반복: ${weekText} ${dayText}` : `반복: ${weekText}`;
+      }
+
+      return `반복: ${interval}${unitMap[unit]}마다`;
     }
     case "NONE":
     default:
@@ -177,24 +224,32 @@ function shouldShowRoutineOnDate(
     return false;
   }
 
-  if (!item.repeatOption || item.repeatOption === "NONE") {
+  if (!item.repeatType || item.repeatType === "NONE") {
     return true;
   }
 
-  if (item.repeatOption === "DAILY") {
+  if (item.repeatType === "DAILY") {
     return true;
   }
 
-  if (item.repeatOption === "CUSTOM") {
-    const every = item.customRepeatEvery ?? 1;
-    const unit = item.customRepeatUnit ?? "DAY";
+  if (item.repeatType === "CUSTOM") {
+    const every = item.repeatInterval ?? 1;
+    const unit = item.repeatUnit ?? "DAY";
 
     if (unit === "DAY") {
       return getDiffDays(item.startDate, targetDateString) % every === 0;
     }
 
     if (unit === "WEEK") {
-      return getDiffWeeks(item.startDate, targetDateString) % every === 0;
+      const repeatDays = normalizeRepeatDays(item.repeatDays);
+      const targetDay = weekdayValueMap[new Date(targetDateString).getDay()];
+      const isSelectedWeekday =
+        repeatDays.length === 0 || repeatDays.includes(targetDay);
+
+      return (
+        isSelectedWeekday &&
+        getDiffWeeks(item.startDate, targetDateString) % every === 0
+      );
     }
 
     if (unit === "MONTH") {
@@ -266,7 +321,10 @@ export default function ScheduleContent() {
     newDate.setDate(selectedDate.getDate() + offset);
     setSelectedDate(newDate);
   };
-
+  const goToday = () => {
+    setSelectedDate(new Date());
+    setShowDatePicker(false);
+  };
   const onDayPress = (day: CalendarDay) => {
     setSelectedDate(new Date(day.dateString));
     setShowDatePicker(false);
@@ -517,15 +575,23 @@ export default function ScheduleContent() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[
-                styles.calendarBtn,
-                showDatePicker && styles.calendarBtnActive,
-              ]}
-              onPress={() => setShowDatePicker(!showDatePicker)}
-            >
-              <Ionicons name="calendar-outline" size={18} color="#A0B0D0" />
-            </TouchableOpacity>
+            <View style={styles.headerActionRow}>
+              {!isSameDay(selectedDate, new Date()) && (
+                <TouchableOpacity style={styles.todayButton} onPress={goToday}>
+                  <Text style={styles.todayButtonText}>오늘</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.calendarBtn,
+                  showDatePicker && styles.calendarBtnActive,
+                ]}
+                onPress={() => setShowDatePicker(!showDatePicker)}
+              >
+                <Ionicons name="calendar-outline" size={18} color="#A0B0D0" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {showDatePicker && (
@@ -770,5 +836,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#B4B6C0",
     paddingVertical: 8,
+  },
+  headerActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  todayButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "#F3F4F8",
+  },
+
+  todayButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#405886",
   },
 });

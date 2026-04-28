@@ -1,6 +1,18 @@
 export type NotifyOption = "NONE" | "ON_TIME";
-export type RepeatOption = "NONE" | "DAILY" | "CUSTOM";
+
+export type RepeatType = "NONE" | "DAILY" | "CUSTOM";
+
+export type RepeatOption = RepeatType;
+
 export type RepeatUnit = "DAY" | "WEEK" | "MONTH" | "YEAR";
+export type RepeatWeekday =
+  | "SUN"
+  | "MON"
+  | "TUE"
+  | "WED"
+  | "THU"
+  | "FRI"
+  | "SAT";
 
 // 일정 화면과 저장소에서 공통으로 사용하는 루틴 타입
 export interface ScheduleRoutine {
@@ -16,11 +28,12 @@ export interface ScheduleRoutine {
   alarm: boolean;
   state: boolean;
   completedDates?: string[];
-  cronExpression?: string | null;
-  repeatOption?: RepeatOption;
-  customRepeatEvery?: number;
-  customRepeatUnit?: RepeatUnit;
+  repeatType?: RepeatType;
+  repeatInterval?: number | null;
+  repeatUnit?: RepeatUnit | null;
+  repeatDays?: RepeatWeekday[] | null;
 }
+
 //날짜 선택 시 사용하는 타입
 export interface CalendarDay {
   dateString: string;
@@ -36,9 +49,11 @@ export interface SaveRoutineOptions {
   customNotifyDay: string;
   customNotifyHour: string;
   customNotifyMinute: string;
-  repeatOption: RepeatOption;
-  customRepeatEvery: string;
-  customRepeatUnit: RepeatUnit;
+  repeatType: RepeatType;
+  repeatInterval: number;
+  repeatUnit: RepeatUnit | null;
+  repeatDays: RepeatWeekday[] | null;
+
   startDate: string;
   endDate: string;
 }
@@ -56,4 +71,19 @@ export interface DailyTargetRecord {
   routineId: number;
   targetDate: string;
   isCompleted: boolean;
+}
+
+// 카테고리 API 응답 타입
+export interface RoutineCategory {
+  id: number;
+  name: string;
+  colorCode: string;
+  rtSum: string;
+  sortOrder: number;
+}
+
+//카테고리 생성/수정 요청 타입
+export interface CategoryRequest {
+  name: string;
+  colorCode: string;
 }
