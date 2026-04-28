@@ -16,6 +16,12 @@ export const authApi = {
     return data; // 서버에서 토큰(JWT) 등을 보내준다고 가정
   },
 
+  ///이메일 중복 확인 요청
+  checkEmail: async (email: string) => {
+    const { data } = await api.get(`/api/v1/auth/check-email?email=${encodeURIComponent(email)}`);
+    return data;
+  },
+
   ///로그인 요청
   login: async (email: string, password: string) => {
     const { data } = await api.post("/api/v1/auth/login", { email, password });
