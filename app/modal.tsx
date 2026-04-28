@@ -1,4 +1,3 @@
-// app/modal.tsx
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import TimePickerModal from "@/components/time_picker_modal";
@@ -7,8 +6,9 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRoutineForm } from "@/hooks/use_routine_form";
 import type {
   NotifyOption,
-  RepeatOption,
+  RepeatType,
   RepeatUnit,
+  RepeatWeekday,
   SaveRoutineOptions,
 } from "@/types/routine";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -42,6 +42,19 @@ type CustomCategory = {
   color: string;
 };
 
+const WEEKDAY_OPTIONS: { label: string; value: RepeatWeekday }[] = [
+  { label: "일", value: "SUN" },
+  { label: "월", value: "MON" },
+  { label: "화", value: "TUE" },
+  { label: "수", value: "WED" },
+  { label: "목", value: "THU" },
+  { label: "금", value: "FRI" },
+  { label: "토", value: "SAT" },
+];
+
+// 주 단위 반복은 격주까지만 허용
+const WEEK_REPEAT_EVERY_OPTIONS = ["1", "2"];
+
 const DEFAULT_CATEGORIES = [
   "기상",
   "운동",
@@ -59,7 +72,27 @@ const FIXED_EVENT_TYPES = {
   저녁: { bg: "#FEF9EE", dot: "#E6CF8A", text: "#685A3F" },
   기타: { bg: "#F3F4F8", dot: "#C4C6D0", text: "#8A8C9A" },
 } as const;
+const isFixedCategoryName = (categoryName: string) => {
+  return Object.prototype.hasOwnProperty.call(FIXED_EVENT_TYPES, categoryName);
+};
+const getCategoryBadgeStyle = (categoryName: string, categoryColor: string) => {
+  if (isFixedCategory(categoryName)) {
+    const fixedStyle =
+      FIXED_EVENT_TYPES[categoryName as keyof typeof FIXED_EVENT_TYPES];
 
+    return {
+      backgroundColor: fixedStyle.bg,
+      textColor: fixedStyle.text,
+      borderColor: fixedStyle.dot,
+    };
+  }
+
+  return {
+    backgroundColor: `${categoryColor}22`,
+    textColor: categoryColor,
+    borderColor: categoryColor,
+  };
+};
 const DEFAULT_USER_COLOR_PALETTE = [
   "#405886",
   "#E79A95",
@@ -121,11 +154,12 @@ function getNotifyLabel(isNotify: boolean) {
 }
 
 function getRepeatLabel(
-  repeatOption: RepeatOption,
-  customRepeatEvery: string,
-  customRepeatUnit: RepeatUnit,
+  repeatType: RepeatType,
+  repeatInterval: string,
+  repeatUnit: RepeatUnit,
+  repeatDays: RepeatWeekday[],
 ) {
-  switch (repeatOption) {
+  switch (repeatType) {
     case "NONE":
       return "없음";
     case "DAILY":
@@ -138,7 +172,20 @@ function getRepeatLabel(
         YEAR: "년",
       };
 
-      return `${customRepeatEvery}${unitLabelMap[customRepeatUnit]}마다`;
+      // 주 단위 반복은 선택한 요일까지 함께 보여줌
+      if (repeatUnit === "WEEK") {
+        const selectedLabels = WEEKDAY_OPTIONS.filter((day) =>
+          repeatDays.includes(day.value),
+        ).map((day) => day.label);
+
+        const dayLabel =
+          selectedLabels.length > 0 ? ` · ${selectedLabels.join(", ")}` : "";
+        const everyLabel = repeatInterval === "1" ? "매주" : "격주";
+
+        return `${everyLabel}${dayLabel}`;
+      }
+
+      return `${repeatInterval}${unitLabelMap[repeatUnit]}마다`;
     }
     default:
       return "없음";
@@ -179,26 +226,6 @@ function uniqueCustomCategories(categories: CustomCategory[]) {
 //기본 카테고리인지 확인
 function isFixedCategory(categoryName: string) {
   return Object.prototype.hasOwnProperty.call(FIXED_EVENT_TYPES, categoryName);
-}
-
-//카테고리 배지 색상 계산
-function getCategoryBadgeStyle(categoryName: string, categoryColor: string) {
-  if (isFixedCategory(categoryName)) {
-    const fixedStyle =
-      FIXED_EVENT_TYPES[categoryName as keyof typeof FIXED_EVENT_TYPES];
-
-    return {
-      backgroundColor: fixedStyle.bg,
-      textColor: fixedStyle.text,
-      borderColor: fixedStyle.dot,
-    };
-  }
-
-  return {
-    backgroundColor: `${categoryColor}22`,
-    textColor: categoryColor,
-    borderColor: categoryColor,
-  };
 }
 
 //반복 단위 선택 컬럼
@@ -358,9 +385,11 @@ export default function ModalScreen() {
   const customNotifyHour = "0";
   const customNotifyMinute = "0";
   //반복 설정 상태
-  const [repeatOption, setRepeatOption] = useState<RepeatOption>("NONE");
-  const [customRepeatEvery, setCustomRepeatEvery] = useState("1");
-  const [customRepeatUnit, setCustomRepeatUnit] = useState<RepeatUnit>("DAY");
+  const [repeatType, setRepeatType] = useState<RepeatType>("NONE");
+  const [repeatInterval, setRepeatInterval] = useState("1");
+  const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>("DAY");
+  // 추가: 주 단위 사용자 반복에서 선택한 요일 저장
+  const [repeatDays, setRepeatDays] = useState<RepeatWeekday[]>([]);
 
   //커스텀 카테고리 이름 -> 색상 맵
   const customCategoryColorMap = useMemo(() => {
@@ -406,8 +435,8 @@ export default function ModalScreen() {
   }, [isNotify]);
 
   const repeatLabel = useMemo(() => {
-    return getRepeatLabel(repeatOption, customRepeatEvery, customRepeatUnit);
-  }, [repeatOption, customRepeatEvery, customRepeatUnit]);
+    return getRepeatLabel(repeatType, repeatInterval, repeatUnit, repeatDays);
+  }, [repeatType, repeatInterval, repeatUnit, repeatDays]);
 
   const isInvalidDateRange = useMemo(() => {
     // 종료일이 시작일보다 빠른지 미리 검사
@@ -631,19 +660,46 @@ export default function ModalScreen() {
     }),
   ).current;
   //반복 옵션 선택
-  const handleSelectRepeatOption = (option: RepeatOption) => {
+  const handleSelectRepeatType = (option: RepeatType) => {
     if (option === "CUSTOM") {
       setShowRepeatModal(false);
       setShowCustomRepeatModal(true);
       return;
     }
 
-    setRepeatOption(option);
+    setRepeatType(option);
     setShowRepeatModal(false);
   };
 
+  // 반복 단위를 선택할 때 주 단위는 1주/2주까지만 허용
+  const handleSelectCustomRepeatUnit = (unit: RepeatUnit) => {
+    setRepeatUnit(unit);
+
+    if (unit === "WEEK" && Number(repeatInterval) > 2) {
+      setRepeatInterval("2");
+    }
+  };
+
+  // 주 단위 반복 요일 선택/해제
+  const handleToggleWeekday = (weekday: RepeatWeekday) => {
+    setRepeatDays((prev) =>
+      prev.includes(weekday)
+        ? prev.filter((item) => item !== weekday)
+        : [...prev, weekday],
+    );
+  };
+
   const handleSaveCustomRepeat = () => {
-    setRepeatOption("CUSTOM");
+    // 추가: 주 단위 반복은 요일을 최소 1개 선택해야 저장 가능
+    if (repeatUnit === "WEEK" && repeatDays.length === 0) {
+      Alert.alert(
+        "요일 선택 필요",
+        "주 단위 반복은 요일을 1개 이상 선택해 주세요.",
+      );
+      return;
+    }
+
+    setRepeatType("CUSTOM");
     setShowCustomRepeatModal(false);
   };
 
@@ -675,13 +731,26 @@ export default function ModalScreen() {
   };
   //저장 전 최종 검증
   const validateBeforeSubmit = () => {
-    if (!repeatOption || repeatOption === "NONE") {
+    if (!repeatType || repeatType === "NONE") {
       Alert.alert(
         "반복 설정 필요",
         "반복 설정을 선택해야 일정을 추가할 수 있어요.",
       );
       return false;
     }
+    // 주 단위 사용자 반복은 요일 선택이 필수
+    if (
+      repeatType === "CUSTOM" &&
+      repeatUnit === "WEEK" &&
+      repeatDays.length === 0
+    ) {
+      Alert.alert(
+        "요일 선택 필요",
+        "주 단위 반복은 요일을 1개 이상 선택해 주세요.",
+      );
+      return false;
+    }
+
     if (!validateDateRange()) {
       return false;
     }
@@ -692,7 +761,7 @@ export default function ModalScreen() {
     return true;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateBeforeSubmit()) return;
 
     const saveOptions = {
@@ -700,14 +769,25 @@ export default function ModalScreen() {
       customNotifyDay,
       customNotifyHour,
       customNotifyMinute,
-      repeatOption,
-      customRepeatEvery,
-      customRepeatUnit,
+      repeatType,
+      repeatInterval: repeatType === "CUSTOM" ? Number(repeatInterval) : 1,
+      repeatUnit: repeatType === "CUSTOM" ? repeatUnit : null,
+      repeatDays:
+        repeatType === "CUSTOM" && repeatUnit === "WEEK" ? repeatDays : null,
       startDate,
       endDate,
-    } as SaveRoutineOptions & { startDate: string; endDate: string };
+    } as SaveRoutineOptions;
 
-    handleSave(saveOptions);
+    try {
+      await handleSave(saveOptions);
+    } catch (error) {
+      if (error instanceof Error && error.message === "TIME_CONFLICT") {
+        Alert.alert("시간 중복", "같은 시간대에 이미 등록된 일정이 있어요.");
+        return;
+      }
+
+      Alert.alert("저장 실패", "일정을 저장하지 못했어요.");
+    }
   };
   //시간 모달에서 값 적용
   const handleApplyTime = (time: {
@@ -1019,69 +1099,45 @@ export default function ModalScreen() {
                     cat,
                     resolvedCategoryColor,
                   );
-
                   const isSelected = category === cat;
-                  const isCustomCategory = !DEFAULT_CATEGORIES.includes(
-                    cat as (typeof DEFAULT_CATEGORIES)[number],
-                  );
 
                   return (
-                    <View key={cat} style={styles.categoryItemWrapper}>
-                      <TouchableOpacity
+                    <TouchableOpacity
+                      key={cat}
+                      style={[
+                        styles.categoryBadge,
+                        {
+                          backgroundColor: badgeStyle.backgroundColor,
+                          borderColor: isSelected
+                            ? badgeStyle.borderColor
+                            : "transparent",
+                          borderWidth: isSelected ? 1.5 : 1,
+                        },
+                      ]}
+                      onPress={() => {
+                        setCategory(cat);
+                        setSelectedColor(resolvedCategoryColor);
+                      }}
+                    >
+                      <View
                         style={[
-                          styles.categoryBadge,
-                          {
-                            backgroundColor: badgeStyle.backgroundColor,
-                            borderColor: isSelected
-                              ? badgeStyle.borderColor
-                              : "transparent",
-                            borderWidth: isSelected ? 1.5 : 1,
-                          },
+                          styles.categoryBadgeDot,
+                          { backgroundColor: resolvedCategoryColor },
                         ]}
-                        onPress={() => {
-                          setCategory(cat);
-
-                          if (isFixedCategory(cat)) {
-                            const fixedStyle =
-                              FIXED_EVENT_TYPES[
-                                cat as keyof typeof FIXED_EVENT_TYPES
-                              ];
-                            setSelectedColor(fixedStyle.dot);
-                          } else {
-                            const savedColor = customCategoryColorMap[cat];
-                            if (savedColor) {
-                              setSelectedColor(savedColor);
-                            }
-                          }
-                        }}
-                        onLongPress={() => {
-                          if (isCustomCategory) {
-                            handleConfirmDeleteCustomCategory(cat);
-                          }
-                        }}
+                      />
+                      <ThemedText
+                        style={[
+                          styles.categoryBadgeText,
+                          { color: badgeStyle.textColor },
+                        ]}
                       >
-                        <ThemedText
-                          style={[
-                            styles.categoryText,
-                            { color: badgeStyle.textColor },
-                            isSelected && styles.categoryTextSelected,
-                          ]}
-                        >
-                          {cat}
-                        </ThemedText>
-                      </TouchableOpacity>
-
-                      {isCustomCategory && (
-                        <View style={styles.categoryDeleteMiniButton}>
-                          <IconSymbol name="minus" size={10} color="#FFFFFF" />
-                        </View>
-                      )}
-                    </View>
+                        {cat}
+                      </ThemedText>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
             </View>
-
             {/* 시간 / 알림 / 반복 설정 카드 */}
             <View style={styles.optionCard}>
               <View style={styles.rowBetween}>
@@ -1156,14 +1212,14 @@ export default function ModalScreen() {
                 <TouchableOpacity
                   style={[
                     styles.valueButton,
-                    repeatOption === "NONE" && styles.requiredValueButton,
+                    repeatType === "NONE" && styles.requiredValueButton,
                   ]}
                   onPress={() => setShowRepeatModal(true)}
                 >
                   <ThemedText
                     style={[
                       styles.valueButtonText,
-                      repeatOption === "NONE" && styles.requiredValueText,
+                      repeatType === "NONE" && styles.requiredValueText,
                     ]}
                   >
                     {repeatLabel}
@@ -1213,16 +1269,16 @@ export default function ModalScreen() {
 
             <View style={styles.optionList}>
               {[
-                { label: "매일", value: "DAILY" as RepeatOption },
-                { label: "사용자 설정", value: "CUSTOM" as RepeatOption },
+                { label: "매일", value: "DAILY" as RepeatType },
+                { label: "사용자 설정", value: "CUSTOM" as RepeatType },
               ].map((item) => {
-                const isSelected = repeatOption === item.value;
+                const isSelected = repeatType === item.value;
 
                 return (
                   <TouchableOpacity
                     key={item.value}
                     style={styles.optionListItem}
-                    onPress={() => handleSelectRepeatOption(item.value)}
+                    onPress={() => handleSelectRepeatType(item.value)}
                   >
                     <ThemedText
                       style={[
@@ -1267,9 +1323,13 @@ export default function ModalScreen() {
             <View style={styles.inlinePickerRow}>
               <NumberOptionColumn
                 title="빈도"
-                options={REPEAT_EVERY_OPTIONS}
-                selectedValue={customRepeatEvery}
-                onSelect={setCustomRepeatEvery}
+                options={
+                  repeatUnit === "WEEK"
+                    ? WEEK_REPEAT_EVERY_OPTIONS
+                    : REPEAT_EVERY_OPTIONS
+                }
+                selectedValue={repeatInterval}
+                onSelect={setRepeatInterval}
               />
 
               <UnitOptionColumn
@@ -1280,10 +1340,48 @@ export default function ModalScreen() {
                   { label: "월", value: "MONTH" },
                   { label: "년", value: "YEAR" },
                 ]}
-                selectedValue={customRepeatUnit}
-                onSelect={setCustomRepeatUnit}
+                selectedValue={repeatUnit}
+                onSelect={handleSelectCustomRepeatUnit}
               />
             </View>
+
+            {/* 주 단위일 때만 요일 선택 영역 표시 */}
+            {repeatUnit === "WEEK" && (
+              <View style={styles.weekdaySection}>
+                <View style={styles.weekdayTitleRow}>
+                  <ThemedText style={styles.weekdayTitle}>요일</ThemedText>
+                  <ThemedText style={styles.weekdayHelperText}>
+                    주 반복은 격주까지만 가능해요
+                  </ThemedText>
+                </View>
+
+                <View style={styles.weekdayGrid}>
+                  {WEEKDAY_OPTIONS.map((day) => {
+                    const isSelected = repeatDays.includes(day.value);
+
+                    return (
+                      <TouchableOpacity
+                        key={day.value}
+                        style={[
+                          styles.weekdayChip,
+                          isSelected && styles.weekdayChipSelected,
+                        ]}
+                        onPress={() => handleToggleWeekday(day.value)}
+                      >
+                        <ThemedText
+                          style={[
+                            styles.weekdayChipText,
+                            isSelected && styles.weekdayChipTextSelected,
+                          ]}
+                        >
+                          {day.label}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
           </Pressable>
         </Pressable>
       )}
@@ -1548,8 +1646,8 @@ const styles = StyleSheet.create({
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginTop: 10,
+    marginTop: 2,
+    gap: 3,
   },
 
   categoryItemWrapper: {
@@ -1569,18 +1667,22 @@ const styles = StyleSheet.create({
   },
 
   categoryBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  categoryBadgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    marginRight: 7,
   },
 
-  categoryText: {
+  categoryBadgeText: {
     fontSize: 13,
     fontWeight: "700",
-  },
-
-  categoryTextSelected: {
-    opacity: 1,
   },
 
   optionCard: {
@@ -1785,6 +1887,61 @@ const styles = StyleSheet.create({
 
   optionListItemTextSelected: {
     color: "#405886",
+  },
+
+  weekdaySection: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#EEF1F5",
+  },
+
+  weekdayTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  weekdayTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#2A3C6B",
+  },
+
+  weekdayHelperText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#A0B0D0",
+  },
+
+  weekdayGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  weekdayChip: {
+    width: "22%",
+    minHeight: 38,
+    borderRadius: 999,
+    backgroundColor: "#F3F4F8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  weekdayChipSelected: {
+    backgroundColor: "#6BBFCC",
+  },
+
+  weekdayChipText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#8A8C9A",
+  },
+
+  weekdayChipTextSelected: {
+    color: "#FFFFFF",
   },
 
   colorPicker: {

@@ -1,29 +1,44 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 
 interface HeaderProps {
   activeTab?: "left" | "right";
 }
 export function Header({ activeTab = "left" }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const isIndex = pathname === "/" || pathname === "/index";
   return (
     <View style={styles.header}>
-      <Text style={styles.logoText}>Rutia</Text>
+      <Image
+        source={require("@/assets/images/logo_icon.png")}
+        style={styles.logoImage}
+        resizeMode="contain"
+      />
       <View style={styles.headerRight}>
-        <View
-          style={[
-            styles.dot,
-            { backgroundColor: activeTab === "left" ? "#405886" : "#E2E5EC" },
-          ]}
-        />
-        <View
-          style={[
-            styles.dot,
-            { backgroundColor: activeTab === "right" ? "#405886" : "#E2E5EC" },
-          ]}
-        />
+        {isIndex && (
+          <>
+            <View
+              style={[
+                styles.dot,
+                {
+                  backgroundColor: activeTab === "left" ? "#405886" : "#E2E5EC",
+                },
+              ]}
+            />
+            <View
+              style={[
+                styles.dot,
+                {
+                  backgroundColor:
+                    activeTab === "right" ? "#405886" : "#E2E5EC",
+                },
+              ]}
+            />
+          </>
+        )}
         <Pressable
           style={styles.settingButton}
           onPress={() => router.push("/settings")}
@@ -42,6 +57,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
     paddingHorizontal: 8,
+  },
+  logoImage: {
+    width: 120,
+    height: 60,
   },
   logoText: {
     fontSize: 32,
