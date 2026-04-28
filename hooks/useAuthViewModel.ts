@@ -79,15 +79,32 @@ export const useAuthViewModel = () => {
     } catch (err: any) {
       console.log("서버 로그아웃 에러:", err);
       // 서버 오류가 나더라도 디바이스 내부에서는 무조건 로그아웃 처리
-      setError(err.response?.data?.message || "서버 로그아웃 중 예외가 발생했습니다.");
+      setError(
+        err.response?.data?.message || "서버 로그아웃 중 예외가 발생했습니다.",
+      );
     } finally {
       await AsyncStorage.removeItem("userToken");
       await AsyncStorage.removeItem("refreshToken");
       authStore.setLoggedIn(false);
-      router.replace("/login");
+      router.replace("/onboarding/login");
       setIsLoading(false);
     }
   };
 
-  return { login, signup, logout, isLoading, error, setError };
+  const checkEmail = async (email: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.checkEmail(email);
+      return data;
+    } catch (err: any) {
+      console.log("이메일 중복 확인 에러:", err);
+      // 서버 에러 메시지가 있으면 사용
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return { login, signup, logout, checkEmail, isLoading, error, setError };
 };
