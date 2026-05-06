@@ -21,7 +21,7 @@ export const useSocialAuth = () => {
       const BACKEND_AUTH_URL = `http://3.35.117.128:8080/oauth2/authorization/${provider}`;
 
       // 모바일 딥링크 주소 생성 (예: exp://192.../--/oauth 또는 rutinafrontend://oauth)
-      const DEEP_LINK_URI = Linking.createURL('http://localhost:3000/oauth/callback');
+      const DEEP_LINK_URI = Linking.createURL('exp://172.30.1.67:8081/oauth/callback');
 
       // 브라우저 열기 (프론트 -> 백엔드로 이동)
       // 주의: 백엔드에서 인증 완료 후, 최종적으로 DEEP_LINK_URI 로 리다이렉트 시켜줘야 모바일 앱으로 브라우저가 닫히면서 돌아옵니다.
