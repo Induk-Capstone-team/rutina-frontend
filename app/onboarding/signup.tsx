@@ -1,7 +1,7 @@
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import React, { useState, useEffect } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -17,14 +17,26 @@ import {
 
 export default function SignupScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ email?: string; nickname?: string }>();
+  
   const { signup, checkEmail: checkEmailApi, isLoading, error, setError } = useAuthViewModel();
 
-  const [nickname, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [nickname, setName] = useState(params.nickname || "");
+  const [email, setEmail] = useState(params.email || "");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
-  const [isEmailValidated, setIsEmailValidated] = useState(false);
+  const [isEmailValidated, setIsEmailValidated] = useState(!!params.email);
+
+  useEffect(() => {
+    if (params.email) {
+      setEmail(params.email);
+      setIsEmailValidated(true);
+    }
+    if (params.nickname) {
+      setName(params.nickname);
+    }
+  }, [params.email, params.nickname]);
 
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [agreeProfile, setAgreeProfile] = useState(false);

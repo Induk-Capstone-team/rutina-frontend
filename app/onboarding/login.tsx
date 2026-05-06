@@ -1,4 +1,5 @@
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
+import { useSocialAuth } from "@/hooks/useSocialAuth";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -21,6 +22,7 @@ export default function LoginScreen() {
 
   // ViewModel에서 필요한 기능만 쏙 빼오기
   const { login, isLoading, error } = useAuthViewModel();
+  const { handleKakaoLogin, handleNaverLogin, isSocialLoading } = useSocialAuth();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -124,8 +126,9 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.socialButton, { backgroundColor: "#03A94D" }]}
-                onPress={() => {}}
+                style={[styles.socialButton, { backgroundColor: "#03A94D", opacity: isSocialLoading ? 0.7 : 1 }]}
+                onPress={handleNaverLogin}
+                disabled={isSocialLoading}
               >
                 <Image
                   source={require("../../assets/images/naver_icon.png")}
@@ -137,8 +140,9 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.socialButton, { backgroundColor: "#FEE500" }]}
-                onPress={() => {}}
+                style={[styles.socialButton, { backgroundColor: "#FEE500", opacity: isSocialLoading ? 0.7 : 1 }]}
+                onPress={handleKakaoLogin}
+                disabled={isSocialLoading}
               >
                 <Image
                   source={require("../../assets/images/kakao_icon.png")}
