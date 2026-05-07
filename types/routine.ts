@@ -4,7 +4,7 @@ export type RepeatType = "NONE" | "DAILY" | "CUSTOM";
 
 export type RepeatOption = RepeatType;
 
-export type RepeatUnit = "DAY" | "WEEK" | "MONTH" | "YEAR";
+export type RepeatUnit = "DAY" | "WEEK";
 export type RepeatWeekday =
   | "SUN"
   | "MON"

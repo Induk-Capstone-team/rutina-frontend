@@ -1,5 +1,4 @@
-// hooks/use-routine-form.ts
-import { RoutineStorage } from "@/lib/storage";
+import { RoutineService } from "@/app/services/routine_service";
 import type { SaveRoutineOptions, ScheduleRoutine } from "@/types/routine";
 import { useState } from "react";
 
@@ -20,6 +19,7 @@ export const useRoutineForm = (onSuccess: () => void) => {
   // 일정 저장 함수
   const handleSave = async (options: SaveRoutineOptions) => {
     if (!title.trim()) return;
+
     const resolvedStartDate = options.startDate || selectedDate;
     const resolvedEndDate = options.endDate || selectedDate;
 
@@ -31,23 +31,26 @@ export const useRoutineForm = (onSuccess: () => void) => {
       completedDates: [],
       startDate: resolvedStartDate,
       endDate: resolvedEndDate,
-      alarm: isNotify,
+      alarm: options.notifyOption !== "NONE",
       state: true,
-      repeatOption: options.repeatOption,
-      customRepeatEvery: Number(options.customRepeatEvery || 1),
-      customRepeatUnit: options.customRepeatUnit,
-      cronExpression: null,
-
+      repeatType: options.repeatType,
+      repeatInterval:
+        options.repeatType === "CUSTOM" ? options.repeatInterval : undefined,
+      repeatUnit:
+        options.repeatType === "CUSTOM" ? options.repeatUnit : undefined,
+      repeatDays:
+        options.repeatType === "CUSTOM" && options.repeatUnit === "WEEK"
+          ? options.repeatDays
+          : null,
       ...(isTimed && {
-        startTime: `${startHour.padStart(2, "0")}:${startMinute.padStart(2, "0")}:00`,
-        endTime: `${endHour.padStart(2, "0")}:${endMinute.padStart(2, "0")}:00`,
+        startTime: `${startHour.padStart(2, "0")}:${startMinute.padStart(2, "0")}`,
+        endTime: `${endHour.padStart(2, "0")}:${endMinute.padStart(2, "0")}`,
       }),
     };
 
-    await RoutineStorage.save(newRoutine);
+    await RoutineService.save(newRoutine);
     onSuccess();
   };
-
   return {
     title,
     setTitle,
