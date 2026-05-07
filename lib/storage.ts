@@ -1,4 +1,3 @@
-// lib/storage.ts
 import type {
   RepeatUnit,
   RepeatWeekday,
@@ -19,13 +18,11 @@ type StoredRoutine = Partial<ScheduleRoutine> & {
   repeatOption?: "NONE" | "DAILY" | "CUSTOM";
   customRepeatEvery?: number;
   customRepeatUnit?: RepeatUnit;
-
-  // API에서 repeatDays가 문자열로 올 수도 있어서 허용
   repeatDays?: RepeatWeekday[] | string | null;
 };
 
 // repeatDays를 항상 배열 형태로 정리
-const normalizeRepeatDays = (
+export const normalizeRepeatDays = (
   repeatDays?: RepeatWeekday[] | string | null,
 ): RepeatWeekday[] => {
   if (!repeatDays) return [];
@@ -168,7 +165,68 @@ const hasTimeConflict = (
     );
   });
 };
+export const shouldShowRoutineOnDate = (
+  item: ScheduleRoutine,
+  targetDate: string,
+): boolean => {
+  if (targetDate < item.startDate || targetDate > item.endDate) return false;
+  if (!item.repeatType || item.repeatType === "NONE") return true;
+  if (item.repeatType === "DAILY") return true;
 
+  if (item.repeatType === "CUSTOM") {
+    const every = item.repeatInterval ?? 1;
+    const unit = item.repeatUnit ?? "DAY";
+    const diffDays = Math.floor(
+      (new Date(targetDate + "T00:00:00").getTime() -
+        new Date(item.startDate + "T00:00:00").getTime()) /
+        86400000,
+    );
+
+    if (unit === "DAY") return diffDays % every === 0;
+
+    if (unit === "WEEK") {
+      if (Math.floor(diffDays / 7) % every !== 0) return false;
+      const weekdays = [
+        "SUN",
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI",
+        "SAT",
+      ] as const;
+      const targetWeekday =
+        weekdays[new Date(targetDate + "T00:00:00").getDay()];
+      const days = normalizeRepeatDays(item.repeatDays);
+      return days.length === 0 || days.includes(targetWeekday);
+    }
+  }
+
+  return false;
+};
+
+export const getRoutineOccurrenceDates = (
+  routine: ScheduleRoutine,
+  from: string,
+  to: string,
+): string[] => {
+  const dates: string[] = [];
+  const current = new Date(from + "T00:00:00");
+  const end = new Date(to + "T00:00:00");
+
+  while (current <= end) {
+    const dateStr = [
+      current.getFullYear(),
+      String(current.getMonth() + 1).padStart(2, "0"),
+      String(current.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    if (shouldShowRoutineOnDate(routine, dateStr)) dates.push(dateStr);
+    current.setDate(current.getDate() + 1);
+  }
+
+  return dates;
+};
 export const RoutineStorage = {
   getAll: async (): Promise<ScheduleRoutine[]> => {
     try {
@@ -208,20 +266,6 @@ export const RoutineStorage = {
 
       console.error("데이터 저장 실패", e);
       throw e;
-    }
-  },
-
-  // 전체 배열 저장 전용 메서드
-  saveAll: async (routines: ScheduleRoutine[]) => {
-    try {
-      const normalizedRoutines = routines.map(normalizeRoutine);
-
-      await AsyncStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(normalizedRoutines),
-      );
-    } catch (e) {
-      console.error("전체 데이터 저장 실패", e);
     }
   },
 

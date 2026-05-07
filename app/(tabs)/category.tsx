@@ -1,5 +1,16 @@
+import { RoutineService } from "@/app/services/routine_service";
 import { Header } from "@/components/ui/_header";
-import { RoutineStorage } from "@/lib/storage";
+import {
+  DEFAULT_CATEGORIES,
+  EVENT_TYPES,
+  getCategoryBadgeStyle,
+  normalizeCategoryName,
+  normalizeHexColor,
+  uniqueColors,
+  uniqueCustomCategories,
+  type CustomCategory,
+} from "@/lib/category";
+import { getRoutineOccurrenceDates } from "@/lib/storage";
 import type { ScheduleRoutine } from "@/types/routine";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "expo-router";
@@ -25,13 +36,10 @@ import ColorPicker, {
   Preview,
 } from "reanimated-color-picker";
 
+// 카테고리 탭 상태 타입: 진행중 / 완료됨
 type CategoryTab = "ACTIVE" | "COMPLETED";
 
-type CustomCategory = {
-  name: string;
-  color: string;
-};
-
+// 카테고리 숨김/수정 상태를 저장하는 메타 정보
 interface CategoryMeta {
   id: string;
   linkedCategoryId?: number | null;
@@ -42,6 +50,7 @@ interface CategoryMeta {
   updatedAt: string;
 }
 
+// 화면에 보여줄 카테고리 요약 데이터
 interface CategorySummary {
   key: string;
   metaId?: string;
@@ -63,26 +72,6 @@ const CUSTOM_COLOR_STORAGE_KEY = "@rutina/custom_colors";
 const CUSTOM_CATEGORY_STORAGE_KEY = "@rutina/custom_categories";
 const DEFAULT_COLOR = "#405886";
 
-// 기본으로 제공되는 고정 카테고리
-const DEFAULT_CATEGORIES = [
-  "기상",
-  "운동",
-  "공부",
-  "명상",
-  "저녁",
-  "기타",
-] as const;
-
-// 고정 카테고리별 배지/점 색상 설정
-const FIXED_EVENT_TYPES = {
-  기상: { bg: "#FAEEEE", dot: "#E79A95", text: "#5D4645" },
-  운동: { bg: "#FDF4EC", dot: "#EFB996", text: "#675141" },
-  공부: { bg: "#F1F1FB", dot: "#9FA2D6", text: "#3E426F" },
-  명상: { bg: "#F1F7EE", dot: "#A8CD9B", text: "#4C5D44" },
-  저녁: { bg: "#FEF9EE", dot: "#E6CF8A", text: "#685A3F" },
-  기타: { bg: "#F3F4F8", dot: "#C4C6D0", text: "#8A8C9A" },
-} as const;
-
 const DEFAULT_USER_COLOR_PALETTE = [
   "#405886",
   "#E79A95",
@@ -91,36 +80,6 @@ const DEFAULT_USER_COLOR_PALETTE = [
   "#A8CD9B",
   "#C4C6D0",
 ];
-// 색상값을 항상 #이 붙은 대문자 HEX 형식으로 맞춤
-const normalizeHexColor = (color: string) => {
-  const value = color.trim().toUpperCase();
-  return value.startsWith("#") ? value : `#${value}`;
-};
-
-const uniqueColors = (colors: string[]) => {
-  return Array.from(new Set(colors.map(normalizeHexColor)));
-};
-// 사용자 카테고리 중복 제거: 이름이 같으면 마지막 값으로 덮어씀
-const uniqueCustomCategories = (categories: CustomCategory[]) => {
-  const map = new Map<string, CustomCategory>();
-
-  categories.forEach((item) => {
-    const name = item.name.trim();
-    if (!name) return;
-
-    map.set(name.toLowerCase(), {
-      name,
-      color: normalizeHexColor(item.color),
-    });
-  });
-
-  return Array.from(map.values());
-};
-
-const normalizeCategoryName = (name?: string | null) => {
-  const trimmed = name?.trim();
-  return trimmed ? trimmed : "기타";
-};
 
 const toCategoryNameKey = (name: string) =>
   `name:${normalizeCategoryName(name).toLowerCase()}`;
@@ -128,28 +87,10 @@ const toCategoryNameKey = (name: string) =>
 const toCategoryIdKey = (id: number) => `id:${id}`;
 
 const isFixedCategoryName = (categoryName: string) => {
-  return Object.prototype.hasOwnProperty.call(FIXED_EVENT_TYPES, categoryName);
+  return Object.prototype.hasOwnProperty.call(EVENT_TYPES, categoryName);
 };
 
-const getCategoryBadgeStyle = (categoryName: string, categoryColor: string) => {
-  if (isFixedCategoryName(categoryName)) {
-    const fixedStyle =
-      FIXED_EVENT_TYPES[categoryName as keyof typeof FIXED_EVENT_TYPES];
-
-    return {
-      backgroundColor: fixedStyle.bg,
-      textColor: fixedStyle.text,
-      borderColor: fixedStyle.dot,
-    };
-  }
-
-  return {
-    backgroundColor: `${categoryColor}22`,
-    textColor: categoryColor,
-    borderColor: categoryColor,
-  };
-};
-// 루틴이 속한 카테고리를 id 우선으로 구분함
+// 루틴이 속한 카테고리를 id 우선으로 구분
 const getRoutineCategoryKey = (routine: ScheduleRoutine) => {
   if (typeof routine.categoryId === "number") {
     return toCategoryIdKey(routine.categoryId);
@@ -181,26 +122,44 @@ const isPastEndDate = (endDate?: string | null) => {
   // 종료일이 오늘보다 이전이면 기간이 지난 루틴으로 판단
   return endDate < getTodayString();
 };
+const isRoutineCompleted = (routine: ScheduleRoutine): boolean => {
+  // 조건 1: 종료일이 오늘보다 이전이면 완료
+  if (isPastEndDate(routine.endDate)) return true;
 
-const isRoutineCompleted = (routine: ScheduleRoutine) => {
+  // 조건 2: 수동 완료 처리
+  if (routine.state === false) return true;
+
+  const completedDates = routine.completedDates ?? [];
+  if (completedDates.length === 0) return false;
+
+  // 단순 1회 루틴
+  if (routine.startDate === routine.endDate) {
+    return completedDates.includes(routine.startDate);
+  }
+
+  // 기간 내 모든 반복 날짜를 완료했는지 검사
   const today = getTodayString();
+  const effectiveEnd =
+    routine.endDate && routine.endDate <= today ? routine.endDate : today;
 
-  // 오늘 일정 화면에서 체크한 루틴은 completedDates에 오늘 날짜가 들어왔다고 판단
-  const isCompletedToday =
-    Array.isArray(routine.completedDates) &&
-    routine.completedDates.includes(today);
+  const allDates = getRoutineOccurrenceDates(
+    routine,
+    routine.startDate,
+    effectiveEnd,
+  );
 
-  //state가 false인 경우 사용자가 직접 비활성화/완료 처리한 루틴으로 판단
-  const isManuallyCompleted = routine.state === false;
+  const normalizedCompletedDates = completedDates.map(
+    (date) => date.split("T")[0],
+  );
 
-  // 종료 기간이 지난 루틴도 완료된 루틴으로 판단
-  const isExpired = isPastEndDate(routine.endDate);
-
-  return isCompletedToday || isManuallyCompleted || isExpired;
+  return (
+    allDates.length > 0 &&
+    allDates.every((date) => normalizedCompletedDates.includes(date))
+  );
 };
 
 const loadRoutines = async () => {
-  return RoutineStorage.getAll();
+  return RoutineService.getAll();
 };
 // 숨김/수정된 카테고리 메타 정보를 불러옴
 const loadCategoryMetas = async (): Promise<CategoryMeta[]> => {
@@ -234,7 +193,7 @@ const loadCustomColors = async (): Promise<string[]> => {
     return [];
   }
 };
-// 사용자 카테고리를 불러오고, 예전 string[] 저장 형태도 함께 처리함
+// AsyncStorage에서 사용자 카테고리 불러오기
 const loadCustomCategories = async (): Promise<CustomCategory[]> => {
   try {
     const raw = await AsyncStorage.getItem(CUSTOM_CATEGORY_STORAGE_KEY);
@@ -289,7 +248,7 @@ const saveCustomCategories = async (categories: CustomCategory[]) => {
     throw error;
   }
 };
-// 루틴, 고정 카테고리, 사용자 카테고리, 메타 정보를 하나의 화면용 데이터로 합침
+// 루틴 + 기본 카테고리 + 사용자 카테고리를 화면용 데이터로 합치기
 const buildCategorySummaries = (
   routines: ScheduleRoutine[],
   metas: CategoryMeta[],
@@ -329,7 +288,7 @@ const buildCategorySummaries = (
   const presetCategories: CustomCategory[] = [
     ...DEFAULT_CATEGORIES.map((name) => ({
       name,
-      color: FIXED_EVENT_TYPES[name].dot,
+      color: EVENT_TYPES[name].dot,
     })),
     ...customCategories,
   ];
@@ -441,7 +400,7 @@ export default function CategoryScreen() {
   const [isMoveModalVisible, setIsMoveModalVisible] = useState(false);
   const categoryModalTranslateY = useRef(new Animated.Value(0)).current;
   const CATEGORY_MODAL_CLOSE_THRESHOLD = 120;
-  // 화면에 진입할 때 AsyncStorage와 루틴 저장소 데이터를 다시 불러옴
+  // 화면 진입 시 루틴, 카테고리 메타, 색상, 사용자 카테고리 다시 불러오기
   const refreshData = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -476,34 +435,26 @@ export default function CategoryScreen() {
   const categories = useMemo(() => {
     return buildCategorySummaries(routines, categoryMetas, customCategories);
   }, [routines, categoryMetas, customCategories]);
-  // 숨김 처리되지 않은 카테고리 중 현재 탭에 맞는 루틴만 보여줌
+  // 현재 선택된 탭에 맞게 카테고리별 루틴 필터링
   const visibleCategories = useMemo(() => {
     return categories
-      .filter((category) => !category.isHidden)
+      .filter((category) => !category.isHidden) // 숨김 카테고리만 제외
       .map((category) => {
-        // 카테고리 자체를 이동시키지 않고, 탭에 맞는 루틴만 분리해서 보여줌
+        // 현재 탭에 맞는 루틴만 카드 안에 표시
         const filteredRoutines = category.routines.filter((routine) => {
           const completed = isRoutineCompleted(routine);
-
-          if (selectedTab === "ACTIVE") {
-            return !completed;
-          }
-
-          return completed;
+          return selectedTab === "ACTIVE" ? !completed : completed;
         });
 
         return {
           ...category,
           routines: filteredRoutines,
-          totalCount: filteredRoutines.length,
-          completedCount: filteredRoutines.filter(isRoutineCompleted).length,
-          // 완료 탭에서는 루틴 기준으로 완료 상태를 표시
+          totalCount: category.totalCount,
+          completedCount: category.completedCount,
           isCompletedCategory: selectedTab === "COMPLETED",
         };
-      })
-      .filter((category) => category.totalCount > 0);
+      });
   }, [categories, selectedTab]);
-
   const hiddenCategories = useMemo(() => {
     return categories.filter((category) => category.isHidden);
   }, [categories]);
@@ -528,7 +479,7 @@ export default function CategoryScreen() {
     setPickerColor(DEFAULT_COLOR);
     setShowColorPickerModal(false);
   };
-
+  // 카테고리 추가 모달 열기
   const openAddCategoryModal = () => {
     categoryModalTranslateY.setValue(0);
     setEditingCategory(null);
@@ -538,7 +489,7 @@ export default function CategoryScreen() {
     setShowColorPickerModal(false);
     setIsCategoryModalVisible(true);
   };
-
+  // 카테고리 수정 모달 열기
   const openEditCategoryModal = (category: CategorySummary) => {
     categoryModalTranslateY.setValue(0);
     setEditingCategory(category);
@@ -579,7 +530,7 @@ export default function CategoryScreen() {
       friction: 12,
     }).start();
   };
-  // 모달을 아래로 스와이프하면 닫히도록 처리
+  // 바텀시트 모달을 아래로 스와이프해서 닫기
   const categoryModalPanResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
@@ -623,8 +574,7 @@ export default function CategoryScreen() {
   };
 
   const handleSelectFixedCategory = (categoryName: string) => {
-    const fixedStyle =
-      FIXED_EVENT_TYPES[categoryName as keyof typeof FIXED_EVENT_TYPES];
+    const fixedStyle = EVENT_TYPES[categoryName as keyof typeof EVENT_TYPES];
 
     setCategoryNameInput(categoryName);
     setSelectedColor(fixedStyle.dot);
@@ -757,7 +707,7 @@ export default function CategoryScreen() {
     if (categoryToDelete.totalCount > 0) {
       Alert.alert(
         "카테고리 삭제",
-        `"${categoryToDelete.name}"에 연결된 일정이 있어요. 다른 카테고리로 이동한 뒤 삭제할까요?`,
+        `"${categoryToDelete.name}"에 연결된 루틴이 있어요. 다른 카테고리로 이동한 뒤 삭제할까요?`,
         [
           { text: "취소", style: "cancel" },
           {
@@ -934,7 +884,7 @@ export default function CategoryScreen() {
       ];
     });
   };
-
+  // 숨긴 카테고리 다시 복구
   const handleRestoreCategory = async (category: CategorySummary) => {
     await upsertCategoryMeta((prev) =>
       prev.map((meta) => {
@@ -970,11 +920,21 @@ export default function CategoryScreen() {
       };
     });
 
-    await RoutineStorage.saveAll(updatedRoutines);
+    await RoutineService.updateAll(updatedRoutines);
     setRoutines(updatedRoutines);
   };
-  // 카테고리 삭제: 연결된 루틴이 있으면 먼저 이동 모달을 띄움
+  // 카테고리 삭제 처리
   const handleDeleteCategory = async (category: CategorySummary) => {
+    //기본 카테고리는 삭제 불가
+    if (category.isFixedCategory) {
+      Alert.alert(
+        "삭제 불가",
+        `"${category.name}"은 기본 카테고리라 삭제할 수 없어요.`,
+        [{ text: "확인" }],
+      );
+      return;
+    }
+
     if (category.totalCount > 0) {
       setMoveSourceCategory(category);
       setMoveTargetKey(null);
@@ -988,16 +948,13 @@ export default function CategoryScreen() {
         text: "삭제",
         style: "destructive",
         onPress: async () => {
-          if (!category.isFixedCategory) {
-            const filteredCustomCategories = customCategories.filter(
-              (item) =>
-                item.name.trim().toLowerCase() !==
-                category.name.trim().toLowerCase(),
-            );
-
-            await saveCustomCategories(filteredCustomCategories);
-            setCustomCategories(filteredCustomCategories);
-          }
+          const filteredCustomCategories = customCategories.filter(
+            (item) =>
+              item.name.trim().toLowerCase() !==
+              category.name.trim().toLowerCase(),
+          );
+          await saveCustomCategories(filteredCustomCategories);
+          setCustomCategories(filteredCustomCategories);
 
           await upsertCategoryMeta((prev) =>
             prev.filter((meta) => {
@@ -1109,7 +1066,9 @@ export default function CategoryScreen() {
             item.routines.slice(0, 3).map(renderRoutineItem)
           ) : (
             <Text style={styles.emptyRoutineText}>
-              연결된 일정이 아직 없어요.
+              {selectedTab === "ACTIVE"
+                ? "연결된 루틴이 아직 없어요."
+                : "완료된 루틴이 아직 없어요."}
             </Text>
           )}
         </View>
@@ -1324,7 +1283,7 @@ export default function CategoryScreen() {
                     <Text style={styles.inputLabel}>고정 카테고리</Text>
                     <View style={styles.categoryGrid}>
                       {DEFAULT_CATEGORIES.map((categoryName) => {
-                        const fixedStyle = FIXED_EVENT_TYPES[categoryName];
+                        const fixedStyle = EVENT_TYPES[categoryName];
                         const badgeStyle = getCategoryBadgeStyle(
                           categoryName,
                           fixedStyle.dot,
@@ -1555,7 +1514,7 @@ export default function CategoryScreen() {
               <Text style={styles.modalTitle}>카테고리 이동 후 삭제</Text>
 
               <Text style={styles.moveDescription}>
-                "{moveSourceCategory?.name}"에 연결된 일정이 있어서 바로 삭제할
+                "{moveSourceCategory?.name}"에 연결된 루틴이 있어서 바로 삭제할
                 수 없어요. 다른 카테고리로 옮긴 뒤 삭제할게요.
               </Text>
 

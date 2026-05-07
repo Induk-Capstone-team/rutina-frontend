@@ -4,6 +4,15 @@ import TimePickerModal from "@/components/time_picker_modal";
 import AppCalendar from "@/components/ui/app_calendar";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRoutineForm } from "@/hooks/use_routine_form";
+import {
+  DEFAULT_CATEGORIES,
+  EVENT_TYPES,
+  getCategoryBadgeStyle,
+  normalizeHexColor,
+  uniqueColors,
+  uniqueCustomCategories,
+  type CustomCategory,
+} from "@/lib/category";
 import type {
   NotifyOption,
   RepeatType,
@@ -36,12 +45,7 @@ import ColorPicker, {
   Preview,
 } from "reanimated-color-picker";
 
-//사용자 추가 카테고리 타입
-type CustomCategory = {
-  name: string;
-  color: string;
-};
-
+// 반복 요일 선택 버튼에 사용할 요일 목록
 const WEEKDAY_OPTIONS: { label: string; value: RepeatWeekday }[] = [
   { label: "일", value: "SUN" },
   { label: "월", value: "MON" },
@@ -54,45 +58,6 @@ const WEEKDAY_OPTIONS: { label: string; value: RepeatWeekday }[] = [
 
 // 주 단위 반복은 격주까지만 허용
 const WEEK_REPEAT_EVERY_OPTIONS = ["1", "2"];
-
-const DEFAULT_CATEGORIES = [
-  "기상",
-  "운동",
-  "공부",
-  "명상",
-  "저녁",
-  "기타",
-] as const;
-
-const FIXED_EVENT_TYPES = {
-  기상: { bg: "#FAEEEE", dot: "#E79A95", text: "#5D4645" },
-  운동: { bg: "#FDF4EC", dot: "#EFB996", text: "#675141" },
-  공부: { bg: "#F1F1FB", dot: "#9FA2D6", text: "#3E426F" },
-  명상: { bg: "#F1F7EE", dot: "#A8CD9B", text: "#4C5D44" },
-  저녁: { bg: "#FEF9EE", dot: "#E6CF8A", text: "#685A3F" },
-  기타: { bg: "#F3F4F8", dot: "#C4C6D0", text: "#8A8C9A" },
-} as const;
-const isFixedCategoryName = (categoryName: string) => {
-  return Object.prototype.hasOwnProperty.call(FIXED_EVENT_TYPES, categoryName);
-};
-const getCategoryBadgeStyle = (categoryName: string, categoryColor: string) => {
-  if (isFixedCategory(categoryName)) {
-    const fixedStyle =
-      FIXED_EVENT_TYPES[categoryName as keyof typeof FIXED_EVENT_TYPES];
-
-    return {
-      backgroundColor: fixedStyle.bg,
-      textColor: fixedStyle.text,
-      borderColor: fixedStyle.dot,
-    };
-  }
-
-  return {
-    backgroundColor: `${categoryColor}22`,
-    textColor: categoryColor,
-    borderColor: categoryColor,
-  };
-};
 const DEFAULT_USER_COLOR_PALETTE = [
   "#405886",
   "#E79A95",
@@ -149,10 +114,31 @@ function formatDateLabel(dateString: string) {
   return `${year}년 ${month}월 ${day}일`;
 }
 
+// 빠른 선택의 매주/격주 반복은 시작 날짜의 요일을 기본 반복 요일로 사용
+function getWeekdayValueFromDate(dateString: string): RepeatWeekday {
+  const weekdayValues: RepeatWeekday[] = [
+    "SUN",
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT",
+  ];
+
+  return weekdayValues[new Date(`${dateString}T00:00:00`).getDay()];
+}
+
 function getNotifyLabel(isNotify: boolean) {
   return isNotify ? "켜짐" : "꺼짐";
 }
 
+//빠른 선택 매주/격주는 시작 날짜의 요일을 보여줌
+function getQuickWeekdayLabel(startDate: string) {
+  const weekday = getWeekdayValueFromDate(startDate);
+
+  return WEEKDAY_OPTIONS.find((day) => day.value === weekday)?.label ?? "";
+}
 function getRepeatLabel(
   repeatType: RepeatType,
   repeatInterval: string,
@@ -165,14 +151,6 @@ function getRepeatLabel(
     case "DAILY":
       return "매일";
     case "CUSTOM": {
-      const unitLabelMap: Record<RepeatUnit, string> = {
-        DAY: "일",
-        WEEK: "주",
-        MONTH: "월",
-        YEAR: "년",
-      };
-
-      // 주 단위 반복은 선택한 요일까지 함께 보여줌
       if (repeatUnit === "WEEK") {
         const selectedLabels = WEEKDAY_OPTIONS.filter((day) =>
           repeatDays.includes(day.value),
@@ -185,7 +163,7 @@ function getRepeatLabel(
         return `${everyLabel}${dayLabel}`;
       }
 
-      return `${repeatInterval}${unitLabelMap[repeatUnit]}마다`;
+      return repeatInterval === "1" ? "매일" : `${repeatInterval}일마다`;
     }
     default:
       return "없음";
@@ -196,36 +174,9 @@ const REPEAT_EVERY_OPTIONS = Array.from({ length: 30 }, (_, i) =>
   String(i + 1),
 );
 
-//색상 문자열 정리
-function normalizeHexColor(color: string) {
-  return color.trim().toUpperCase();
-}
-
-//중복 색상 제거
-function uniqueColors(colors: string[]) {
-  return Array.from(new Set(colors.map(normalizeHexColor)));
-}
-
-//중복 카테고리 제거 + 이름/색상 정리
-function uniqueCustomCategories(categories: CustomCategory[]) {
-  const map = new Map<string, CustomCategory>();
-
-  categories.forEach((item) => {
-    const name = item.name.trim();
-    if (!name) return;
-
-    map.set(name, {
-      name,
-      color: normalizeHexColor(item.color),
-    });
-  });
-
-  return Array.from(map.values());
-}
-
 //기본 카테고리인지 확인
 function isFixedCategory(categoryName: string) {
-  return Object.prototype.hasOwnProperty.call(FIXED_EVENT_TYPES, categoryName);
+  return Object.prototype.hasOwnProperty.call(EVENT_TYPES, categoryName);
 }
 
 //반복 단위 선택 컬럼
@@ -327,7 +278,6 @@ function NumberOptionColumn({
 export default function ModalScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  //화면 UI 상태
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [tempCategory, setTempCategory] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -530,8 +480,7 @@ export default function ModalScreen() {
     ) {
       setCategory(newCategory);
 
-      const fixedStyle =
-        FIXED_EVENT_TYPES[newCategory as keyof typeof FIXED_EVENT_TYPES];
+      const fixedStyle = EVENT_TYPES[newCategory as keyof typeof EVENT_TYPES];
       setSelectedColor(fixedStyle.dot);
 
       setTempCategory("");
@@ -607,7 +556,7 @@ export default function ModalScreen() {
 
       if (category === categoryName) {
         setCategory("기타");
-        setSelectedColor(FIXED_EVENT_TYPES["기타"].dot);
+        setSelectedColor(EVENT_TYPES["기타"].dot);
       }
     } catch (error) {
       console.error("사용자 카테고리 삭제 실패", error);
@@ -666,14 +615,28 @@ export default function ModalScreen() {
       setShowCustomRepeatModal(true);
       return;
     }
-
     setRepeatType(option);
+    setRepeatInterval("1");
+    setRepeatUnit("DAY");
+    setRepeatDays([]);
     setShowRepeatModal(false);
   };
 
-  // 반복 단위를 선택할 때 주 단위는 1주/2주까지만 허용
+  const handleSelectQuickWeeklyRepeat = (interval: "1" | "2") => {
+    setRepeatType("CUSTOM");
+    setRepeatInterval(interval);
+    setRepeatUnit("WEEK");
+    setRepeatDays([getWeekdayValueFromDate(startDate)]);
+    setShowRepeatModal(false);
+  };
+
+  // 사용자 설정 반복 단위는 일/주만 사용하고, 주 단위는 1주/2주까지만 허용
   const handleSelectCustomRepeatUnit = (unit: RepeatUnit) => {
     setRepeatUnit(unit);
+
+    if (unit === "DAY") {
+      setRepeatDays([]);
+    }
 
     if (unit === "WEEK" && Number(repeatInterval) > 2) {
       setRepeatInterval("2");
@@ -690,7 +653,7 @@ export default function ModalScreen() {
   };
 
   const handleSaveCustomRepeat = () => {
-    // 추가: 주 단위 반복은 요일을 최소 1개 선택해야 저장 가능
+    // 주 단위 반복은 요일을 최소 1개 선택해야 저장 가능
     if (repeatUnit === "WEEK" && repeatDays.length === 0) {
       Alert.alert(
         "요일 선택 필요",
@@ -734,7 +697,7 @@ export default function ModalScreen() {
     if (!repeatType || repeatType === "NONE") {
       Alert.alert(
         "반복 설정 필요",
-        "반복 설정을 선택해야 일정을 추가할 수 있어요.",
+        "반복 설정을 선택해야 루틴을 추가할 수 있어요.",
       );
       return false;
     }
@@ -782,11 +745,11 @@ export default function ModalScreen() {
       await handleSave(saveOptions);
     } catch (error) {
       if (error instanceof Error && error.message === "TIME_CONFLICT") {
-        Alert.alert("시간 중복", "같은 시간대에 이미 등록된 일정이 있어요.");
+        Alert.alert("시간 중복", "같은 시간대에 이미 등록된 루틴이 있어요.");
         return;
       }
 
-      Alert.alert("저장 실패", "일정을 저장하지 못했어요.");
+      Alert.alert("저장 실패", "루틴을 저장하지 못했어요.");
     }
   };
   //시간 모달에서 값 적용
@@ -796,6 +759,16 @@ export default function ModalScreen() {
     endHour: string;
     endMinute: string;
   }) => {
+    // 시작/종료 시간이 반대로 저장되지 않도록 적용 단계에서 먼저 차단
+    const startTotalMinutes =
+      Number(time.startHour) * 60 + Number(time.startMinute);
+    const endTotalMinutes = Number(time.endHour) * 60 + Number(time.endMinute);
+
+    if (endTotalMinutes <= startTotalMinutes) {
+      Alert.alert("시간 설정 확인", "끝나는 시간은 시작 시간보다 늦어야 해요.");
+      return;
+    }
+
     setStartHour(time.startHour);
     setStartMinute(time.startMinute);
     setEndHour(time.endHour);
@@ -885,7 +858,7 @@ export default function ModalScreen() {
 
           <View style={styles.header}>
             <ThemedText type="subtitle" style={styles.headerTitle}>
-              일정 추가
+              루틴 추가
             </ThemedText>
 
             <TouchableOpacity onPress={closeModal}>
@@ -1090,8 +1063,7 @@ export default function ModalScreen() {
               <View style={styles.categoryGrid}>
                 {categoryList.map((cat) => {
                   const resolvedCategoryColor = isFixedCategory(cat)
-                    ? FIXED_EVENT_TYPES[cat as keyof typeof FIXED_EVENT_TYPES]
-                        .dot
+                    ? EVENT_TYPES[cat as keyof typeof EVENT_TYPES].dot
                     : customCategoryColorMap[cat] ||
                       DEFAULT_USER_COLOR_PALETTE[0];
 
@@ -1231,7 +1203,7 @@ export default function ModalScreen() {
             {/* 저장 버튼 */}
             <TouchableOpacity style={styles.saveButton} onPress={handleSubmit}>
               <ThemedText style={styles.saveButtonText}>
-                일정 등록하기
+                루틴 등록하기
               </ThemedText>
             </TouchableOpacity>
           </ScrollView>
@@ -1270,15 +1242,54 @@ export default function ModalScreen() {
             <View style={styles.optionList}>
               {[
                 { label: "매일", value: "DAILY" as RepeatType },
+
+                {
+                  label: `매주(${getQuickWeekdayLabel(startDate)})`,
+                  value: "QUICK_WEEKLY",
+                },
+                {
+                  label: `격주(${getQuickWeekdayLabel(startDate)})`,
+                  value: "QUICK_BIWEEKLY",
+                },
+
                 { label: "사용자 설정", value: "CUSTOM" as RepeatType },
               ].map((item) => {
-                const isSelected = repeatType === item.value;
+                const isQuickWeekly = item.value === "QUICK_WEEKLY";
+                const isQuickBiweekly = item.value === "QUICK_BIWEEKLY";
+                const isSelected =
+                  (repeatType === "DAILY" && item.value === "DAILY") ||
+                  (repeatType === "CUSTOM" &&
+                    repeatUnit === "WEEK" &&
+                    repeatInterval === "1" &&
+                    isQuickWeekly) ||
+                  (repeatType === "CUSTOM" &&
+                    repeatUnit === "WEEK" &&
+                    repeatInterval === "2" &&
+                    isQuickBiweekly) ||
+                  (repeatType === "CUSTOM" &&
+                    !(
+                      repeatUnit === "WEEK" &&
+                      (repeatInterval === "1" || repeatInterval === "2")
+                    ) &&
+                    item.value === "CUSTOM");
 
                 return (
                   <TouchableOpacity
                     key={item.value}
                     style={styles.optionListItem}
-                    onPress={() => handleSelectRepeatType(item.value)}
+                    onPress={() => {
+                      if (isQuickWeekly) {
+                        handleSelectQuickWeeklyRepeat("1");
+                        return;
+                      }
+
+                      if (isQuickBiweekly) {
+                        handleSelectQuickWeeklyRepeat("2");
+                        return;
+                      }
+
+                      handleSelectRepeatType(item.value as RepeatType);
+                    }}
                   >
                     <ThemedText
                       style={[
@@ -1337,8 +1348,6 @@ export default function ModalScreen() {
                 options={[
                   { label: "일", value: "DAY" },
                   { label: "주", value: "WEEK" },
-                  { label: "월", value: "MONTH" },
-                  { label: "년", value: "YEAR" },
                 ]}
                 selectedValue={repeatUnit}
                 onSelect={handleSelectCustomRepeatUnit}
@@ -1512,13 +1521,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#A0B0D0",
     marginBottom: 12,
-  },
-
-  helperText: {
-    marginTop: 10,
-    fontSize: 12,
-    color: "#A0B0D0",
-    lineHeight: 18,
   },
 
   subInput: {
