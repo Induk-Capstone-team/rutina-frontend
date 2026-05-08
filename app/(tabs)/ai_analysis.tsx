@@ -7,6 +7,7 @@ import {
 } from "@/hooks/useAiRecommend";
 import type { RecommendedRoutine } from "@/lib/data/ai_api";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   ActivityIndicator,
@@ -51,17 +52,22 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
   );
 }
 
-function RoutineCheckItem({ routine, checked, onToggle }: { routine: RecommendedRoutine; checked: boolean; onToggle: () => void }) {
+function RoutineCheckItem({ routine, checked, onToggle, onEdit }: { routine: RecommendedRoutine; checked: boolean; onToggle: () => void; onEdit: () => void }) {
   return (
-    <TouchableOpacity style={s.routineItem} onPress={onToggle} activeOpacity={0.7}>
-      <View style={[s.checkbox, checked && s.checkboxChecked]}>
-        {checked && <Ionicons name="checkmark" size={14} color="#fff" />}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={s.routineTitle}>{routine.startTime} – {routine.endTime} {routine.title}</Text>
-        {routine.description ? <Text style={s.routineDesc}>({routine.description})</Text> : null}
-      </View>
-    </TouchableOpacity>
+    <View style={s.routineItemWrapper}>
+      <TouchableOpacity style={s.routineItem} onPress={onToggle} activeOpacity={0.7}>
+        <View style={[s.checkbox, checked && s.checkboxChecked]}>
+          {checked && <Ionicons name="checkmark" size={14} color="#fff" />}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.routineTitle}>{routine.startTime} – {routine.endTime} {routine.title}</Text>
+          {routine.description ? <Text style={s.routineDesc}>({routine.description})</Text> : null}
+        </View>
+      </TouchableOpacity>
+      <TouchableOpacity style={s.editBtn} onPress={onEdit}>
+        <Ionicons name="add-circle-outline" size={24} color={C.primary} />
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -95,6 +101,7 @@ export default function AiAnalysisScreen() {
     toggleRoutineCheck, saveSelectedRoutines,
   } = useAiRecommend();
 
+  const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const [localGoals, setLocalGoals] = useState<string[]>([]);
   const [localTime, setLocalTime] = useState("");
@@ -114,9 +121,28 @@ export default function AiAnalysisScreen() {
       Alert.alert("선택 없음", "추가할 루틴을 선택해주세요.");
       return;
     }
-    const ok = await saveSelectedRoutines();
-    if (ok) Alert.alert("완료", `${checkedRoutineIds.size}개의 루틴이 추가되었습니다!`);
-  }, [checkedRoutineIds, saveSelectedRoutines]);
+    
+    // 첫 번째로 선택된 루틴을 가져옴 (현재는 하나씩 직접 추가하는 흐름을 위해)
+    const firstId = Array.from(checkedRoutineIds)[0];
+    const routine = recommendedRoutines.find(r => r.id === firstId);
+    
+    if (routine) {
+      handleEditAndAdd(routine);
+    }
+  }, [checkedRoutineIds, recommendedRoutines, handleEditAndAdd]);
+
+  const handleEditAndAdd = useCallback((routine: RecommendedRoutine) => {
+    router.push({
+      pathname: "/modal",
+      params: {
+        title: routine.title,
+        startTime: routine.startTime,
+        endTime: routine.endTime,
+        category: routine.category,
+        description: routine.description,
+      },
+    });
+  }, [router]);
 
   // ── 대화 시작 전 ──
   if (step === "init") {
@@ -180,10 +206,16 @@ export default function AiAnalysisScreen() {
           {step === "result" && recommendedRoutines.length > 0 && (
             <View style={s.resultCard}>
               {recommendedRoutines.map((r) => (
-                <RoutineCheckItem key={r.id} routine={r} checked={checkedRoutineIds.has(r.id)} onToggle={() => toggleRoutineCheck(r.id)} />
+                <RoutineCheckItem
+                  key={r.id}
+                  routine={r}
+                  checked={checkedRoutineIds.has(r.id)}
+                  onToggle={() => toggleRoutineCheck(r.id)}
+                  onEdit={() => handleEditAndAdd(r)}
+                />
               ))}
               <TouchableOpacity style={s.addRoutineBtn} onPress={handleSaveRoutines}>
-                <Text style={s.addRoutineBtnText}>루틴 추가하기</Text>
+                <Text style={s.addRoutineBtnText}>선택한 루틴 직접 추가하기</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -287,7 +319,9 @@ const s = StyleSheet.create({
   nextBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 
   resultCard: { backgroundColor: "#fff", borderRadius: 20, padding: 16, marginTop: 4, marginBottom: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  routineItem: { flexDirection: "row", alignItems: "flex-start", paddingVertical: 10, borderBottomWidth: 1, borderColor: "#F3F4F8" },
+  routineItemWrapper: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderColor: "#F3F4F8" },
+  routineItem: { flex: 1, flexDirection: "row", alignItems: "flex-start", paddingVertical: 10 },
+  editBtn: { padding: 8, marginLeft: 4 },
   checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: C.border, marginRight: 12, marginTop: 1, justifyContent: "center", alignItems: "center" },
   checkboxChecked: { backgroundColor: C.check, borderColor: C.check },
   routineTitle: { fontSize: 14, fontWeight: "700", color: C.text, lineHeight: 20 },
