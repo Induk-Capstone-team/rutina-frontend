@@ -1,8 +1,16 @@
+import { RoutineService } from "@/app/services/routine_service";
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
-import { RoutineStorage } from "@/lib/storage";
-import type { CalendarDay, ScheduleRoutine } from "@/types/routine";
+import { DEFAULT_CATEGORY_NAME, getCategoryStyle } from "@/lib/category";
+import { normalizeRepeatDays, shouldShowRoutineOnDate } from "@/lib/storage";
+
+import type {
+  CalendarDay,
+  RepeatWeekday,
+  ScheduleRoutine,
+} from "@/types/routine";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { isSameDay } from "date-fns";
 import React, { useCallback, useState } from "react";
 import {
   ScrollView,
@@ -13,24 +21,18 @@ import {
 } from "react-native";
 import AppCalendar from "./ui/app_calendar";
 
-// 카테고리 색상 타입
-type EventTypeStyle = {
-  bg: string;
-  dot: string;
-  text: string;
-};
-
 type RoutineWithCompletedDates = ScheduleRoutine & {
   completedDates?: string[];
 };
 
-const eventTypes: Record<string, EventTypeStyle> = {
-  기상: { bg: "#FAEEEE", dot: "#E79A95", text: "#5D4645" },
-  운동: { bg: "#FDF4EC", dot: "#EFB996", text: "#675141" },
-  공부: { bg: "#F1F1FB", dot: "#9FA2D6", text: "#3E426F" },
-  명상: { bg: "#F1F7EE", dot: "#A8CD9B", text: "#4C5D44" },
-  저녁: { bg: "#FEF9EE", dot: "#E6CF8A", text: "#685A3F" },
-  기타: { bg: "#F3F4F8", dot: "#C4C6D0", text: "#8A8C9A" },
+const weekdayLabelMap: Record<RepeatWeekday, string> = {
+  SUN: "일",
+  MON: "월",
+  TUE: "화",
+  WED: "수",
+  THU: "목",
+  FRI: "금",
+  SAT: "토",
 };
 
 function getNotifyText(item: ScheduleRoutine) {
@@ -38,22 +40,21 @@ function getNotifyText(item: ScheduleRoutine) {
 }
 
 function getRepeatText(item: ScheduleRoutine) {
-  switch (item.repeatOption) {
+  switch (item.repeatType) {
     case "DAILY":
       return "반복: 매일";
     case "CUSTOM": {
-      const unitMap = {
-        DAY: "일",
-        WEEK: "주",
-        MONTH: "개월",
-        YEAR: "년",
-      } as const;
-
-      const unit = item.customRepeatUnit
-        ? unitMap[item.customRepeatUnit]
-        : "일";
-
-      return `반복: ${item.customRepeatEvery ?? 1}${unit}마다`;
+      const interval = item.repeatInterval ?? 1;
+      const unit = item.repeatUnit ?? "DAY";
+      if (unit === "WEEK") {
+        const repeatDays = normalizeRepeatDays(item.repeatDays);
+        const dayText = repeatDays
+          .map((day) => weekdayLabelMap[day])
+          .join(", ");
+        const weekText = interval === 2 ? "격주" : "매주";
+        return dayText ? `반복: ${weekText} ${dayText}` : `반복: ${weekText}`;
+      }
+      return `반복: ${interval}일마다`;
     }
     case "NONE":
     default:
@@ -90,125 +91,6 @@ function parseTimeString(time?: string | null) {
   };
 }
 
-// hex 색상을 rgba로 변환하는 함수
-function hexToRgba(hex: string, alpha: number) {
-  const cleaned = hex.replace("#", "");
-
-  if (cleaned.length !== 6) {
-    return hex;
-  }
-
-  const r = parseInt(cleaned.slice(0, 2), 16);
-  const g = parseInt(cleaned.slice(2, 4), 16);
-  const b = parseInt(cleaned.slice(4, 6), 16);
-
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-// 카테고리에 맞는 스타일 반환
-function getCategoryStyle(item: ScheduleRoutine): EventTypeStyle {
-  const typeLabel = item.categoryName ?? "기타";
-  const fixedStyle = eventTypes[typeLabel];
-
-  if (fixedStyle) {
-    return fixedStyle;
-  }
-
-  if (item.color) {
-    return {
-      bg: hexToRgba(item.color, 0.14),
-      dot: item.color,
-      text: item.color,
-    };
-  }
-
-  return eventTypes["기타"];
-}
-// 일 단위 차이 계산
-function getDiffDays(startDate: string, targetDate: string) {
-  const start = new Date(startDate);
-  const target = new Date(targetDate);
-
-  const startTime = new Date(
-    start.getFullYear(),
-    start.getMonth(),
-    start.getDate(),
-  ).getTime();
-
-  const targetTime = new Date(
-    target.getFullYear(),
-    target.getMonth(),
-    target.getDate(),
-  ).getTime();
-
-  return Math.floor((targetTime - startTime) / (1000 * 60 * 60 * 24));
-}
-
-// 주 단위 차이 계산
-function getDiffWeeks(startDate: string, targetDate: string) {
-  return Math.floor(getDiffDays(startDate, targetDate) / 7);
-}
-
-// 월 단위 차이 계산
-function getDiffMonths(startDate: string, targetDate: string) {
-  const start = new Date(startDate);
-  const target = new Date(targetDate);
-
-  return (
-    (target.getFullYear() - start.getFullYear()) * 12 +
-    (target.getMonth() - start.getMonth())
-  );
-}
-
-// 년 단위 차이 계산
-function getDiffYears(startDate: string, targetDate: string) {
-  const start = new Date(startDate);
-  const target = new Date(targetDate);
-
-  return target.getFullYear() - start.getFullYear();
-}
-
-// 선택 날짜에 이 일정이 보여야 하는지 판단
-function shouldShowRoutineOnDate(
-  item: ScheduleRoutine,
-  targetDateString: string,
-) {
-  if (targetDateString < item.startDate || targetDateString > item.endDate) {
-    return false;
-  }
-
-  if (!item.repeatOption || item.repeatOption === "NONE") {
-    return true;
-  }
-
-  if (item.repeatOption === "DAILY") {
-    return true;
-  }
-
-  if (item.repeatOption === "CUSTOM") {
-    const every = item.customRepeatEvery ?? 1;
-    const unit = item.customRepeatUnit ?? "DAY";
-
-    if (unit === "DAY") {
-      return getDiffDays(item.startDate, targetDateString) % every === 0;
-    }
-
-    if (unit === "WEEK") {
-      return getDiffWeeks(item.startDate, targetDateString) % every === 0;
-    }
-
-    if (unit === "MONTH") {
-      return getDiffMonths(item.startDate, targetDateString) % every === 0;
-    }
-
-    if (unit === "YEAR") {
-      return getDiffYears(item.startDate, targetDateString) % every === 0;
-    }
-  }
-
-  return false;
-}
-
 // 특정 날짜 완료 여부 확인
 function isCompletedOnDate(
   item: RoutineWithCompletedDates,
@@ -231,8 +113,11 @@ export default function ScheduleContent() {
     useState<RoutineWithCompletedDates | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
-  const selectedDateString = selectedDate.toISOString().split("T")[0];
-
+  const selectedDateString = [
+    selectedDate.getFullYear(),
+    String(selectedDate.getMonth() + 1).padStart(2, "0"),
+    String(selectedDate.getDate()).padStart(2, "0"),
+  ].join("-");
   const day = selectedDate.getDate();
   const year = selectedDate.getFullYear();
   const monthNames = [
@@ -266,15 +151,18 @@ export default function ScheduleContent() {
     newDate.setDate(selectedDate.getDate() + offset);
     setSelectedDate(newDate);
   };
-
+  const goToday = () => {
+    setSelectedDate(new Date());
+    setShowDatePicker(false);
+  };
   const onDayPress = (day: CalendarDay) => {
-    setSelectedDate(new Date(day.dateString));
+    setSelectedDate(new Date(day.dateString + "T00:00:00")); // 로컬 시간 기준
     setShowDatePicker(false);
   };
 
   const loadRoutines = useCallback(async () => {
     try {
-      const allRoutines = await RoutineStorage.getAll();
+      const allRoutines = await RoutineService.getAll();
 
       // 선택 날짜 기준으로 보여줄 루틴만 필터링
       const filteredByDate = allRoutines.filter(
@@ -305,7 +193,7 @@ export default function ScheduleContent() {
       setTimedRoutines(timed);
       setNoTimeRoutines(noTimed);
     } catch (error) {
-      console.error("일정 불러오기 실패", error);
+      console.error("루틴 불러오기 실패", error);
       setTimedRoutines([]);
       setNoTimeRoutines([]);
     }
@@ -319,75 +207,26 @@ export default function ScheduleContent() {
 
   const toggleComplete = async (id: number) => {
     try {
-      const storageApi = RoutineStorage as unknown as {
-        getAll: () => Promise<RoutineWithCompletedDates[]>;
-        saveAll?: (routines: RoutineWithCompletedDates[]) => Promise<void>;
-        updateById?: (
-          id: number,
-          updatedRoutine: RoutineWithCompletedDates,
-        ) => Promise<void>;
-      };
-
-      const allRoutines = await storageApi.getAll();
-      const targetRoutine = allRoutines.find((item) => item.id === id);
-
-      if (!targetRoutine) {
-        return;
-      }
-
-      const prevCompletedDates = targetRoutine.completedDates ?? [];
-      const isCompletedToday = prevCompletedDates.includes(selectedDateString);
-      // 오늘 날짜를 completedDates에 추가/제거해서 완료 상태 토글
-      const nextCompletedDates = isCompletedToday
-        ? prevCompletedDates.filter((date) => date !== selectedDateString)
-        : [...prevCompletedDates, selectedDateString];
-
-      const updatedRoutine: RoutineWithCompletedDates = {
-        ...targetRoutine,
-        completedDates: nextCompletedDates,
-      };
-
-      if (storageApi.updateById) {
-        await storageApi.updateById(id, updatedRoutine);
-      } else if (storageApi.saveAll) {
-        const updatedRoutines = allRoutines.map((item) =>
-          item.id === id ? updatedRoutine : item,
-        );
-        await storageApi.saveAll(updatedRoutines);
-      } else {
-        console.error(
-          "완료 상태 변경 실패: RoutineStorage에 updateById 또는 saveAll 메서드가 필요합니다.",
-        );
-        return;
-      }
-
+      await RoutineService.toggleComplete(id, selectedDateString);
       await loadRoutines();
-
-      // 상세 모달이 열려 있을 때도 상태가 바로 반영되도록 동기화
       setSelectedRoutine((prev) => {
         if (!prev || prev.id !== id) return prev;
-
-        const prevSelectedCompletedDates = prev.completedDates ?? [];
-        const prevSelectedCompletedToday =
-          prevSelectedCompletedDates.includes(selectedDateString);
-
+        const completedDates = prev.completedDates ?? [];
+        const isCompleted = completedDates.includes(selectedDateString);
         return {
           ...prev,
-          completedDates: prevSelectedCompletedToday
-            ? prevSelectedCompletedDates.filter(
-                (date) => date !== selectedDateString,
-              )
-            : [...prevSelectedCompletedDates, selectedDateString],
+          completedDates: isCompleted
+            ? completedDates.filter((date) => date !== selectedDateString)
+            : [...completedDates, selectedDateString],
         };
       });
     } catch (error) {
       console.error("완료 상태 변경 실패", error);
     }
   };
-
   const handleDeleteRoutine = async (id: number) => {
     try {
-      await RoutineStorage.deleteById(id);
+      await RoutineService.deleteById(id);
       await loadRoutines();
 
       if (selectedRoutine?.id === id) {
@@ -395,7 +234,7 @@ export default function ScheduleContent() {
         setShowDetailModal(false);
       }
     } catch (error) {
-      console.error("일정 삭제 실패", error);
+      console.error("루틴 삭제 실패", error);
     }
   };
 
@@ -411,7 +250,7 @@ export default function ScheduleContent() {
     item: RoutineWithCompletedDates;
     isTimed: boolean;
   }) => {
-    const typeLabel = item.categoryName ?? "기타";
+    const typeLabel = item.categoryName ?? DEFAULT_CATEGORY_NAME;
     const typeStyle = getCategoryStyle(item);
     const isCompletedToday = isCompletedOnDate(item, selectedDateString);
     const parsedStartTime = parseTimeString(item.startTime);
@@ -517,15 +356,23 @@ export default function ScheduleContent() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[
-                styles.calendarBtn,
-                showDatePicker && styles.calendarBtnActive,
-              ]}
-              onPress={() => setShowDatePicker(!showDatePicker)}
-            >
-              <Ionicons name="calendar-outline" size={18} color="#A0B0D0" />
-            </TouchableOpacity>
+            <View style={styles.headerActionRow}>
+              {!isSameDay(selectedDate, new Date()) && (
+                <TouchableOpacity style={styles.todayButton} onPress={goToday}>
+                  <Text style={styles.todayButtonText}>오늘</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.calendarBtn,
+                  showDatePicker && styles.calendarBtnActive,
+                ]}
+                onPress={() => setShowDatePicker(!showDatePicker)}
+              >
+                <Ionicons name="calendar-outline" size={18} color="#A0B0D0" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {showDatePicker && (
@@ -559,7 +406,7 @@ export default function ScheduleContent() {
 
           <Text style={styles.sectionTitle}>시간 없는 루틴</Text>
           {noTimeRoutines.length === 0 ? (
-            <Text style={styles.emptyText}>시간 없는 일정이 없어요.</Text>
+            <Text style={styles.emptyText}>시간 없는 루틴이 없어요.</Text>
           ) : (
             noTimeRoutines.map((item) => (
               <RenderItem key={item.id} item={item} isTimed={false} />
@@ -570,7 +417,7 @@ export default function ScheduleContent() {
 
           <Text style={styles.sectionTitle}>시간 있는 루틴</Text>
           {timedRoutines.length === 0 ? (
-            <Text style={styles.emptyText}>시간 있는 일정이 없어요.</Text>
+            <Text style={styles.emptyText}>시간 있는 루틴이 없어요.</Text>
           ) : (
             timedRoutines.map((item) => (
               <RenderItem key={item.id} item={item} isTimed={true} />
@@ -770,5 +617,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#B4B6C0",
     paddingVertical: 8,
+  },
+  headerActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  todayButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "#F3F4F8",
+  },
+
+  todayButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#405886",
   },
 });

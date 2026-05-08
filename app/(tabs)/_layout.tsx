@@ -44,9 +44,9 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="schedule"
+        name="category"
         options={{
-          title: "일정",
+          title: "카테고리",
           tabBarIcon: ({ color }) =>
             renderIcon("list.bullet", "list-outline", color),
         }}

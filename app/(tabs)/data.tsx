@@ -1,9 +1,11 @@
+import { RoutineService } from "@/app/services/routine_service";
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { Header } from "@/components/ui/_header";
-import { RoutineStorage } from "@/lib/storage";
+import { getCategoryStyle, normalizeCategoryName } from "@/lib/category";
 import type { ScheduleRoutine } from "@/types/routine";
 import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useMemo, useState } from "react";
+
 import {
   Pressable,
   SafeAreaView,
@@ -13,18 +15,22 @@ import {
   View,
 } from "react-native";
 
+// 통계 화면 보기 모드 타입
 type ViewMode = "YEAR" | "MONTH" | "WEEK";
 
+// 카테고리별로 묶은 루틴 타입
 type GroupedRoutine = {
   categoryName: string;
   routines: ScheduleRoutine[];
 };
 
+// 년/주 단위 히트맵 셀 타입
 type HeatmapCell = {
   key: string;
   filled: boolean;
 };
 
+// 월 달력 셀 타입
 type CalendarCell = {
   key: string;
   filled: boolean;
@@ -32,23 +38,7 @@ type CalendarCell = {
   isEmpty?: boolean;
 };
 
-type EventTypeStyle = {
-  bg: string;
-  dot: string;
-  text: string;
-};
-
-const DEFAULT_CATEGORY_NAME = "기타";
 const MAIN_COLOR = "#405886";
-
-const eventTypes: Record<string, EventTypeStyle> = {
-  기상: { bg: "#FAEEEE", dot: "#E79A95", text: "#5D4645" },
-  운동: { bg: "#FDF4EC", dot: "#EFB996", text: "#675141" },
-  공부: { bg: "#F1F1FB", dot: "#9FA2D6", text: "#3E426F" },
-  명상: { bg: "#F1F7EE", dot: "#A8CD9B", text: "#4C5D44" },
-  저녁: { bg: "#FEF9EE", dot: "#E6CF8A", text: "#685A3F" },
-  기타: { bg: "#F3F4F8", dot: "#C4C6D0", text: "#8A8C9A" },
-};
 
 const MONTH_LABELS = [
   "1월",
@@ -67,44 +57,7 @@ const MONTH_LABELS = [
 
 const WEEK_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
-function hexToRgba(hex: string, alpha: number) {
-  const cleaned = hex.replace("#", "");
-
-  if (cleaned.length !== 6) {
-    return hex;
-  }
-
-  const r = parseInt(cleaned.slice(0, 2), 16);
-  const g = parseInt(cleaned.slice(2, 4), 16);
-  const b = parseInt(cleaned.slice(4, 6), 16);
-
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function normalizeCategoryName(categoryName?: string | null) {
-  const trimmed = categoryName?.trim();
-  return trimmed ? trimmed : DEFAULT_CATEGORY_NAME;
-}
-
-function getCategoryStyle(item: ScheduleRoutine): EventTypeStyle {
-  const typeLabel = item.categoryName ?? DEFAULT_CATEGORY_NAME;
-  const fixedStyle = eventTypes[typeLabel];
-
-  if (fixedStyle) {
-    return fixedStyle;
-  }
-  // 커스텀 카테고리 색상 적용
-  if (item.color) {
-    return {
-      bg: hexToRgba(item.color, 0.14),
-      dot: item.color,
-      text: item.color,
-    };
-  }
-
-  return eventTypes[DEFAULT_CATEGORY_NAME];
-}
-
+// 선택한 날짜가 포함된 주의 시작일 계산
 function getWeekStart(date: Date) {
   const start = new Date(date);
   start.setHours(0, 0, 0, 0);
@@ -112,6 +65,7 @@ function getWeekStart(date: Date) {
   return start;
 }
 
+// 선택한 날짜가 포함된 주의 종료일 계산
 function getWeekEnd(date: Date) {
   const end = new Date(getWeekStart(date));
   end.setDate(end.getDate() + 6);
@@ -119,6 +73,7 @@ function getWeekEnd(date: Date) {
   return end;
 }
 
+// 문자열 날짜를 Date 객체로 변환
 function parseDateValue(value: unknown) {
   if (typeof value !== "string" || !value.trim()) {
     return null;
@@ -137,19 +92,24 @@ function parseDateValue(value: unknown) {
   return date;
 }
 
+// Date 객체를 YYYY-MM-DD 형식으로 변환
 function formatDateKey(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+// 루틴 시작일 가져오기
 function getRoutineStartDate(routine: ScheduleRoutine) {
   return parseDateValue(routine.startDate) || null;
 }
 
+// 루틴 종료일 가져오기
 function getRoutineEndDate(routine: ScheduleRoutine) {
   return parseDateValue(routine.endDate) || getRoutineStartDate(routine);
 }
+
+// 특정 날짜가 루틴 기간 안에 포함되는지 확인
 function isDateInRoutineRange(routine: ScheduleRoutine, targetDate: Date) {
   const startDate = getRoutineStartDate(routine);
   const endDate = getRoutineEndDate(routine);
@@ -160,15 +120,16 @@ function isDateInRoutineRange(routine: ScheduleRoutine, targetDate: Date) {
 
   const normalizedTarget = new Date(targetDate);
   normalizedTarget.setHours(0, 0, 0, 0);
-  // 시작일~종료일 범위 안에 있는 날짜인지 확인
   return normalizedTarget >= startDate && normalizedTarget <= endDate;
 }
+// 특정 날짜에 루틴이 완료되었는지 확인
 function isRoutineCompletedOnDate(routine: ScheduleRoutine, targetDate: Date) {
   const targetDateKey = formatDateKey(targetDate);
   const completedDates = routine.completedDates ?? [];
-  // 해당 날짜가 완료 기록에 포함되어 있는지 확인
   return completedDates.includes(targetDateKey);
 }
+
+// 루틴 기간과 현재 선택한 기간이 겹치는지 확인
 function doesRoutineOverlapPeriod(
   routine: ScheduleRoutine,
   periodStart: Date,
@@ -186,16 +147,16 @@ function doesRoutineOverlapPeriod(
 
   const normalizedEnd = new Date(periodEnd);
   normalizedEnd.setHours(23, 59, 59, 999);
-  // 루틴 기간과 현재 보는 기간이 겹치는지 확인
   return startDate <= normalizedEnd && endDate >= normalizedStart;
 }
-
+// 선택한 연도에 해당하는 루틴인지 확인
 function isRoutineInSameYear(routine: ScheduleRoutine, year: number) {
   const yearStart = new Date(year, 0, 1);
   const yearEnd = new Date(year, 11, 31);
   return doesRoutineOverlapPeriod(routine, yearStart, yearEnd);
 }
 
+// 선택한 월에 해당하는 루틴인지 확인
 function isRoutineInSameMonth(
   routine: ScheduleRoutine,
   year: number,
@@ -205,13 +166,13 @@ function isRoutineInSameMonth(
   const monthEnd = new Date(year, month + 1, 0);
   return doesRoutineOverlapPeriod(routine, monthStart, monthEnd);
 }
-
+// 선택한 주에 해당하는 루틴인지 확인
 function isRoutineInSameWeek(routine: ScheduleRoutine, selectedDate: Date) {
   const weekStart = getWeekStart(selectedDate);
   const weekEnd = getWeekEnd(selectedDate);
   return doesRoutineOverlapPeriod(routine, weekStart, weekEnd);
 }
-
+// 연간 통계 히트맵 셀 생성
 function buildYearCells(routine: ScheduleRoutine, year: number): HeatmapCell[] {
   const startDate = new Date(year, 0, 1);
   const endDate = new Date(year, 11, 31);
@@ -235,7 +196,7 @@ function buildYearCells(routine: ScheduleRoutine, year: number): HeatmapCell[] {
 
   return cells;
 }
-
+// 주간 통계 히트맵 셀 생성
 function buildWeekCells(
   routine: ScheduleRoutine,
   selectedWeekDate: Date,
@@ -254,7 +215,7 @@ function buildWeekCells(
     };
   });
 }
-
+// 월간 달력 셀 생성
 function buildMonthCalendarCells(
   routine: ScheduleRoutine,
   year: number,
@@ -265,7 +226,7 @@ function buildMonthCalendarCells(
   const startWeekday = firstDay.getDay();
 
   const cells: CalendarCell[] = [];
-
+  // 월 시작 전 빈 칸 채우기
   for (let i = 0; i < startWeekday; i++) {
     cells.push({
       key: `${routine.id}-month-empty-start-${i}`,
@@ -274,7 +235,7 @@ function buildMonthCalendarCells(
       isEmpty: true,
     });
   }
-
+  // 실제 날짜 셀 생성
   for (let day = 1; day <= daysInMonth; day++) {
     const currentDate = new Date(year, month, day);
 
@@ -286,7 +247,7 @@ function buildMonthCalendarCells(
       label: String(day),
     });
   }
-
+  // 마지막 줄을 7칸으로 맞추기 위한 빈 칸 추가
   while (cells.length % 7 !== 0) {
     cells.push({
       key: `${routine.id}-month-empty-end-${cells.length}`,
@@ -298,7 +259,7 @@ function buildMonthCalendarCells(
 
   return cells;
 }
-
+// 루틴을 카테고리별로 묶기
 function groupByCategory(routines: ScheduleRoutine[]): GroupedRoutine[] {
   const groupedMap = new Map<string, ScheduleRoutine[]>();
 
@@ -324,7 +285,7 @@ function formatYear(year: number) {
 function formatMonth(year: number, month: number) {
   return `${year}년 ${month + 1}월`;
 }
-
+// 주간 표시 텍스트 생성
 function formatWeek(selectedDate: Date) {
   const start = getWeekStart(selectedDate);
   const end = getWeekEnd(selectedDate);
@@ -336,7 +297,7 @@ function formatWeek(selectedDate: Date) {
 
   return `${startMonth}/${startDay} - ${endMonth}/${endDay}`;
 }
-
+// 루틴 하나의 통계 카드
 function HeatmapRow({
   routine,
   viewMode,
@@ -353,17 +314,19 @@ function HeatmapRow({
   onPress: (routine: ScheduleRoutine) => void;
 }) {
   const categoryStyle = getCategoryStyle(routine);
-
+  // 연간 보기일 때만 연간 셀 계산
   const yearCells = useMemo(() => {
     if (viewMode !== "YEAR") return [];
     return buildYearCells(routine, selectedYear);
   }, [routine, viewMode, selectedYear]);
 
+  // 월간 보기일 때만 월간 셀 계산
   const monthCells = useMemo(() => {
     if (viewMode !== "MONTH") return [];
     return buildMonthCalendarCells(routine, selectedYear, selectedMonth);
   }, [routine, viewMode, selectedYear, selectedMonth]);
 
+  // 주간 보기일 때만 주간 셀 계산
   const weekCells = useMemo(() => {
     if (viewMode !== "WEEK") return [];
     return buildWeekCells(routine, selectedWeekDate);
@@ -383,6 +346,7 @@ function HeatmapRow({
         </Text>
       </View>
 
+      {/* 연간 통계 화면 */}
       {viewMode === "YEAR" && (
         <>
           <View style={styles.yearHeatmapWrap}>
@@ -410,6 +374,7 @@ function HeatmapRow({
         </>
       )}
 
+      {/* 월간 통계 화면 */}
       {viewMode === "MONTH" && (
         <>
           <View style={styles.monthWeekLabelRow}>
@@ -450,6 +415,7 @@ function HeatmapRow({
         </>
       )}
 
+      {/* 주간 통계 화면 */}
       {viewMode === "WEEK" && (
         <>
           <View style={styles.weekContainer}>
@@ -483,21 +449,27 @@ function HeatmapRow({
 
 export default function DataScreen() {
   const today = new Date();
-
+  // 저장된 루틴 목록
   const [routines, setRoutines] = useState<ScheduleRoutine[]>([]);
+  // 현재 통계 보기 모드
   const [viewMode, setViewMode] = useState<ViewMode>("YEAR");
+  // 선택된 연도/월/주
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
   const [selectedWeekDate, setSelectedWeekDate] = useState(today);
+  // 카테고리 접기/펼치기 상태
   const [expandedCategories, setExpandedCategories] = useState<
     Record<string, boolean>
   >({});
+  // 상세 모달에 보여줄 루틴
   const [selectedRoutine, setSelectedRoutine] =
     useState<ScheduleRoutine | null>(null);
+  // 상세 모달 표시 여부
   const [showDetailModal, setShowDetailModal] = useState(false);
+  // 저장소에서 루틴 데이터 불러오기
   const loadRoutines = useCallback(async () => {
     try {
-      const stored = await RoutineStorage.getAll();
+      const stored = await RoutineService.getAll();
       setRoutines(stored);
     } catch (error) {
       console.error("통계 데이터 불러오기 실패", error);
@@ -510,7 +482,7 @@ export default function DataScreen() {
       loadRoutines();
     }, [loadRoutines]),
   );
-
+  // 현재 보기 모드에 맞는 루틴만 필터링
   const filteredRoutines = useMemo(() => {
     if (viewMode === "YEAR") {
       return routines.filter((routine) =>
@@ -528,11 +500,11 @@ export default function DataScreen() {
       isRoutineInSameWeek(routine, selectedWeekDate),
     );
   }, [routines, viewMode, selectedYear, selectedMonth, selectedWeekDate]);
-
+  // 필터링된 루틴을 카테고리별로 묶기
   const groupedRoutines = useMemo(() => {
     return groupByCategory(filteredRoutines);
   }, [filteredRoutines]);
-
+  // 새로 생긴 카테고리는 기본적으로 펼쳐진 상태로 설정
   React.useEffect(() => {
     setExpandedCategories((prev) => {
       const nextState = { ...prev };
@@ -546,24 +518,24 @@ export default function DataScreen() {
       return nextState;
     });
   }, [groupedRoutines]);
-
+  // 카테고리 접기/펼치기
   const toggleCategory = (categoryName: string) => {
     setExpandedCategories((prev) => ({
       ...prev,
       [categoryName]: !prev[categoryName],
     }));
   };
-
+  // 연도 이동
   const moveYear = (diff: number) => {
     setSelectedYear((prev) => prev + diff);
   };
-
+  // 월 이동
   const moveMonth = (diff: number) => {
     const nextDate = new Date(selectedYear, selectedMonth + diff, 1);
     setSelectedYear(nextDate.getFullYear());
     setSelectedMonth(nextDate.getMonth());
   };
-
+  // 주 이동
   const moveWeek = (diff: number) => {
     setSelectedWeekDate((prev) => {
       const nextDate = new Date(prev);
@@ -571,6 +543,7 @@ export default function DataScreen() {
       return nextDate;
     });
   };
+  // 루틴 클릭 시 상세 모달 열기
   const handlePressRoutine = (routine: ScheduleRoutine) => {
     setSelectedRoutine(routine);
     setShowDetailModal(true);
@@ -592,7 +565,7 @@ export default function DataScreen() {
                 루틴별 완료 기록을 확인해보세요
               </Text>
             </View>
-
+            {/* 통계 보기 모드 선택 */}
             <View style={styles.viewTabRow}>
               <Pressable
                 style={[
@@ -645,7 +618,7 @@ export default function DataScreen() {
                 </Text>
               </Pressable>
             </View>
-
+            {/* 현재 선택된 기간 이동 영역 */}
             <View style={styles.periodRow}>
               <Pressable
                 style={styles.periodMoveButton}
@@ -693,7 +666,7 @@ export default function DataScreen() {
                 <Text style={styles.periodMoveText}>›</Text>
               </Pressable>
             </View>
-
+            {/* 표시할 루틴이 없을 때 */}
             {groupedRoutines.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyText}>표시할 루틴이 없어요.</Text>
@@ -721,7 +694,7 @@ export default function DataScreen() {
                         {isExpanded ? "접기" : "펼치기"}
                       </Text>
                     </Pressable>
-
+                    {/* 카테고리가 펼쳐져 있을 때 루틴 목록 표시 */}
                     {isExpanded && (
                       <View style={styles.categoryBody}>
                         {group.routines.map((routine) => (
@@ -744,6 +717,7 @@ export default function DataScreen() {
           </View>
         </ScrollView>
       </View>
+      {/* 루틴 상세 모달 */}
       <ScheduleDetailModal
         visible={showDetailModal}
         routine={selectedRoutine}
@@ -754,6 +728,7 @@ export default function DataScreen() {
         onUpdated={async () => {
           await loadRoutines();
         }}
+        readOnly
       />
     </SafeAreaView>
   );

@@ -1,79 +1,99 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Switch, Alert } from 'react-native';
-import { useAuthViewModel } from '@/hooks/useAuthViewModel';
+import { useAuthViewModel } from "@/hooks/useAuthViewModel";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
+import {
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 type SettingItemProps = {
   icon: string;
   title: string;
   value?: string | boolean;
-  type?: 'link' | 'switch' | 'text';
+  type?: "link" | "switch" | "text";
   onToggle?: (val: boolean) => void;
 };
 
-const SettingItem = ({ icon, title, value, type = 'link', onToggle = () => {} }: SettingItemProps) => {
+const SettingItem = ({
+  icon,
+  title,
+  value,
+  type = "link",
+  onToggle = () => {},
+}: SettingItemProps) => {
   return (
-    <TouchableOpacity style={styles.settingItem} activeOpacity={type === 'link' ? 0.7 : 1}>
+    <TouchableOpacity
+      style={styles.settingItem}
+      activeOpacity={type === "link" ? 0.7 : 1}
+    >
       <View style={styles.settingItemLeft}>
         <View style={styles.iconContainer}>
           <Text style={styles.iconText}>{icon}</Text>
         </View>
         <Text style={styles.settingTitle}>{title}</Text>
       </View>
-      
+
       <View style={styles.settingItemRight}>
-        {type === 'link' && (
+        {type === "link" && (
           <>
             {value && <Text style={styles.settingValue}>{value}</Text>}
             <Text style={styles.chevron}>›</Text>
           </>
         )}
-        {type === 'switch' && (
-          <Switch 
-            value={!!value} 
+        {type === "switch" && (
+          <Switch
+            value={!!value}
             onValueChange={onToggle}
-            trackColor={{ false: '#E2E5EC', true: '#405886' }}
-            thumbColor={'#FFFFFF'}
+            trackColor={{ false: "#E2E5EC", true: "#405886" }}
+            thumbColor={"#FFFFFF"}
           />
         )}
-        {type === 'text' && (
-          <Text style={styles.settingValue}>{value}</Text>
-        )}
+        {type === "text" && <Text style={styles.settingValue}>{value}</Text>}
       </View>
     </TouchableOpacity>
   );
 };
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const { logout } = useAuthViewModel();
 
   const handleLogout = () => {
-    Alert.alert(
-      "로그아웃",
-      "정말 로그아웃 하시겠습니까?",
-      [
-        {
-          text: "취소",
-          style: "cancel"
-        },
-        {
-          text: "로그아웃",
-          onPress: () => logout(),
-          style: "destructive"
-        }
-      ]
-    );
+    Alert.alert("로그아웃", "정말 로그아웃 하시겠습니까?", [
+      {
+        text: "취소",
+        style: "cancel",
+      },
+      {
+        text: "로그아웃",
+        onPress: () => logout(),
+        style: "destructive",
+      },
+    ]);
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backIcon}>‹</Text>
+        </TouchableOpacity>
+
         <Text style={styles.headerTitle}>설정</Text>
       </View>
-
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.profileImageContainer}>
@@ -91,63 +111,41 @@ export default function SettingsScreen() {
         {/* General Settings */}
         <Text style={styles.sectionTitle}>일반</Text>
         <View style={styles.card}>
-          <SettingItem 
-            icon="🔔" 
-            title="알림 설정" 
-            type="switch" 
+          <SettingItem
+            icon="🔔"
+            title="알림 설정"
+            type="switch"
             value={notifications}
             onToggle={setNotifications}
           />
           <View style={styles.divider} />
-          <SettingItem 
-            icon="🌙" 
-            title="다크 모드" 
-            type="switch" 
+          <SettingItem
+            icon="🌙"
+            title="다크 모드"
+            type="switch"
             value={darkMode}
             onToggle={setDarkMode}
           />
           <View style={styles.divider} />
-          <SettingItem 
-            icon="⏱" 
-            title="시간 형식" 
-            value="24시간" 
-          />
+          <SettingItem icon="⏱" title="시간 형식" value="24시간" />
         </View>
 
         {/* Routine Settings */}
         <Text style={styles.sectionTitle}>루틴 관리</Text>
         <View style={styles.card}>
-          <SettingItem 
-            icon="🎨" 
-            title="루틴 색상 테마" 
-            value="기본" 
-          />
+          <SettingItem icon="🎨" title="루틴 색상 테마" value="기본" />
           <View style={styles.divider} />
-          <SettingItem 
-            icon="📦" 
-            title="카테고 편집" 
-          />
+          <SettingItem icon="📦" title="카테고 편집" />
         </View>
 
         {/* Support & Info empty */}
         <Text style={styles.sectionTitle}>지원 및 정보</Text>
         <View style={styles.card}>
-          <SettingItem 
-            icon="💬" 
-            title="공지사항" 
-          />
+          <SettingItem icon="💬" title="공지사항" />
           <View style={styles.divider} />
-          <SettingItem 
-            icon="❓" 
-            title="고객센터 / 도움말" 
-          />
+          <SettingItem icon="❓" title="고객센터 / 도움말" />
           <View style={styles.divider} />
-          <SettingItem 
-            icon="ℹ️" 
-            title="앱 버전" 
-            type="text"
-            value="1.0.0"
-          />
+          <SettingItem icon="ℹ️" title="앱 버전" type="text" value="1.0.0" />
         </View>
 
         {/* Account Actions */}
@@ -166,31 +164,48 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F3F4F8',
+    backgroundColor: "#F3F4F8",
   },
   header: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 8,
   },
+
+  backButton: {
+    width: 32,
+    height: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 3,
+  },
+
+  backIcon: {
+    fontSize: 34,
+    color: "#2A3C6B",
+    fontWeight: "500",
+    marginTop: -5,
+  },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
-    color: '#2A3C6B',
+    fontWeight: "800",
+    color: "#2A3C6B",
   },
   container: {
     flex: 1,
     paddingHorizontal: 16,
   },
   profileSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     padding: 20,
     borderRadius: 24,
     marginTop: 10,
     marginBottom: 24,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -200,14 +215,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#405886',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#405886",
+    justifyContent: "center",
+    alignItems: "center",
   },
   profileImageText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   profileInfo: {
     flex: 1,
@@ -215,61 +230,61 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#2A3C6B',
+    fontWeight: "700",
+    color: "#2A3C6B",
     marginBottom: 4,
   },
   profileEmail: {
     fontSize: 14,
-    color: '#8A8C9A',
+    color: "#8A8C9A",
   },
   editProfileBtn: {
-    backgroundColor: '#F3F4F8',
+    backgroundColor: "#F3F4F8",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 16,
   },
   editProfileText: {
-    color: '#405886',
+    color: "#405886",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#8A8C9A',
+    fontWeight: "600",
+    color: "#8A8C9A",
     marginLeft: 12,
     marginBottom: 8,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 24,
     paddingVertical: 8,
     marginBottom: 24,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
     shadowRadius: 8,
     elevation: 2,
   },
   settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 12,
     paddingHorizontal: 20,
   },
   settingItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   iconContainer: {
     width: 32,
     height: 32,
     borderRadius: 12,
-    backgroundColor: '#F8F9FB',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#F8F9FB",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 12,
   },
   iconText: {
@@ -277,28 +292,28 @@ const styles = StyleSheet.create({
   },
   settingTitle: {
     fontSize: 16,
-    color: '#333333',
-    fontWeight: '500',
+    color: "#333333",
+    fontWeight: "500",
   },
   settingItemRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   settingValue: {
     fontSize: 15,
-    color: '#8A8C9A',
+    color: "#8A8C9A",
     marginRight: 8,
   },
   chevron: {
     fontSize: 20,
-    color: '#C4C6D0',
-    fontWeight: '400',
+    color: "#C4C6D0",
+    fontWeight: "400",
     marginTop: -2,
   },
   divider: {
     height: 1,
-    backgroundColor: '#F3F4F8',
-    marginLeft: 64, // Align with text start
+    backgroundColor: "#F3F4F8",
+    marginLeft: 64,
     marginRight: 20,
   },
   accountActionsRow: {
@@ -306,19 +321,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   logoutButton: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
     shadowRadius: 4,
     elevation: 1,
   },
   logoutText: {
-    color: '#E79A95',
+    color: "#E79A95",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

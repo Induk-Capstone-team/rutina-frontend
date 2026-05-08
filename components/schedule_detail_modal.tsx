@@ -1,15 +1,19 @@
-// components/schedule_detail_modal.tsx
-
+import { RoutineService } from "@/app/services/routine_service";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { RoutineStorage } from "@/lib/storage";
+import {
+  EVENT_TYPES,
+  getCategoryChipStyle,
+  getCategoryStyle,
+} from "@/lib/category";
 import type {
-  RepeatOption,
+  RepeatType,
   RepeatUnit,
+  RepeatWeekday,
   ScheduleRoutine,
 } from "@/types/routine";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Modal,
@@ -24,12 +28,6 @@ import {
 } from "react-native";
 import AppCalendar from "./ui/app_calendar";
 
-type EventTypeStyle = {
-  bg: string;
-  dot: string;
-  text: string;
-};
-
 type CustomCategory = {
   name: string;
   color: string;
@@ -37,43 +35,89 @@ type CustomCategory = {
 
 const CUSTOM_CATEGORY_STORAGE_KEY = "@rutina/custom_categories";
 
-const eventTypes: Record<string, EventTypeStyle> = {
-  기상: { bg: "#FAEEEE", dot: "#E79A95", text: "#5D4645" },
-  운동: { bg: "#FDF4EC", dot: "#EFB996", text: "#675141" },
-  공부: { bg: "#F1F1FB", dot: "#9FA2D6", text: "#3E426F" },
-  명상: { bg: "#F1F7EE", dot: "#A8CD9B", text: "#4C5D44" },
-  저녁: { bg: "#FEF9EE", dot: "#E6CF8A", text: "#685A3F" },
-  기타: { bg: "#F3F4F8", dot: "#C4C6D0", text: "#8A8C9A" },
-};
-
 type ScheduleDetailModalProps = {
   visible: boolean;
   routine: ScheduleRoutine | null;
   onClose: () => void;
   onUpdated: () => Promise<void> | void;
   onDelete?: (id: number) => Promise<void> | void;
+  readOnly?: boolean;
 };
 
 const MINUTE_OPTIONS = ["00", "10", "20", "30", "40", "50"];
+const WEEKDAY_OPTIONS: { label: string; value: RepeatWeekday }[] = [
+  { label: "일", value: "SUN" },
+  { label: "월", value: "MON" },
+  { label: "화", value: "TUE" },
+  { label: "수", value: "WED" },
+  { label: "목", value: "THU" },
+  { label: "금", value: "FRI" },
+  { label: "토", value: "SAT" },
+];
 
+const WEEK_REPEAT_EVERY_OPTIONS = ["1", "2"];
+const REPEAT_EVERY_OPTIONS = Array.from({ length: 30 }, (_, i) =>
+  String(i + 1),
+);
+
+function getWeekdayValueFromDate(dateString: string): RepeatWeekday {
+  const weekdayValues: RepeatWeekday[] = [
+    "SUN",
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT",
+  ];
+  return weekdayValues[new Date(`${dateString}T00:00:00`).getDay()];
+}
+
+function getRepeatLabel(
+  repeatType: RepeatType,
+  repeatInterval: string,
+  repeatUnit: RepeatUnit,
+  repeatDays: RepeatWeekday[],
+): string {
+  switch (repeatType) {
+    case "NONE":
+      return "없음";
+    case "DAILY":
+      return "매일";
+    case "CUSTOM":
+      if (repeatUnit === "WEEK") {
+        const dayLabels = WEEKDAY_OPTIONS.filter((d) =>
+          repeatDays.includes(d.value),
+        ).map((d) => d.label);
+        const everyLabel = repeatInterval === "1" ? "매주" : "격주";
+        const dayLabel =
+          dayLabels.length > 0 ? ` · ${dayLabels.join(", ")}` : "";
+        return `${everyLabel}${dayLabel}`;
+      }
+      return repeatInterval === "1" ? "매일" : `${repeatInterval}일마다`;
+    default:
+      return "없음";
+  }
+}
 function getRepeatText(item: ScheduleRoutine) {
-  switch (item.repeatOption) {
+  switch (item.repeatType) {
     case "DAILY":
       return "매일 반복";
+
     case "CUSTOM": {
-      const unitMap = {
-        DAY: "일",
-        WEEK: "주",
-        MONTH: "개월",
-        YEAR: "년",
-      } as const;
-
-      const unit = item.customRepeatUnit
-        ? unitMap[item.customRepeatUnit]
-        : "일";
-
-      return `${item.customRepeatEvery ?? 1}${unit}마다 반복`;
+      if (item.repeatUnit === "WEEK") {
+        const dayLabels = WEEKDAY_OPTIONS.filter((d) =>
+          (item.repeatDays ?? []).includes(d.value),
+        ).map((d) => d.label);
+        const everyLabel = (item.repeatInterval ?? 1) === 1 ? "매주" : "격주";
+        const dayLabel =
+          dayLabels.length > 0 ? ` · ${dayLabels.join(", ")}` : "";
+        return `${everyLabel}${dayLabel} 반복`;
+      }
+      const interval = item.repeatInterval ?? 1;
+      return interval === 1 ? "매일 반복" : `${interval}일마다 반복`;
     }
+
     case "NONE":
     default:
       return "반복 없음";
@@ -101,6 +145,7 @@ function formatTimeRange(startTime?: string | null, endTime?: string | null) {
   const end = formatTime(endTime);
   return `${start} — ${end}`;
 }
+
 function formatDate(dateString: string) {
   const [year, month, day] = dateString.split("-");
   return `${year}년 ${month}월 ${day}일`;
@@ -112,18 +157,6 @@ function formatDateRange(startDate: string, endDate: string) {
   }
 
   return `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
-}
-
-function hexToRgba(hex: string, alpha: number) {
-  const cleaned = hex.replace("#", "");
-
-  if (cleaned.length !== 6) return hex;
-
-  const r = parseInt(cleaned.slice(0, 2), 16);
-  const g = parseInt(cleaned.slice(2, 4), 16);
-  const b = parseInt(cleaned.slice(4, 6), 16);
-
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function normalizeHexColor(color: string) {
@@ -144,42 +177,6 @@ function uniqueCustomCategories(categories: CustomCategory[]) {
   });
 
   return Array.from(map.values());
-}
-
-function getCategoryStyle(routine: ScheduleRoutine): EventTypeStyle {
-  const categoryName = routine.categoryName ?? "기타";
-  const fixedStyle = eventTypes[categoryName];
-
-  if (fixedStyle) return fixedStyle;
-
-  if (routine.color) {
-    return {
-      bg: hexToRgba(routine.color, 0.14),
-      dot: routine.color,
-      text: routine.color,
-    };
-  }
-
-  return eventTypes["기타"];
-}
-
-function getCategoryChipStyle(
-  categoryName: string,
-  customCategoryColorMap: Record<string, string>,
-): EventTypeStyle {
-  const fixedStyle = eventTypes[categoryName];
-  if (fixedStyle) return fixedStyle;
-
-  const customColor = customCategoryColorMap[categoryName];
-  if (customColor) {
-    return {
-      bg: hexToRgba(customColor, 0.14),
-      dot: customColor,
-      text: customColor,
-    };
-  }
-
-  return eventTypes["기타"];
 }
 
 function padNumber(value: number) {
@@ -248,36 +245,8 @@ function getPrevMinute(minute: string) {
   return MINUTE_OPTIONS[prevIndex];
 }
 
-type DialControlProps = {
-  label: string;
-  value: string;
-  onDecrease: () => void;
-  onIncrease: () => void;
-};
-
-function DialControl({
-  label,
-  value,
-  onDecrease,
-  onIncrease,
-}: DialControlProps) {
-  return (
-    <View style={styles.dialItem}>
-      <Text style={styles.dialLabel}>{label}</Text>
-
-      <View style={styles.dialBox}>
-        <TouchableOpacity style={styles.dialButton} onPress={onDecrease}>
-          <Text style={styles.dialButtonText}>－</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.dialValue}>{value}</Text>
-
-        <TouchableOpacity style={styles.dialButton} onPress={onIncrease}>
-          <Text style={styles.dialButtonText}>＋</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+function normalizeMinuteOption(minute: string) {
+  return MINUTE_OPTIONS.includes(minute) ? minute : "00";
 }
 
 function TimeStepperControl({
@@ -318,11 +287,10 @@ export function ScheduleDetailModal({
   onClose,
   onUpdated,
   onDelete,
+  readOnly = false,
 }: ScheduleDetailModalProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isTogglingComplete, setIsTogglingComplete] = useState(false);
-
   const [title, setTitle] = useState("");
   const [categoryName, setCategoryName] = useState("기타");
   const [selectedColor, setSelectedColor] = useState("#C4C6D0");
@@ -342,16 +310,56 @@ export function ScheduleDetailModal({
   const [endHour, setEndHour] = useState("10");
   const [endMinute, setEndMinute] = useState("00");
 
-  const [repeatOption, setRepeatOption] = useState<RepeatOption>("DAILY");
-  const [customRepeatEvery, setCustomRepeatEvery] = useState("1");
-  const [customRepeatUnit, setCustomRepeatUnit] = useState<RepeatUnit>("DAY");
+  const [repeatType, setRepeatType] = useState<RepeatType>("DAILY");
+  const [repeatInterval, setRepeatInterval] = useState("1");
+  const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>("DAY");
+  const [repeatDays, setRepeatDays] = useState<RepeatWeekday[]>([]);
+  const [showRepeatPanel, setShowRepeatPanel] = useState(false);
+  const [showCustomRepeatPanel, setShowCustomRepeatPanel] = useState(false);
+  const [isTimed, setIsTimed] = useState(false);
   const [isNotify, setIsNotify] = useState(false);
 
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>(
     [],
   );
 
+  const resetFormFromRoutine = useCallback((targetRoutine: ScheduleRoutine) => {
+    const startDateParts = parseDateParts(targetRoutine.startDate);
+    const endDateParts = parseDateParts(
+      targetRoutine.endDate ?? targetRoutine.startDate,
+    );
+    const start = splitTime(targetRoutine.startTime);
+    const end = splitTime(targetRoutine.endTime);
+
+    setIsEditMode(false);
+    setShowCalendar(false);
+    setTitle(targetRoutine.title);
+    setCategoryName(targetRoutine.categoryName ?? "기타");
+    setSelectedColor(targetRoutine.color ?? EVENT_TYPES["기타"].dot);
+
+    setStartDateYear(startDateParts.year);
+    setStartDateMonth(startDateParts.month);
+    setStartDateDay(startDateParts.day);
+    setEndDateYear(endDateParts.year);
+    setEndDateMonth(endDateParts.month);
+    setEndDateDay(endDateParts.day);
+    setCalendarTarget("start");
+
+    setStartHour(start.hour);
+    setStartMinute(normalizeMinuteOption(start.minute));
+    setEndHour(end.hour);
+    setEndMinute(normalizeMinuteOption(end.minute));
+    setRepeatType((targetRoutine.repeatType as RepeatType) ?? "NONE");
+    setRepeatInterval(String(targetRoutine.repeatInterval ?? 1));
+    setRepeatUnit((targetRoutine.repeatUnit as RepeatUnit) ?? "DAY");
+    setRepeatDays((targetRoutine.repeatDays as RepeatWeekday[]) ?? []); // ← 추가
+    setIsTimed(Boolean(targetRoutine.startTime));
+    setIsNotify(Boolean(targetRoutine.alarm));
+  }, []);
+
   useEffect(() => {
+    if (!visible) return;
+
     const loadCustomCategories = async () => {
       try {
         const stored = await AsyncStorage.getItem(CUSTOM_CATEGORY_STORAGE_KEY);
@@ -363,7 +371,6 @@ export function ScheduleDetailModal({
 
         const parsed = JSON.parse(stored) as string[] | CustomCategory[];
 
-        // 커스텀 카테고리 데이터를 문자열/객체 형태 모두 허용해서 정규화
         const normalized = Array.isArray(parsed)
           ? uniqueCustomCategories(
               parsed.map((item) => {
@@ -390,41 +397,12 @@ export function ScheduleDetailModal({
     };
 
     loadCustomCategories();
-  }, []);
+  }, [visible]);
 
   useEffect(() => {
     if (!routine || !visible) return;
-
-    const startDateParts = parseDateParts(routine.startDate);
-    const endDateParts = parseDateParts(routine.endDate ?? routine.startDate);
-    const start = splitTime(routine.startTime);
-    const end = splitTime(routine.endTime);
-
-    // 모달이 열릴 때 전달받은 routine 값으로 수정 폼 상태 초기화
-    setIsEditMode(false);
-    setShowCalendar(false);
-    setTitle(routine.title);
-    setCategoryName(routine.categoryName ?? "기타");
-    setSelectedColor(routine.color ?? eventTypes["기타"].dot);
-
-    setStartDateYear(startDateParts.year);
-    setStartDateMonth(startDateParts.month);
-    setStartDateDay(startDateParts.day);
-    setEndDateYear(endDateParts.year);
-    setEndDateMonth(endDateParts.month);
-    setEndDateDay(endDateParts.day);
-    setCalendarTarget("start");
-
-    setStartHour(start.hour);
-    setStartMinute(MINUTE_OPTIONS.includes(start.minute) ? start.minute : "00");
-    setEndHour(end.hour);
-    setEndMinute(MINUTE_OPTIONS.includes(end.minute) ? end.minute : "00");
-
-    setRepeatOption((routine.repeatOption as RepeatOption) ?? "NONE");
-    setCustomRepeatEvery(String(routine.customRepeatEvery ?? 1));
-    setCustomRepeatUnit((routine.customRepeatUnit as RepeatUnit) ?? "DAY");
-    setIsNotify(Boolean(routine.alarm));
-  }, [routine, visible]);
+    resetFormFromRoutine(routine);
+  }, [routine, visible, resetFormFromRoutine]);
 
   const customCategoryColorMap = useMemo(() => {
     return customCategories.reduce<Record<string, string>>((acc, item) => {
@@ -435,7 +413,7 @@ export function ScheduleDetailModal({
 
   const categoryList = useMemo(() => {
     return [
-      ...Object.keys(eventTypes),
+      ...Object.keys(EVENT_TYPES),
       ...customCategories.map((item) => item.name),
     ];
   }, [customCategories]);
@@ -445,7 +423,7 @@ export function ScheduleDetailModal({
 
     const nextStartDate = makeDate(startDateYear, startDateMonth, startDateDay);
     const nextEndDate = makeDate(endDateYear, endDateMonth, endDateDay);
-    // 화면에 보여줄 임시 미리보기 데이터
+
     return {
       ...routine,
       title,
@@ -453,16 +431,15 @@ export function ScheduleDetailModal({
       color: selectedColor,
       startDate: nextStartDate,
       endDate: nextEndDate,
-      startTime: makeTime(startHour, startMinute),
-      endTime: makeTime(endHour, endMinute),
+      startTime: isTimed ? makeTime(startHour, startMinute) : null,
+      endTime: isTimed ? makeTime(endHour, endMinute) : null,
       alarm: isNotify,
-      repeatOption,
-      customRepeatEvery:
-        repeatOption === "CUSTOM"
-          ? Number(customRepeatEvery || "1")
-          : undefined,
-      customRepeatUnit:
-        repeatOption === "CUSTOM" ? customRepeatUnit : undefined,
+      repeatType,
+      repeatInterval:
+        repeatType === "CUSTOM" ? Number(repeatInterval || "1") : undefined,
+      repeatUnit: repeatType === "CUSTOM" ? repeatUnit : undefined,
+      repeatDays:
+        repeatType === "CUSTOM" && repeatUnit === "WEEK" ? repeatDays : [],
     };
   }, [
     routine,
@@ -480,9 +457,11 @@ export function ScheduleDetailModal({
     endHour,
     endMinute,
     isNotify,
-    repeatOption,
-    customRepeatEvery,
-    customRepeatUnit,
+    isTimed,
+    repeatType,
+    repeatInterval,
+    repeatUnit,
+    repeatDays,
   ]);
 
   if (!routine || !previewRoutine) return null;
@@ -504,41 +483,13 @@ export function ScheduleDetailModal({
   };
 
   const handleCancelEdit = () => {
-    const startDateParts = parseDateParts(routine.startDate);
-    const endDateParts = parseDateParts(routine.endDate ?? routine.startDate);
-    const start = splitTime(routine.startTime);
-    const end = splitTime(routine.endTime);
-
-    // 수정 취소 시 원본 routine 값으로 다시 되돌림
-    setTitle(routine.title);
-    setCategoryName(routine.categoryName ?? "기타");
-    setSelectedColor(routine.color ?? eventTypes["기타"].dot);
-
-    setStartDateYear(startDateParts.year);
-    setStartDateMonth(startDateParts.month);
-    setStartDateDay(startDateParts.day);
-    setEndDateYear(endDateParts.year);
-    setEndDateMonth(endDateParts.month);
-    setEndDateDay(endDateParts.day);
-    setCalendarTarget("start");
-    setShowCalendar(false);
-
-    setStartHour(start.hour);
-    setStartMinute(MINUTE_OPTIONS.includes(start.minute) ? start.minute : "00");
-    setEndHour(end.hour);
-    setEndMinute(MINUTE_OPTIONS.includes(end.minute) ? end.minute : "00");
-
-    setRepeatOption((routine.repeatOption as RepeatOption) ?? "NONE");
-    setCustomRepeatEvery(String(routine.customRepeatEvery ?? 1));
-    setCustomRepeatUnit((routine.customRepeatUnit as RepeatUnit) ?? "DAY");
-    setIsNotify(Boolean(routine.alarm));
-
-    setIsEditMode(false);
+    resetFormFromRoutine(routine);
   };
+
   const handleDelete = async () => {
     if (!routine || !onDelete) return;
 
-    Alert.alert("일정 삭제", "이 일정을 삭제할까요?", [
+    Alert.alert("루틴 삭제", "이 루틴을 삭제할까요?", [
       { text: "취소", style: "cancel" },
       {
         text: "삭제",
@@ -548,12 +499,63 @@ export function ScheduleDetailModal({
             await onDelete(routine.id);
             onClose();
           } catch (error) {
-            console.error("일정 삭제 실패", error);
-            Alert.alert("오류", "일정 삭제 중 문제가 발생했어요.");
+            console.error("루틴 삭제 실패", error);
+            Alert.alert("오류", "루틴 삭제 중 문제가 발생했어요.");
           }
         },
       },
     ]);
+  };
+  const handleSelectQuickWeeklyRepeat = (interval: "1" | "2") => {
+    const startDateString = makeDate(
+      startDateYear,
+      startDateMonth,
+      startDateDay,
+    );
+    setRepeatType("CUSTOM");
+    setRepeatInterval(interval);
+    setRepeatUnit("WEEK");
+    setRepeatDays([getWeekdayValueFromDate(startDateString)]);
+    setShowRepeatPanel(false);
+  };
+
+  const handleSelectRepeatType = (option: RepeatType) => {
+    if (option === "CUSTOM") {
+      setShowRepeatPanel(false);
+      setShowCustomRepeatPanel(true);
+      return;
+    }
+    setRepeatType(option);
+    setRepeatInterval("1");
+    setRepeatUnit("DAY");
+    setRepeatDays([]);
+    setShowRepeatPanel(false);
+  };
+
+  const handleSelectCustomRepeatUnit = (unit: RepeatUnit) => {
+    setRepeatUnit(unit);
+    if (unit === "DAY") setRepeatDays([]);
+    if (unit === "WEEK" && Number(repeatInterval) > 2) setRepeatInterval("2");
+  };
+
+  const handleToggleWeekday = (weekday: RepeatWeekday) => {
+    setRepeatDays((prev) =>
+      prev.includes(weekday)
+        ? prev.filter((item) => item !== weekday)
+        : [...prev, weekday],
+    );
+  };
+
+  const handleSaveCustomRepeat = () => {
+    if (repeatUnit === "WEEK" && repeatDays.length === 0) {
+      Alert.alert(
+        "요일 선택 필요",
+        "주 단위 반복은 요일을 1개 이상 선택해 주세요.",
+      );
+      return;
+    }
+    setRepeatType("CUSTOM");
+    setShowCustomRepeatPanel(false);
   };
   const handleSave = async () => {
     if (!routine) return;
@@ -561,7 +563,7 @@ export function ScheduleDetailModal({
     const trimmedTitle = title.trim();
 
     if (!trimmedTitle) {
-      Alert.alert("안내", "일정 제목을 입력해 주세요.");
+      Alert.alert("안내", "루틴 제목을 입력해 주세요.");
       return;
     }
 
@@ -583,15 +585,13 @@ export function ScheduleDetailModal({
     const startTotal = safeStartHour * 60 + safeStartMinute;
     const endTotal = safeEndHour * 60 + safeEndMinute;
 
-    if (endTotal < startTotal) {
-      Alert.alert("안내", "종료 시간은 시작 시간보다 빠를 수 없어요.");
+    if (isTimed && endTotal <= startTotal) {
+      Alert.alert("안내", "종료 시간은 시작 시간보다 늦어야 해요.");
       return;
     }
 
     try {
       setIsSaving(true);
-
-      const prev = await RoutineStorage.getAll();
 
       const nextStartDate = makeDate(
         String(safeStartYear),
@@ -603,67 +603,54 @@ export function ScheduleDetailModal({
         padNumber(safeEndMonth),
         padNumber(safeEndDay),
       );
+
       if (nextEndDate < nextStartDate) {
         Alert.alert("안내", "종료 날짜는 시작 날짜보다 빠를 수 없어요.");
         return;
       }
-      // 현재 선택한 루틴만 찾아서 수정
-      const updated = prev.map((item) => {
-        if (item.id !== routine.id) return item;
+      // 시간 겹침 체크
+      const newStartTime = makeTime(
+        padNumber(safeStartHour),
+        padNumber(safeStartMinute),
+      );
+      const newEndTime = makeTime(
+        padNumber(safeEndHour),
+        padNumber(safeEndMinute),
+      );
 
-        return {
-          ...item,
-          title: trimmedTitle,
-          categoryName,
-          color: selectedColor,
-          startDate: nextStartDate,
-          endDate: nextEndDate,
-          startTime: makeTime(
-            padNumber(safeStartHour),
-            padNumber(safeStartMinute),
-          ),
-          endTime: makeTime(padNumber(safeEndHour), padNumber(safeEndMinute)),
-          alarm: isNotify,
-          repeatOption,
-          customRepeatEvery:
-            repeatOption === "CUSTOM"
-              ? clamp(Number(customRepeatEvery || "1"), 1, 999)
-              : undefined,
-          customRepeatUnit:
-            repeatOption === "CUSTOM" ? customRepeatUnit : undefined,
-        };
+      await RoutineService.updateById(routine.id, {
+        title: trimmedTitle,
+        categoryName,
+        color: selectedColor,
+        startDate: nextStartDate,
+        endDate: nextEndDate,
+        startTime: isTimed ? newStartTime : null,
+        endTime: isTimed ? newEndTime : null,
+        alarm: isNotify,
+        repeatType,
+        repeatInterval:
+          repeatType === "CUSTOM"
+            ? clamp(Number(repeatInterval || "1"), 1, 999)
+            : undefined,
+        repeatUnit: repeatType === "CUSTOM" ? repeatUnit : undefined,
+        repeatDays:
+          repeatType === "CUSTOM" && repeatUnit === "WEEK" ? repeatDays : [],
       });
 
-      await RoutineStorage.updateAll(updated);
       await onUpdated();
       setIsEditMode(false);
       onClose();
     } catch (error) {
-      console.error("일정 수정 실패", error);
-      Alert.alert("오류", "일정 수정 중 문제가 발생했어요.");
+      if (error instanceof Error && error.message === "TIME_CONFLICT") {
+        Alert.alert("시간 중복", "같은 시간대에 이미 등록된 루틴이 있어요.");
+        return;
+      }
+
+      console.error("루틴 수정 실패", error);
+      Alert.alert("오류", "루틴 수정 중 문제가 발생했어요.");
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const changeRepeatEvery = (diff: number) => {
-    const nextValue = clamp(Number(customRepeatEvery || "1") + diff, 1, 999);
-    setCustomRepeatEvery(String(nextValue));
-  };
-
-  const changeRepeatUnit = (diff: number) => {
-    const units: RepeatUnit[] = ["DAY", "WEEK", "MONTH", "YEAR"];
-    const currentIndex = units.indexOf(customRepeatUnit);
-    const nextIndex = clamp(currentIndex + diff, 0, units.length - 1);
-
-    setCustomRepeatUnit(units[nextIndex]);
-  };
-
-  const repeatUnitTextMap: Record<RepeatUnit, string> = {
-    DAY: "일",
-    WEEK: "주",
-    MONTH: "개월",
-    YEAR: "년",
   };
 
   return (
@@ -680,31 +667,41 @@ export function ScheduleDetailModal({
         >
           <View style={styles.detailHeader}>
             <Text style={styles.detailTitle}>
-              {isEditMode ? "일정 수정" : "상세 정보"}
+              {isEditMode ? "루틴 수정" : "상세 정보"}
             </Text>
 
             <View style={styles.headerActions}>
               {!isEditMode ? (
                 <>
-                  <TouchableOpacity
-                    onPress={handleEdit}
-                    style={styles.editButton}
-                  >
-                    <Text style={styles.editText}>수정</Text>
-                  </TouchableOpacity>
+                  {/* readOnly가 아닐 때만 수정/삭제 버튼 표시 */}
+                  {!readOnly && (
+                    <>
+                      <TouchableOpacity
+                        onPress={handleEdit}
+                        style={styles.editButton}
+                      >
+                        <Text style={styles.editText}>수정</Text>
+                      </TouchableOpacity>
 
-                  <TouchableOpacity
-                    onPress={handleDelete}
-                    style={styles.deleteIconButton}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#D45A68" />
-                  </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={handleDelete}
+                        style={styles.deleteIconButton}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color="#D45A68"
+                        />
+                      </TouchableOpacity>
+                    </>
+                  )}
 
                   <TouchableOpacity onPress={onClose}>
                     <IconSymbol name="xmark" size={20} color="#B4B6C0" />
                   </TouchableOpacity>
                 </>
               ) : (
+                // 편집 모드 (readOnly면 이 분기 자체에 도달 안 함)
                 <>
                   <TouchableOpacity
                     onPress={handleCancelEdit}
@@ -815,7 +812,7 @@ export function ScheduleDetailModal({
                 <TextInput
                   value={title}
                   onChangeText={setTitle}
-                  placeholder="일정 제목을 입력해 주세요"
+                  placeholder="루틴 제목을 입력해 주세요"
                   placeholderTextColor="#B4B6C0"
                   style={styles.titleInput}
                 />
@@ -823,24 +820,29 @@ export function ScheduleDetailModal({
 
               <View style={styles.inputBlock}>
                 <Text style={styles.editSectionLabel}>카테고리</Text>
-                <View style={styles.categoryChipWrap}>
-                  {categoryList.map((name) => {
-                    const selected = categoryName === name;
+                <View style={styles.categoryGrid}>
+                  {categoryList.map((cat) => {
                     const chipStyle = getCategoryChipStyle(
-                      name,
+                      cat,
                       customCategoryColorMap,
                     );
+                    const isSelected = categoryName === cat;
 
                     return (
                       <TouchableOpacity
-                        key={name}
+                        key={cat}
                         style={[
                           styles.categoryChip,
-                          { backgroundColor: chipStyle.bg },
-                          selected && styles.categoryChipSelected,
+                          {
+                            backgroundColor: chipStyle.bg,
+                            borderColor: isSelected
+                              ? chipStyle.dot
+                              : "transparent",
+                            borderWidth: isSelected ? 1.5 : 1,
+                          },
                         ]}
                         onPress={() => {
-                          setCategoryName(name);
+                          setCategoryName(cat);
                           setSelectedColor(chipStyle.dot);
                         }}
                       >
@@ -850,7 +852,7 @@ export function ScheduleDetailModal({
                             { color: chipStyle.text },
                           ]}
                         >
-                          {name}
+                          {cat}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -947,43 +949,122 @@ export function ScheduleDetailModal({
               </View>
 
               <View style={styles.inputBlock}>
-                <Text style={styles.editSectionLabel}>시작 시간</Text>
-                <View style={styles.timePickerRow}>
-                  <TimeStepperControl
-                    label="시"
-                    value={startHour}
-                    onIncrease={() => setStartHour(getNextHour(startHour))}
-                    onDecrease={() => setStartHour(getPrevHour(startHour))}
-                  />
-                  <TimeStepperControl
-                    label="분"
-                    value={startMinute}
-                    onIncrease={() =>
-                      setStartMinute(getNextMinute(startMinute))
-                    }
-                    onDecrease={() =>
-                      setStartMinute(getPrevMinute(startMinute))
-                    }
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 10,
+                  }}
+                >
+                  <Text style={styles.editSectionLabel}>시간 설정</Text>
+                  <Switch
+                    value={isTimed}
+                    onValueChange={(value) => {
+                      setIsTimed(value);
+                      if (!value) setIsNotify(false);
+                    }}
+                    trackColor={{ true: "#9FA2D6" }}
                   />
                 </View>
-              </View>
 
-              <View style={styles.inputBlock}>
-                <Text style={styles.editSectionLabel}>종료 시간</Text>
-                <View style={styles.timePickerRow}>
-                  <TimeStepperControl
-                    label="시"
-                    value={endHour}
-                    onIncrease={() => setEndHour(getNextHour(endHour))}
-                    onDecrease={() => setEndHour(getPrevHour(endHour))}
-                  />
-                  <TimeStepperControl
-                    label="분"
-                    value={endMinute}
-                    onIncrease={() => setEndMinute(getNextMinute(endMinute))}
-                    onDecrease={() => setEndMinute(getPrevMinute(endMinute))}
-                  />
-                </View>
+                {isTimed && (
+                  <>
+                    <Text style={[styles.editSectionLabel, { marginTop: 8 }]}>
+                      시작 시간
+                    </Text>
+                    <View style={styles.timePickerRow}>
+                      <TimeStepperControl
+                        label="시"
+                        value={startHour}
+                        onIncrease={() => setStartHour(getNextHour(startHour))}
+                        onDecrease={() => setStartHour(getPrevHour(startHour))}
+                      />
+                      <TimeStepperControl
+                        label="분"
+                        value={startMinute}
+                        onIncrease={() =>
+                          setStartMinute(getNextMinute(startMinute))
+                        }
+                        onDecrease={() =>
+                          setStartMinute(getPrevMinute(startMinute))
+                        }
+                      />
+                    </View>
+
+                    <Text style={[styles.editSectionLabel, { marginTop: 12 }]}>
+                      종료 시간
+                    </Text>
+                    <View style={styles.timePickerRow}>
+                      <TimeStepperControl
+                        label="시"
+                        value={endHour}
+                        onIncrease={() => {
+                          const next = getNextHour(endHour);
+                          const startTotal =
+                            Number(startHour) * 60 + Number(startMinute);
+                          const endTotal =
+                            Number(next) * 60 + Number(endMinute);
+                          if (endTotal <= startTotal) {
+                            Alert.alert(
+                              "안내",
+                              "종료 시간은 시작 시간보다 늦어야 해요.",
+                            );
+                            return;
+                          }
+                          setEndHour(next);
+                        }}
+                        onDecrease={() => {
+                          const next = getPrevHour(endHour);
+                          const startTotal =
+                            Number(startHour) * 60 + Number(startMinute);
+                          const endTotal =
+                            Number(next) * 60 + Number(endMinute);
+                          if (endTotal <= startTotal) {
+                            Alert.alert(
+                              "안내",
+                              "종료 시간은 시작 시간보다 늦어야 해요.",
+                            );
+                            return;
+                          }
+                          setEndHour(next);
+                        }}
+                      />
+                      <TimeStepperControl
+                        label="분"
+                        value={endMinute}
+                        onIncrease={() => {
+                          const next = getNextMinute(endMinute);
+                          const startTotal =
+                            Number(startHour) * 60 + Number(startMinute);
+                          const endTotal = Number(endHour) * 60 + Number(next);
+                          if (endTotal <= startTotal) {
+                            Alert.alert(
+                              "안내",
+                              "종료 시간은 시작 시간보다 늦어야 해요.",
+                            );
+                            return;
+                          }
+                          setEndMinute(next);
+                        }}
+                        onDecrease={() => {
+                          const next = getPrevMinute(endMinute);
+                          const startTotal =
+                            Number(startHour) * 60 + Number(startMinute);
+                          const endTotal = Number(endHour) * 60 + Number(next);
+                          if (endTotal <= startTotal) {
+                            Alert.alert(
+                              "안내",
+                              "종료 시간은 시작 시간보다 늦어야 해요.",
+                            );
+                            return;
+                          }
+                          setEndMinute(next);
+                        }}
+                      />
+                    </View>
+                  </>
+                )}
               </View>
 
               <View style={styles.inputBlock}>
@@ -999,71 +1080,258 @@ export function ScheduleDetailModal({
                     </Text>
                     <Switch
                       value={isNotify}
-                      onValueChange={setIsNotify}
+                      onValueChange={(value) => {
+                        setIsNotify(value);
+                      }}
                       trackColor={{ false: "#D8DEE8", true: "#9FA2D6" }}
                     />
                   </View>
                 </View>
               </View>
-
               <View style={styles.inputBlock}>
                 <Text style={styles.editSectionLabel}>반복 설정</Text>
 
-                <View style={styles.repeatOptionWrap}>
-                  <TouchableOpacity
-                    style={[
-                      styles.repeatOptionButton,
-                      repeatOption === "DAILY" &&
-                        styles.repeatOptionButtonSelected,
-                    ]}
-                    onPress={() => setRepeatOption("DAILY")}
-                  >
-                    <Text
-                      style={[
-                        styles.repeatOptionText,
-                        repeatOption === "DAILY" &&
-                          styles.repeatOptionTextSelected,
-                      ]}
-                    >
-                      매일 반복
-                    </Text>
-                  </TouchableOpacity>
+                {/* 현재 반복 설정 표시 버튼 */}
+                <TouchableOpacity
+                  style={styles.repeatOptionButton}
+                  onPress={() => {
+                    setShowRepeatPanel((prev) => !prev);
+                    setShowCustomRepeatPanel(false);
+                  }}
+                >
+                  <Text style={styles.repeatOptionText}>
+                    {getRepeatLabel(
+                      repeatType,
+                      repeatInterval,
+                      repeatUnit,
+                      repeatDays,
+                    )}
+                  </Text>
+                </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.repeatOptionButton,
-                      repeatOption === "CUSTOM" &&
-                        styles.repeatOptionButtonSelected,
-                    ]}
-                    onPress={() => setRepeatOption("CUSTOM")}
-                  >
-                    <Text
-                      style={[
-                        styles.repeatOptionText,
-                        repeatOption === "CUSTOM" &&
-                          styles.repeatOptionTextSelected,
-                      ]}
-                    >
-                      사용자 설정
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                {repeatOption === "CUSTOM" && (
-                  <View style={styles.customRepeatBox}>
-                    <View style={styles.dialRow}>
-                      <DialControl
-                        label="반복 수"
-                        value={customRepeatEvery}
-                        onDecrease={() => changeRepeatEvery(-1)}
-                        onIncrease={() => changeRepeatEvery(1)}
-                      />
-                      <DialControl
-                        label="단위"
-                        value={repeatUnitTextMap[customRepeatUnit]}
-                        onDecrease={() => changeRepeatUnit(-1)}
-                        onIncrease={() => changeRepeatUnit(1)}
-                      />
+                {/* 빠른 선택 패널 */}
+                {showRepeatPanel && (
+                  <View style={{ marginTop: 8, gap: 6 }}>
+                    {[
+                      { label: "매일", value: "DAILY" as RepeatType },
+                      {
+                        label: `매주 (${
+                          WEEKDAY_OPTIONS.find(
+                            (d) =>
+                              d.value ===
+                              getWeekdayValueFromDate(
+                                makeDate(
+                                  startDateYear,
+                                  startDateMonth,
+                                  startDateDay,
+                                ),
+                              ),
+                          )?.label ?? ""
+                        })`,
+                        value: "QUICK_WEEKLY",
+                      },
+                      {
+                        label: `격주 (${
+                          WEEKDAY_OPTIONS.find(
+                            (d) =>
+                              d.value ===
+                              getWeekdayValueFromDate(
+                                makeDate(
+                                  startDateYear,
+                                  startDateMonth,
+                                  startDateDay,
+                                ),
+                              ),
+                          )?.label ?? ""
+                        })`,
+                        value: "QUICK_BIWEEKLY",
+                      },
+                      { label: "사용자 설정", value: "CUSTOM" as RepeatType },
+                    ].map((item) => {
+                      const isSelected =
+                        (repeatType === "DAILY" && item.value === "DAILY") ||
+                        (repeatType === "CUSTOM" &&
+                          repeatUnit === "WEEK" &&
+                          repeatInterval === "1" &&
+                          item.value === "QUICK_WEEKLY") ||
+                        (repeatType === "CUSTOM" &&
+                          repeatUnit === "WEEK" &&
+                          repeatInterval === "2" &&
+                          item.value === "QUICK_BIWEEKLY") ||
+                        (repeatType === "CUSTOM" &&
+                          !(
+                            repeatUnit === "WEEK" &&
+                            (repeatInterval === "1" || repeatInterval === "2")
+                          ) &&
+                          item.value === "CUSTOM");
+
+                      return (
+                        <TouchableOpacity
+                          key={item.value}
+                          style={[
+                            styles.repeatOptionButton,
+                            isSelected && styles.repeatOptionButtonSelected,
+                          ]}
+                          onPress={() => {
+                            if (item.value === "QUICK_WEEKLY") {
+                              handleSelectQuickWeeklyRepeat("1");
+                            } else if (item.value === "QUICK_BIWEEKLY") {
+                              handleSelectQuickWeeklyRepeat("2");
+                            } else {
+                              handleSelectRepeatType(item.value as RepeatType);
+                            }
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.repeatOptionText,
+                              isSelected && styles.repeatOptionTextSelected,
+                            ]}
+                          >
+                            {item.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* 사용자 설정 패널 */}
+                {showCustomRepeatPanel && (
+                  <View style={{ marginTop: 12, gap: 14 }}>
+                    {/* 단위 - 일/주 */}
+                    <View>
+                      <Text style={styles.dialLabel}>단위</Text>
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        {(["DAY", "WEEK"] as RepeatUnit[]).map((unit) => (
+                          <TouchableOpacity
+                            key={unit}
+                            style={[
+                              styles.repeatOptionButton,
+                              repeatUnit === unit &&
+                                styles.repeatOptionButtonSelected,
+                              { flex: 1, alignItems: "center" },
+                            ]}
+                            onPress={() => handleSelectCustomRepeatUnit(unit)}
+                          >
+                            <Text
+                              style={[
+                                styles.repeatOptionText,
+                                repeatUnit === unit &&
+                                  styles.repeatOptionTextSelected,
+                              ]}
+                            >
+                              {unit === "DAY" ? "일" : "주"}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
                     </View>
+
+                    {/* 빈도 */}
+                    <View>
+                      <Text style={styles.dialLabel}>빈도</Text>
+                      {repeatUnit === "WEEK" ? (
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          {WEEK_REPEAT_EVERY_OPTIONS.map((opt) => (
+                            <TouchableOpacity
+                              key={opt}
+                              style={[
+                                styles.repeatOptionButton,
+                                repeatInterval === opt &&
+                                  styles.repeatOptionButtonSelected,
+                                { flex: 1, alignItems: "center" },
+                              ]}
+                              onPress={() => setRepeatInterval(opt)}
+                            >
+                              <Text
+                                style={[
+                                  styles.repeatOptionText,
+                                  repeatInterval === opt &&
+                                    styles.repeatOptionTextSelected,
+                                ]}
+                              >
+                                {opt === "1" ? "매주" : "격주"}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      ) : (
+                        <View style={styles.frequencyGrid}>
+                          {REPEAT_EVERY_OPTIONS.slice(0, 10).map((opt) => (
+                            <TouchableOpacity
+                              key={opt}
+                              style={[
+                                styles.frequencyGridChip,
+                                repeatInterval === opt &&
+                                  styles.repeatOptionButtonSelected,
+                              ]}
+                              onPress={() => setRepeatInterval(opt)}
+                            >
+                              <Text
+                                style={[
+                                  styles.repeatOptionText,
+                                  repeatInterval === opt &&
+                                    styles.repeatOptionTextSelected,
+                                ]}
+                              >
+                                {opt}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+
+                    {/* 요일 (주 단위일 때만) */}
+                    {repeatUnit === "WEEK" && (
+                      <View>
+                        <Text style={styles.dialLabel}>요일</Text>
+                        <View style={styles.weekdayRow}>
+                          {WEEKDAY_OPTIONS.map((day) => {
+                            const isSelected = repeatDays.includes(day.value);
+                            return (
+                              <TouchableOpacity
+                                key={day.value}
+                                style={[
+                                  styles.weekdayChip,
+                                  isSelected && styles.weekdayChipSelected,
+                                ]}
+                                onPress={() => handleToggleWeekday(day.value)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.weekdayChipText,
+                                    isSelected &&
+                                      styles.weekdayChipTextSelected,
+                                  ]}
+                                >
+                                  {day.label}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      style={[
+                        styles.repeatOptionButton,
+                        styles.repeatOptionButtonSelected,
+                      ]}
+                      onPress={handleSaveCustomRepeat}
+                    >
+                      <Text
+                        style={[
+                          styles.repeatOptionText,
+                          styles.repeatOptionTextSelected,
+                          { textAlign: "center" },
+                        ]}
+                      >
+                        완료
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -1256,6 +1524,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 12,
+    gap: 6,
+  },
+
   dateRangeBlock: {
     gap: 8,
   },
@@ -1449,5 +1724,47 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FCEBEC",
+  },
+
+  weekdayRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  weekdayChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E4E7EE",
+    backgroundColor: "#FAFBFD",
+  },
+  weekdayChipSelected: {
+    borderColor: "#405886",
+    backgroundColor: "#EEF2FF",
+  },
+  weekdayChipText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6D7690",
+  },
+  weekdayChipTextSelected: {
+    color: "#405886",
+  },
+
+  frequencyGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  frequencyGridChip: {
+    width: "18%",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E4E7EE",
+    borderRadius: 14,
+    paddingVertical: 10,
+    backgroundColor: "#FAFBFD",
   },
 });
