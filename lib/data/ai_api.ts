@@ -81,7 +81,7 @@ export const requestRoutineRecommendation = async (
     "startTime": "HH:MM (예: 06:00)",
     "endTime": "HH:MM (예: 06:30)",
     "description": "구체적인 활동 설명",
-    "category": "운동, 공부, 명상, 기상, 취침, 기타 중 하나"
+    "category": "운동, 공부, 명상, 기상, 저녁, 기타 중 하나"
   }
 ]
 

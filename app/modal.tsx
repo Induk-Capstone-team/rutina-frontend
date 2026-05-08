@@ -21,7 +21,7 @@ import type {
   SaveRoutineOptions,
 } from "@/types/routine";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -278,6 +278,13 @@ function NumberOptionColumn({
 export default function ModalScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    title?: string;
+    startTime?: string;
+    endTime?: string;
+    category?: string;
+    description?: string;
+  }>();
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [tempCategory, setTempCategory] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -320,6 +327,32 @@ export default function ModalScreen() {
     setIsNotify,
     handleSave,
   } = useRoutineForm(() => router.dismiss());
+
+  // AI 추천 데이터 연동
+  useEffect(() => {
+    if (params.title) setTitle(params.title);
+    if (params.category) {
+      setCategory(params.category);
+      // 고정 카테고리면 색상도 같이 설정
+      if (isFixedCategory(params.category)) {
+        const style = EVENT_TYPES[params.category as keyof typeof EVENT_TYPES];
+        if (style) setSelectedColor(style.dot);
+      }
+    }
+    if (params.startTime) {
+      const [h, m] = params.startTime.split(":");
+      setStartHour(h || "09");
+      setStartMinute(m || "00");
+    }
+    if (params.endTime) {
+      const [h, m] = params.endTime.split(":");
+      setEndHour(h || "10");
+      setEndMinute(m || "00");
+    }
+    if (params.startTime || params.endTime) {
+      setIsTimed(true);
+    }
+  }, [params]);
 
   const [startDate, setStartDate] = useState(selectedDate);
   const [endDate, setEndDate] = useState(selectedDate);
