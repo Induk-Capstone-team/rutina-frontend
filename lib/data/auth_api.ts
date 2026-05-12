@@ -6,14 +6,39 @@ const api = axios.create({
 });
 
 export const authApi = {
-  ///회원가입 요청
-  signup: async (email: string, password: string, nickname: string) => {
+  ///회원가입 요청 (이메일 로그인 사용자)
+  signup: async (
+    email: string,
+    password?: string,
+    nickname?: string,
+    age?: number,
+    job?: string,
+    gender?: string,
+  ) => {
     const { data } = await api.post("/api/v1/auth/signup", {
       email,
       password,
       nickname,
+      age,
+      job,
+      gender,
     });
     return data; // 서버에서 토큰(JWT) 등을 보내준다고 가정
+  },
+
+  /// 프로필 업데이트 요청 (소셜 로그인 사용자 등 추가 정보 입력용)
+  updateProfile: async (age: number, job: string, gender: string) => {
+    const token = await AsyncStorage.getItem("userToken");
+    const { data } = await api.post(
+      "/api/v1/user/profile", // TODO: 실제 백엔드 엔드포인트로 수정 필요
+      { age, job, gender },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return data;
   },
 
   ///이메일 중복 확인 요청

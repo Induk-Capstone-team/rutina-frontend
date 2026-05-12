@@ -55,16 +55,46 @@ export const useAuthViewModel = () => {
     }
   };
 
-  const signup = async (email: string, password: string, nickname: string) => {
+  const signup = async (
+    email: string,
+    password?: string,
+    nickname?: string,
+    age?: number,
+    job?: string,
+    gender?: string,
+  ) => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await authApi.signup(email, password, nickname);
+      const data = await authApi.signup(
+        email,
+        password,
+        nickname,
+        age,
+        job,
+        gender,
+      );
       console.log("회원가입 성공:", data);
       return true; // 성공 여부 반환
     } catch (err: any) {
       console.log("회원가입 에러:", err);
       setError(err.response?.data?.message || err.message || "회원가입 실패");
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateProfile = async (age: number, job: string, gender: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.updateProfile(age, job, gender);
+      console.log("프로필 업데이트 성공:", data);
+      return true;
+    } catch (err: any) {
+      console.log("프로필 업데이트 에러:", err);
+      setError(err.response?.data?.message || err.message || "프로필 업데이트 실패");
       return false;
     } finally {
       setIsLoading(false);
@@ -106,5 +136,5 @@ export const useAuthViewModel = () => {
     }
   };
 
-  return { login, signup, logout, checkEmail, isLoading, error, setError };
+  return { login, signup, updateProfile, logout, checkEmail, isLoading, error, setError };
 };

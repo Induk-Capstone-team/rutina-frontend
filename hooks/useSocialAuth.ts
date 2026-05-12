@@ -21,12 +21,17 @@ export const useSocialAuth = () => {
       const BACKEND_AUTH_URL = `http://3.35.117.128:8080/oauth2/authorization/${provider}`;
 
       // 모바일 딥링크 주소 생성 (예: exp://192.../--/oauth 또는 rutinafrontend://oauth)
-      const DEEP_LINK_URI = Linking.createURL('exp://172.30.1.67:8081/oauth/callback');
+      const DEEP_LINK_URI = Linking.createURL(
+        "exp://[IP_ADDRESS]/oauth/callback",
+      );
 
       // 브라우저 열기 (프론트 -> 백엔드로 이동)
       // 주의: 백엔드에서 인증 완료 후, 최종적으로 DEEP_LINK_URI 로 리다이렉트 시켜줘야 모바일 앱으로 브라우저가 닫히면서 돌아옵니다.
-      const result = await WebBrowser.openAuthSessionAsync(BACKEND_AUTH_URL, DEEP_LINK_URI);
-
+      const result = await WebBrowser.openAuthSessionAsync(
+        BACKEND_AUTH_URL,
+        DEEP_LINK_URI,
+      );
+      console.log("result", result);
       if (result.type === "success" && result.url) {
         // 3. 백엔드에서 프론트로 토큰과 함께 리다이렉트 해준 url을 파싱합니다.
         // 예: rutinafrontend://oauth?accessToken=...&refreshToken=...&isNewUser=true
@@ -45,10 +50,10 @@ export const useSocialAuth = () => {
           }
 
           if (isNewUser === "true") {
-            // 최초 로그인 (회원가입 필요 시)
+            // 최초 로그인 (회원가입 필요 시) -> 추가 정보 화면으로 이동
             router.replace({
-              pathname: "/onboarding/signup",
-              params: { email, nickname }
+              pathname: "/onboarding/signup2",
+              params: { email, nickname, isSocial: "true" },
             });
           } else {
             // 기존 회원 (메인 화면으로 이동)
@@ -61,7 +66,10 @@ export const useSocialAuth = () => {
       }
     } catch (error: any) {
       console.log(`${provider} Login Error:`, error);
-      Alert.alert("소셜 로그인 오류", error.message || "로그인 중 문제가 발생했습니다.");
+      Alert.alert(
+        "소셜 로그인 오류",
+        error.message || "로그인 중 문제가 발생했습니다.",
+      );
     } finally {
       setIsSocialLoading(false);
     }

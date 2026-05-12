@@ -103,12 +103,11 @@ export default function SignupScreen() {
       return;
     }
 
-    const success = await signup(email, password, nickname);
-    if (success) {
-      Alert.alert("환영합니다!", "회원가입이 완료되었습니다.", [
-        { text: "시작하기", onPress: () => router.replace("/") },
-      ]);
-    }
+    // 2단계 화면(signup2)으로 이동하여 추가 정보 입력 후 함께 가입 처리
+    router.replace({
+      pathname: "/onboarding/signup2",
+      params: { email, password, nickname },
+    });
   };
 
   const isFormValid =
