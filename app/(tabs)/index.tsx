@@ -1,9 +1,8 @@
-import { RoutineService } from "@/app/services/routine_service";
 import ScheduleContent from "@/components/schedule_content";
 import { Header } from "@/components/ui/_header";
 import AppCalendar from "@/components/ui/app_calendar";
 import { EVENT_TYPES } from "@/lib/category";
-import { shouldShowRoutineOnDate } from "@/lib/storage";
+import { RoutineService } from "@/services/routine_service";
 import type { MarkedDates } from "@/types/calendar";
 import type { ScheduleRoutine } from "@/types/routine";
 import { addDays, format, isSameDay, startOfWeek } from "date-fns";
@@ -61,35 +60,15 @@ function parseTimeToMinutes(time?: string | null) {
   return hour * 60 + minute;
 }
 
-// 저장된 루틴을 시간표에서 사용할 데이터로 변환
-function buildTimetableEvents(
-  routines: ScheduleRoutine[],
-  targetDateString: string,
-): TimetableEvent[] {
+function buildTimetableEvents(routines: ScheduleRoutine[]): TimetableEvent[] {
   const events: TimetableEvent[] = [];
-
   routines.forEach((routine) => {
-    // 현재 선택 날짜에 보여야 하는 일정만 통과
-    if (!shouldShowRoutineOnDate(routine, targetDateString)) {
-      return;
-    }
-
-    // 시간표에는 시작/종료 시간이 있는 일정만 표시
-    if (!routine.startTime || !routine.endTime) {
-      return;
-    }
+    if (!routine.startTime || !routine.endTime) return;
 
     const startMinute = parseTimeToMinutes(routine.startTime);
     const endMinute = parseTimeToMinutes(routine.endTime);
-
-    if (startMinute === null || endMinute === null) {
-      return;
-    }
-
-    // 종료 시간이 시작 시간보다 늦은 정상 일정만 추가
-    if (endMinute <= startMinute) {
-      return;
-    }
+    if (startMinute === null || endMinute === null) return;
+    if (endMinute <= startMinute) return;
 
     events.push({
       id: String(routine.id),
@@ -100,7 +79,6 @@ function buildTimetableEvents(
       color: routine.color,
     });
   });
-  // 시작 시간이 빠른 순서대로 정렬
   return events.sort((a, b) => a.startMinute - b.startMinute);
 }
 // 카테고리명에 맞는 색상 스타일 반환
@@ -165,17 +143,16 @@ export default function HomeScreen() {
       },
     }),
   ).current;
-  // AsyncStorage에 저장된 루틴 불러오기
+
   const loadStoredRoutines = useCallback(async () => {
     try {
-      // storage.ts에 저장된 전체 일정 불러오기
-      const routines = await RoutineService.getAll();
+      const routines = await RoutineService.getAll(currentDateString);
       setStoredRoutines(routines);
     } catch (error) {
       console.error("저장된 루틴 불러오기 실패", error);
       setStoredRoutines([]);
     }
-  }, []);
+  }, [currentDateString]);
   // 다른 화면 갔다가 돌아올 때 최신 루틴 다시 불러오기
   useFocusEffect(
     useCallback(() => {
@@ -213,39 +190,17 @@ export default function HomeScreen() {
   };
   // 현재 선택 날짜에 시간표로 보여줄 일정 목록
   const timetableEvents = useMemo(() => {
-    // 현재 선택 날짜 기준으로 시간표에 보여줄 일정만 생성
-    return buildTimetableEvents(storedRoutines, currentDateString);
-  }, [storedRoutines, currentDateString]);
-  // 캘린더에 선택 날짜 표시
+    return buildTimetableEvents(storedRoutines);
+  }, [storedRoutines]);
+
   const calendarMarkedDates = useMemo(() => {
     const marked: MarkedDates = {
-      [currentDateString]: {
-        selected: true,
-        selectedColor: "#F1F1FB",
-      },
+      [currentDateString]: { selected: true, selectedColor: "#F1F1FB" },
     };
 
-    weekDays.forEach((date) => {
-      const dateString = format(date, "yyyy-MM-dd");
-      const hasRoutine = storedRoutines.some((routine) =>
-        shouldShowRoutineOnDate(routine, dateString),
-      );
-
-      if (hasRoutine) {
-        marked[dateString] = {
-          ...(marked[dateString] || {}),
-          selected:
-            marked[dateString]?.selected ?? dateString === currentDateString,
-          selectedColor:
-            marked[dateString]?.selectedColor ??
-            (dateString === currentDateString ? "#F1F1FB" : undefined),
-        };
-      }
-    });
-
     return marked;
-  }, [currentDateString, storedRoutines, weekDays]);
-  // 시간표 하단 범례 목록 생성
+  }, [currentDateString]);
+
   const legendItems = useMemo(() => {
     const uniqueMap = new Map<string, { label: string; dot: string }>();
 

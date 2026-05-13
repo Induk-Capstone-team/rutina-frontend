@@ -1,7 +1,8 @@
-import { RoutineService } from "@/app/services/routine_service";
+//data.tsx
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { Header } from "@/components/ui/_header";
 import { getCategoryStyle, normalizeCategoryName } from "@/lib/category";
+import { RoutineService } from "@/services/routine_service";
 import type { ScheduleRoutine } from "@/types/routine";
 import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useMemo, useState } from "react";
@@ -173,28 +174,67 @@ function isRoutineInSameWeek(routine: ScheduleRoutine, selectedDate: Date) {
   return doesRoutineOverlapPeriod(routine, weekStart, weekEnd);
 }
 // 연간 통계 히트맵 셀 생성
-function buildYearCells(routine: ScheduleRoutine, year: number): HeatmapCell[] {
-  const startDate = new Date(year, 0, 1);
-  const endDate = new Date(year, 11, 31);
-  const cells: HeatmapCell[] = [];
+type YearHeatmapColumn = {
+  weekIndex: number;
+  cells: (HeatmapCell | null)[]; // null = 빈칸, 7개 고정
+};
 
-  const current = new Date(startDate);
+function buildYearColumns(
+  routine: ScheduleRoutine,
+  year: number,
+): YearHeatmapColumn[] {
+  const jan1 = new Date(year, 0, 1);
+  const dec31 = new Date(year, 11, 31);
 
-  while (current <= endDate) {
-    const currentYear = current.getFullYear();
-    const currentMonth = current.getMonth();
-    const currentDay = current.getDate();
+  // 1월 1일이 무슨 요일인지 (일=0 ~ 토=6)
+  const startWeekday = jan1.getDay();
 
-    cells.push({
-      key: `${routine.id}-year-${currentYear}-${currentMonth + 1}-${currentDay}`,
-      filled:
-        isDateInRoutineRange(routine, current) &&
-        isRoutineCompletedOnDate(routine, current),
-    });
+  // 전체 날짜 배열 생성
+  const allDates: (Date | null)[] = [];
+
+  // 앞 빈칸
+  for (let i = 0; i < startWeekday; i++) {
+    allDates.push(null);
+  }
+
+  // 실제 날짜
+  const current = new Date(jan1);
+  while (current <= dec31) {
+    allDates.push(new Date(current));
     current.setDate(current.getDate() + 1);
   }
 
-  return cells;
+  // 뒷 빈칸 (7의 배수로)
+  while (allDates.length % 7 !== 0) {
+    allDates.push(null);
+  }
+
+  // 7개씩 잘라서 column(주) 단위로 변환
+  const columns: YearHeatmapColumn[] = [];
+  const totalWeeks = allDates.length / 7;
+
+  for (let week = 0; week < totalWeeks; week++) {
+    const cells: (HeatmapCell | null)[] = [];
+
+    for (let day = 0; day < 7; day++) {
+      const date = allDates[week * 7 + day];
+
+      if (!date) {
+        cells.push(null);
+      } else {
+        cells.push({
+          key: `${routine.id}-year-${formatDateKey(date)}`,
+          filled:
+            isDateInRoutineRange(routine, date) &&
+            isRoutineCompletedOnDate(routine, date),
+        });
+      }
+    }
+
+    columns.push({ weekIndex: week, cells });
+  }
+
+  return columns;
 }
 // 주간 통계 히트맵 셀 생성
 function buildWeekCells(
@@ -315,11 +355,10 @@ function HeatmapRow({
 }) {
   const categoryStyle = getCategoryStyle(routine);
   // 연간 보기일 때만 연간 셀 계산
-  const yearCells = useMemo(() => {
+  const yearColumns = useMemo(() => {
     if (viewMode !== "YEAR") return [];
-    return buildYearCells(routine, selectedYear);
+    return buildYearColumns(routine, selectedYear);
   }, [routine, viewMode, selectedYear]);
-
   // 월간 보기일 때만 월간 셀 계산
   const monthCells = useMemo(() => {
     if (viewMode !== "MONTH") return [];
@@ -348,32 +387,37 @@ function HeatmapRow({
 
       {/* 연간 통계 화면 */}
       {viewMode === "YEAR" && (
-        <>
-          <View style={styles.yearHeatmapWrap}>
-            {yearCells.map((cell) => (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ flexDirection: "row", gap: 2 }}>
+            {yearColumns.map((col) => (
               <View
-                key={cell.key}
-                style={[
-                  styles.yearHeatmapCell,
-                  cell.filled && {
-                    backgroundColor: categoryStyle.dot,
-                    borderColor: categoryStyle.dot,
-                  },
-                ]}
-              />
+                key={col.weekIndex}
+                style={{ flexDirection: "column", gap: 2 }}
+              >
+                {col.cells.map((cell, dayIndex) =>
+                  cell === null ? (
+                    <View
+                      key={`empty-${col.weekIndex}-${dayIndex}`}
+                      style={styles.yearHeatmapCell}
+                    />
+                  ) : (
+                    <View
+                      key={cell.key}
+                      style={[
+                        styles.yearHeatmapCell,
+                        cell.filled && {
+                          backgroundColor: categoryStyle.dot,
+                          borderColor: categoryStyle.dot,
+                        },
+                      ]}
+                    />
+                  ),
+                )}
+              </View>
             ))}
           </View>
-
-          <View style={styles.yearLegendRow}>
-            {MONTH_LABELS.map((label) => (
-              <Text key={label} style={styles.yearLegendText}>
-                {label}
-              </Text>
-            ))}
-          </View>
-        </>
+        </ScrollView>
       )}
-
       {/* 월간 통계 화면 */}
       {viewMode === "MONTH" && (
         <>

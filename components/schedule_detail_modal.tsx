@@ -1,10 +1,12 @@
-import { RoutineService } from "@/app/services/routine_service";
+//schedule_detail_modal.tsx
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import {
   EVENT_TYPES,
   getCategoryChipStyle,
   getCategoryStyle,
 } from "@/lib/category";
+import { CategoryService } from "@/services/category_service";
+import { RoutineService } from "@/services/routine_service";
 import type {
   RepeatType,
   RepeatUnit,
@@ -12,7 +14,6 @@ import type {
   ScheduleRoutine,
 } from "@/types/routine";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -32,15 +33,11 @@ type CustomCategory = {
   name: string;
   color: string;
 };
-
-const CUSTOM_CATEGORY_STORAGE_KEY = "@rutina/custom_categories";
-
 type ScheduleDetailModalProps = {
   visible: boolean;
   routine: ScheduleRoutine | null;
   onClose: () => void;
   onUpdated: () => Promise<void> | void;
-  onDelete?: (id: number) => Promise<void> | void;
   readOnly?: boolean;
 };
 
@@ -72,7 +69,6 @@ function getWeekdayValueFromDate(dateString: string): RepeatWeekday {
   ];
   return weekdayValues[new Date(`${dateString}T00:00:00`).getDay()];
 }
-
 function getRepeatLabel(
   repeatType: RepeatType,
   repeatInterval: string,
@@ -84,6 +80,13 @@ function getRepeatLabel(
       return "없음";
     case "DAILY":
       return "매일";
+    case "WEEKLY": {
+      const dayLabel =
+        WEEKDAY_OPTIONS.find((d) => repeatDays.includes(d.value))?.label ?? "";
+      return `매주 ${dayLabel}`;
+    }
+    case "WEEKDAYS":
+      return "매주 평일";
     case "CUSTOM":
       if (repeatUnit === "WEEK") {
         const dayLabels = WEEKDAY_OPTIONS.filter((d) =>
@@ -103,6 +106,16 @@ function getRepeatText(item: ScheduleRoutine) {
   switch (item.repeatType) {
     case "DAILY":
       return "매일 반복";
+
+    case "WEEKLY": {
+      const dayLabel =
+        WEEKDAY_OPTIONS.find((d) => (item.repeatDays ?? []).includes(d.value))
+          ?.label ?? "";
+      return `매주 ${dayLabel} 반복`;
+    }
+
+    case "WEEKDAYS":
+      return "매주 평일 반복";
 
     case "CUSTOM": {
       if (item.repeatUnit === "WEEK") {
@@ -148,7 +161,7 @@ function formatTimeRange(startTime?: string | null, endTime?: string | null) {
 
 function formatDate(dateString: string) {
   const [year, month, day] = dateString.split("-");
-  return `${year}년 ${month}월 ${day}일`;
+  return `${year}. ${month}. ${day}`;
 }
 
 function formatDateRange(startDate: string, endDate: string) {
@@ -157,26 +170,6 @@ function formatDateRange(startDate: string, endDate: string) {
   }
 
   return `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
-}
-
-function normalizeHexColor(color: string) {
-  return color.trim().toUpperCase();
-}
-
-function uniqueCustomCategories(categories: CustomCategory[]) {
-  const map = new Map<string, CustomCategory>();
-
-  categories.forEach((item) => {
-    const name = item.name.trim();
-    if (!name) return;
-
-    map.set(name, {
-      name,
-      color: normalizeHexColor(item.color),
-    });
-  });
-
-  return Array.from(map.values());
 }
 
 function padNumber(value: number) {
@@ -286,7 +279,6 @@ export function ScheduleDetailModal({
   routine,
   onClose,
   onUpdated,
-  onDelete,
   readOnly = false,
 }: ScheduleDetailModalProps) {
   const [isEditMode, setIsEditMode] = useState(false);
@@ -322,7 +314,6 @@ export function ScheduleDetailModal({
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>(
     [],
   );
-
   const resetFormFromRoutine = useCallback((targetRoutine: ScheduleRoutine) => {
     const startDateParts = parseDateParts(targetRoutine.startDate);
     const endDateParts = parseDateParts(
@@ -356,47 +347,17 @@ export function ScheduleDetailModal({
     setIsTimed(Boolean(targetRoutine.startTime));
     setIsNotify(Boolean(targetRoutine.alarm));
   }, []);
-
   useEffect(() => {
     if (!visible) return;
 
-    const loadCustomCategories = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(CUSTOM_CATEGORY_STORAGE_KEY);
-
-        if (!stored) {
-          setCustomCategories([]);
-          return;
-        }
-
-        const parsed = JSON.parse(stored) as string[] | CustomCategory[];
-
-        const normalized = Array.isArray(parsed)
-          ? uniqueCustomCategories(
-              parsed.map((item) => {
-                if (typeof item === "string") {
-                  return {
-                    name: item,
-                    color: "#405886",
-                  };
-                }
-
-                return {
-                  name: item.name,
-                  color: item.color || "#405886",
-                };
-              }),
-            )
-          : [];
-
-        setCustomCategories(normalized);
-      } catch (error) {
-        console.error("사용자 카테고리 불러오기 실패", error);
-        setCustomCategories([]);
-      }
-    };
-
-    loadCustomCategories();
+    CategoryService.getAll()
+      .then((serverCategories) => {
+        const custom = serverCategories
+          .filter((c) => !Object.keys(EVENT_TYPES).includes(c.name))
+          .map((c) => ({ name: c.name, color: c.colorCode }));
+        setCustomCategories(custom);
+      })
+      .catch(console.error);
   }, [visible]);
 
   useEffect(() => {
@@ -439,7 +400,10 @@ export function ScheduleDetailModal({
         repeatType === "CUSTOM" ? Number(repeatInterval || "1") : undefined,
       repeatUnit: repeatType === "CUSTOM" ? repeatUnit : undefined,
       repeatDays:
-        repeatType === "CUSTOM" && repeatUnit === "WEEK" ? repeatDays : [],
+        repeatType === "WEEKLY" ||
+        (repeatType === "CUSTOM" && repeatUnit === "WEEK")
+          ? repeatDays
+          : [],
     };
   }, [
     routine,
@@ -487,7 +451,7 @@ export function ScheduleDetailModal({
   };
 
   const handleDelete = async () => {
-    if (!routine || !onDelete) return;
+    if (!routine) return;
 
     Alert.alert("루틴 삭제", "이 루틴을 삭제할까요?", [
       { text: "취소", style: "cancel" },
@@ -496,7 +460,30 @@ export function ScheduleDetailModal({
         style: "destructive",
         onPress: async () => {
           try {
-            await onDelete(routine.id);
+            // 서버 버그 우회:
+            // isCompleted: true 상태의 루틴은 삭제 시 500 에러 발생
+            // 삭제 전 오늘 날짜 기준으로 완료 상태를 확인하고
+            // true면 토글로 false로 되돌린 뒤 삭제
+            const today = new Date();
+            const todayString = [
+              today.getFullYear(),
+              String(today.getMonth() + 1).padStart(2, "0"),
+              String(today.getDate()).padStart(2, "0"),
+            ].join("-");
+
+            const isCompletedToday =
+              routine.completedDates?.includes(todayString) ?? false;
+
+            if (isCompletedToday) {
+              try {
+                await RoutineService.toggleComplete(routine.id, todayString);
+              } catch {
+                // 토글 실패 시 그냥 삭제 시도
+              }
+            }
+
+            await RoutineService.deleteById(routine.id);
+            await onUpdated();
             onClose();
           } catch (error) {
             console.error("루틴 삭제 실패", error);
@@ -558,6 +545,7 @@ export function ScheduleDetailModal({
     setShowCustomRepeatPanel(false);
   };
   const handleSave = async () => {
+    if (isSaving) return;
     if (!routine) return;
 
     const trimmedTitle = title.trim();
@@ -576,39 +564,63 @@ export function ScheduleDetailModal({
     const safeEndYear = clamp(Number(endDateYear), 2000, 2099);
     const maxEndDay = getDaysInMonth(safeEndYear, safeEndMonth);
     const safeEndDay = clamp(Number(endDateDay), 1, maxEndDay);
-
     const safeStartHour = clamp(Number(startHour), 0, 23);
     const safeStartMinute = clamp(Number(startMinute), 0, 59);
     const safeEndHour = clamp(Number(endHour), 0, 23);
     const safeEndMinute = clamp(Number(endMinute), 0, 59);
-
     const startTotal = safeStartHour * 60 + safeStartMinute;
     const endTotal = safeEndHour * 60 + safeEndMinute;
+
+    const nextStartDate = makeDate(
+      String(safeStartYear),
+      padNumber(safeStartMonth),
+      padNumber(safeStartDay),
+    );
+    const nextEndDate = makeDate(
+      String(safeEndYear),
+      padNumber(safeEndMonth),
+      padNumber(safeEndDay),
+    );
 
     if (isTimed && endTotal <= startTotal) {
       Alert.alert("안내", "종료 시간은 시작 시간보다 늦어야 해요.");
       return;
     }
-
+    if (nextEndDate < nextStartDate) {
+      Alert.alert("안내", "종료 날짜는 시작 날짜보다 빠를 수 없어요.");
+      return;
+    }
+    setIsSaving(true);
     try {
-      setIsSaving(true);
-
-      const nextStartDate = makeDate(
-        String(safeStartYear),
-        padNumber(safeStartMonth),
-        padNumber(safeStartDay),
+      const serverCategories = await CategoryService.getAll();
+      const matched = serverCategories.find(
+        (c) =>
+          c.name.trim().toLowerCase() === categoryName.trim().toLowerCase(),
       );
-      const nextEndDate = makeDate(
-        String(safeEndYear),
-        padNumber(safeEndMonth),
-        padNumber(safeEndDay),
-      );
+      let resolvedCategoryId: number | null = matched?.id ?? null;
 
-      if (nextEndDate < nextStartDate) {
-        Alert.alert("안내", "종료 날짜는 시작 날짜보다 빠를 수 없어요.");
-        return;
+      if (resolvedCategoryId === null) {
+        try {
+          const created = await CategoryService.create(
+            categoryName,
+            selectedColor,
+          );
+          resolvedCategoryId = created.id;
+        } catch (createError: any) {
+          if (createError?.response?.status === 409) {
+            const retry = await CategoryService.getAll();
+            const retryMatched = retry.find(
+              (c) =>
+                c.name.trim().toLowerCase() ===
+                categoryName.trim().toLowerCase(),
+            );
+            resolvedCategoryId = retryMatched?.id ?? null;
+          } else {
+            throw createError;
+          }
+        }
       }
-      // 시간 겹침 체크
+
       const newStartTime = makeTime(
         padNumber(safeStartHour),
         padNumber(safeStartMinute),
@@ -619,6 +631,7 @@ export function ScheduleDetailModal({
       );
 
       await RoutineService.updateById(routine.id, {
+        categoryId: resolvedCategoryId,
         title: trimmedTitle,
         categoryName,
         color: selectedColor,
@@ -634,20 +647,24 @@ export function ScheduleDetailModal({
             : undefined,
         repeatUnit: repeatType === "CUSTOM" ? repeatUnit : undefined,
         repeatDays:
-          repeatType === "CUSTOM" && repeatUnit === "WEEK" ? repeatDays : [],
+          repeatType === "WEEKLY" ||
+          (repeatType === "CUSTOM" && repeatUnit === "WEEK")
+            ? repeatDays
+            : [],
       });
 
-      await onUpdated();
       setIsEditMode(false);
-      onClose();
-    } catch (error) {
-      if (error instanceof Error && error.message === "TIME_CONFLICT") {
-        Alert.alert("시간 중복", "같은 시간대에 이미 등록된 루틴이 있어요.");
-        return;
-      }
+      onClose(); // ← 먼저 닫고
+      await onUpdated();
+    } catch (error: any) {
+      const status = error?.response?.status;
 
-      console.error("루틴 수정 실패", error);
-      Alert.alert("오류", "루틴 수정 중 문제가 발생했어요.");
+      if (status === 409) {
+        Alert.alert("시간 중복", "같은 시간대에 이미 등록된 루틴이 있어요.");
+      } else {
+        console.error("루틴 수정 실패", error);
+        Alert.alert("오류", "루틴 수정 중 문제가 발생했어요.");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -709,10 +726,11 @@ export function ScheduleDetailModal({
                   >
                     <Text style={styles.cancelText}>취소</Text>
                   </TouchableOpacity>
-
                   <TouchableOpacity
-                    onPress={handleSave}
-                    style={styles.saveButton}
+                    onPress={() => {
+                      if (!isSaving) handleSave();
+                    }}
+                    style={[styles.saveButton, isSaving && { opacity: 0.5 }]}
                     disabled={isSaving}
                   >
                     <Text style={styles.saveText}>
@@ -1114,6 +1132,7 @@ export function ScheduleDetailModal({
                   <View style={{ marginTop: 8, gap: 6 }}>
                     {[
                       { label: "매일", value: "DAILY" as RepeatType },
+                      { label: "매주 평일", value: "WEEKDAYS" as RepeatType },
                       {
                         label: `매주 (${
                           WEEKDAY_OPTIONS.find(
@@ -1150,6 +1169,8 @@ export function ScheduleDetailModal({
                     ].map((item) => {
                       const isSelected =
                         (repeatType === "DAILY" && item.value === "DAILY") ||
+                        (repeatType === "WEEKDAYS" &&
+                          item.value === "WEEKDAYS") ||
                         (repeatType === "CUSTOM" &&
                           repeatUnit === "WEEK" &&
                           repeatInterval === "1" &&
@@ -1505,11 +1526,7 @@ const styles = StyleSheet.create({
     color: "#405886",
     backgroundColor: "#FAFBFD",
   },
-  categoryChipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
+
   categoryChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1517,9 +1534,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
-  categoryChipSelected: {
-    borderColor: "#405886",
-  },
+
   categoryChipText: {
     fontSize: 12,
     fontWeight: "700",
@@ -1646,54 +1661,13 @@ const styles = StyleSheet.create({
     color: "#405886",
   },
 
-  dialRow: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "stretch",
-  },
-  dialItem: {
-    flex: 1,
-    justifyContent: "flex-start",
-  },
   dialLabel: {
     fontSize: 11,
     fontWeight: "700",
     color: "#A0B0D0",
     marginBottom: 8,
   },
-  dialBox: {
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-    borderRadius: 14,
-    backgroundColor: "#FAFBFD",
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    minHeight: 120,
-  },
-  dialButton: {
-    width: "100%",
-    paddingVertical: 4,
-    alignItems: "center",
-    borderRadius: 10,
-    backgroundColor: "#F1F4F9",
-  },
-  dialButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#405886",
-  },
-  dialValue: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#2A3C6B",
-  },
 
-  repeatOptionWrap: {
-    gap: 8,
-  },
   repeatOptionButton: {
     borderWidth: 1,
     borderColor: "#E4E7EE",
@@ -1714,9 +1688,7 @@ const styles = StyleSheet.create({
   repeatOptionTextSelected: {
     color: "#405886",
   },
-  customRepeatBox: {
-    marginTop: 12,
-  },
+
   deleteIconButton: {
     width: 32,
     height: 32,
