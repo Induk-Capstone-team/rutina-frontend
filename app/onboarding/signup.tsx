@@ -19,19 +19,27 @@ export default function SignupScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string; nickname?: string }>();
   
-  const { signup, checkEmail: checkEmailApi, isLoading, error, setError } = useAuthViewModel();
+  const {
+    signup,
+    sendVerificationCode,
+    verifyCode,
+    isLoading,
+    error,
+    setError,
+  } = useAuthViewModel();
 
   const [nickname, setName] = useState(params.nickname || "");
   const [email, setEmail] = useState(params.email || "");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [isEmailValidated, setIsEmailValidated] = useState(!!params.email);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [isCodeSent, setIsCodeSent] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
 
   useEffect(() => {
     if (params.email) {
       setEmail(params.email);
-      setIsEmailValidated(true);
+      setIsVerified(true);
     }
     if (params.nickname) {
       setName(params.nickname);
@@ -51,47 +59,34 @@ export default function SignupScreen() {
     setAgreePush(nextState);
   };
 
-  const checkEmail = async (email: string) => {
-    // 1. 기본 유효성 검사
+  const handleSendCode = async () => {
     if (!email || !email.includes("@")) {
-      setEmailError("유효한 이메일 형식이 아닙니다.");
-      setIsEmailValidated(false);
+      Alert.alert("알림", "유효한 이메일 주소를 입력해주세요.");
       return;
     }
+    const data = await sendVerificationCode(email);
+    if (data?.success) {
+      setIsCodeSent(true);
+      Alert.alert("알림", "인증 코드가 이메일로 발송되었습니다.");
+    } else if (data === null && error) {
+       Alert.alert("오류", error);
+    }
+  };
 
-    setEmailError(null);
-    setIsEmailValidated(false);
-
-    try {
-      const data = await checkEmailApi(email);
-
-      // 3. API 응답 구조 매핑
-      if (data.success) {
-        if (data.data?.isDuplicate) {
-          // 중복된 경우
-          setEmailError("이미 사용 중인 이메일입니다.");
-          setIsEmailValidated(false);
-        } else {
-          // 사용 가능한 경우
-          setEmailError(null);
-          setIsEmailValidated(true);
-          Alert.alert("확인", data.message || "사용 가능한 이메일입니다.");
-        }
-      } else {
-        // success가 false로 오는 경우 (서버 에러 등)
-        setEmailError(data.message || "이메일 확인에 실패했습니다.");
-        setIsEmailValidated(false);
-      }
-    } catch (e: any) {
-      console.error("Check Email Error:", e);
-      setEmailError(e.response?.data?.message || "연결 오류가 발생했습니다.");
-      setIsEmailValidated(false);
+  const handleVerifyCode = async () => {
+    if (!verificationCode) return;
+    const data = await verifyCode(email, verificationCode);
+    if (data?.success) {
+      setIsVerified(true);
+      Alert.alert("알림", "이메일 인증이 완료되었습니다.");
+    } else if (data === null && error) {
+       Alert.alert("오류", error);
     }
   };
 
   const handleSignup = async () => {
-    if (!isEmailValidated) {
-      setError("이메일 중복 확인이 필요합니다.");
+    if (!isVerified) {
+      setError("이메일 인증이 필요합니다.");
       return;
     }
     if (password !== passwordConfirm) {
@@ -105,14 +100,16 @@ export default function SignupScreen() {
 
     const success = await signup(email, password, nickname);
     if (success) {
-      Alert.alert("환영합니다!", "회원가입이 완료되었습니다.", [
-        { text: "시작하기", onPress: () => router.replace("/") },
-      ]);
+      // 회원가입 성공 시 토큰이 저장되므로, 바로 2단계(추가정보) 화면으로 이동
+      router.replace({
+        pathname: "/onboarding/signup2",
+        params: { email, nickname },
+      });
     }
   };
 
   const isFormValid =
-    nickname && isEmailValidated && password && passwordConfirm && agreePrivacy;
+    nickname && isVerified && password && passwordConfirm && agreePrivacy;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -151,40 +148,68 @@ export default function SignupScreen() {
               />
             </View>
 
-            {/* 이메일 입력 + 중복확인 버튼 통합 */}
+            {/* 이메일 입력 + 인증번호 발송 */}
             <View style={styles.inputWrapper}>
               <Text style={styles.inputLabel}>이메일</Text>
               <View style={styles.inlineInputContainer}>
                 <TextInput
                   style={[
                     styles.inlineInput,
-                    isEmailValidated && styles.validatedInput,
+                    isVerified && styles.validatedInput,
                   ]}
                   placeholder="example@mail.com"
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
-                    setIsEmailValidated(false);
+                    setIsVerified(false);
+                    setIsCodeSent(false);
                   }}
                   autoCapitalize="none"
                   keyboardType="email-address"
                   placeholderTextColor="#A0B0D0"
+                  editable={!isVerified}
                 />
                 <TouchableOpacity
                   style={[
                     styles.inlineButton,
-                    (!email || isEmailValidated) && styles.disabledInlineButton,
+                    (!email || isVerified) && styles.disabledInlineButton,
                   ]}
-                  onPress={() => checkEmail(email)}
-                  disabled={!email || isLoading || isEmailValidated}
+                  onPress={handleSendCode}
+                  disabled={!email || isLoading || isVerified}
                 >
                   <Text style={styles.inlineButtonText}>
-                    {isEmailValidated ? "확인됨" : "중복확인"}
+                    {isVerified ? "확인됨" : isCodeSent ? "재발송" : "인증발송"}
                   </Text>
                 </TouchableOpacity>
               </View>
-              {emailError && <Text style={styles.errorText}>{emailError}</Text>}
             </View>
+
+            {/* 인증번호 입력 (인증번호 발송 후에만 표시) */}
+            {isCodeSent && !isVerified && (
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>인증번호</Text>
+                <View style={styles.inlineInputContainer}>
+                  <TextInput
+                    style={styles.inlineInput}
+                    placeholder="인증번호 입력"
+                    value={verificationCode}
+                    onChangeText={setVerificationCode}
+                    keyboardType="number-pad"
+                    placeholderTextColor="#A0B0D0"
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.inlineButton,
+                      !verificationCode && styles.disabledInlineButton,
+                    ]}
+                    onPress={handleVerifyCode}
+                    disabled={!verificationCode || isLoading}
+                  >
+                    <Text style={styles.inlineButtonText}>인증확인</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
             {/* 비밀번호 입력 */}
             <View style={styles.inputWrapper}>

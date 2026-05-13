@@ -31,30 +31,6 @@ export const getDummyUserProfile = (): UserProfile => ({
   ageGroup: "20대",
 });
 
-// ── 더미 루틴 추천 결과 (시간대별) ──
-const DUMMY_ROUTINES: Record<string, RecommendedRoutine[]> = {
-  아침: [
-    { id: "d1", title: "유산소 운동", startTime: "06:00", endTime: "06:30", description: "가벼운 조깅 또는 사이클", category: "운동" },
-    { id: "d2", title: "근력 운동", startTime: "06:30", endTime: "07:30", description: "스쿼트, 푸시업", category: "운동" },
-    { id: "d3", title: "단백질 식사", startTime: "07:30", endTime: "08:00", description: "닭가슴살 샐러드", category: "기상" },
-    { id: "d4", title: "공부", startTime: "08:00", endTime: "09:00", description: "집중 시간대 학습", category: "공부" },
-    { id: "d5", title: "독서", startTime: "09:30", endTime: "10:00", description: "자기계발서, 에세이", category: "기타" },
-  ],
-  점심: [
-    { id: "d6", title: "가벼운 스트레칭", startTime: "11:00", endTime: "11:30", description: "점심 전 몸 풀기", category: "운동" },
-    { id: "d7", title: "건강한 점심 식사", startTime: "11:30", endTime: "12:00", description: "균형 잡힌 영양 식단", category: "기상" },
-    { id: "d8", title: "낮잠 또는 명상", startTime: "12:30", endTime: "13:00", description: "15~20분 파워냅", category: "명상" },
-    { id: "d9", title: "집중 학습", startTime: "13:00", endTime: "14:00", description: "오후 핵심 공부 시간", category: "공부" },
-  ],
-  저녁: [
-    { id: "d10", title: "유산소 운동", startTime: "18:00", endTime: "18:30", description: "가벼운 조깅 또는 사이클", category: "운동" },
-    { id: "d11", title: "근력 운동", startTime: "18:30", endTime: "19:30", description: "스쿼트, 푸시업", category: "운동" },
-    { id: "d12", title: "단백질 식사", startTime: "19:30", endTime: "20:00", description: "닭가슴살 샐러드", category: "저녁" },
-    { id: "d13", title: "공부", startTime: "20:00", endTime: "21:00", description: "집중 시간대 학습", category: "공부" },
-    { id: "d14", title: "독서", startTime: "21:30", endTime: "22:00", description: "자기계발서, 에세이", category: "기타" },
-  ],
-};
-
 // ── ChatGPT API로 루틴 추천 ──
 export const requestRoutineRecommendation = async (
   profile: UserProfile,
@@ -63,7 +39,9 @@ export const requestRoutineRecommendation = async (
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
 
   if (!apiKey) {
-    throw new Error("OpenAI API Key가 설정되지 않았습니다. .env 파일을 확인해주세요.");
+    throw new Error(
+      "OpenAI API Key가 설정되지 않았습니다. .env 파일을 확인해주세요.",
+    );
   }
 
   const prompt = `
@@ -110,10 +88,13 @@ export const requestRoutineRecommendation = async (
 
     const data = await response.json();
     let content = data.choices[0].message.content.trim();
-    
+
     // 혹시 마크다운 블록이 포함되어 있다면 제거
     if (content.startsWith("```json")) {
-      content = content.replace(/^```json/, "").replace(/```$/, "").trim();
+      content = content
+        .replace(/^```json/, "")
+        .replace(/```$/, "")
+        .trim();
     } else if (content.startsWith("```")) {
       content = content.replace(/^```/, "").replace(/```$/, "").trim();
     }
