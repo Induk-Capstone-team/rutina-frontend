@@ -1,6 +1,8 @@
+import { authStore } from "@/store/authStore";
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
+import { CategoryApi } from "@/lib/data/category_api";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
@@ -14,6 +16,49 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+const JOB_CATEGORIES: Record<string, { name: string; colorCode: string }[]> = {
+  학생: [
+    { name: "학습", colorCode: "#007AFF" },
+    { name: "등교", colorCode: "#34C759" },
+    { name: "성취", colorCode: "#FFD700" },
+  ],
+  무직: [
+    { name: "규칙", colorCode: "#8E8E93" },
+    { name: "준비", colorCode: "#FF9500" },
+    { name: "활력", colorCode: "#FFCC00" },
+  ],
+  주부: [
+    { name: "살림", colorCode: "#F2F2F7" },
+    { name: "나", colorCode: "#AF52DE" },
+    { name: "가족", colorCode: "#FF2D55" },
+  ],
+  회사원: [
+    { name: "업무", colorCode: "#004080" },
+    { name: "건강", colorCode: "#58D68D" },
+    { name: "휴식", colorCode: "#5856D6" },
+  ],
+  운동선수: [
+    { name: "훈련", colorCode: "#FF3B30" },
+    { name: "멘탈", colorCode: "#5AC8FA" },
+    { name: "회복", colorCode: "#A52A2A" },
+  ],
+  자영업자: [
+    { name: "운영", colorCode: "#F5F5DC" },
+    { name: "관리", colorCode: "#008080" },
+    { name: "정산", colorCode: "#50C878" },
+  ],
+  은퇴자: [
+    { name: "건강", colorCode: "#90EE90" },
+    { name: "취미", colorCode: "#E6E6FA" },
+    { name: "교류", colorCode: "#FFDAB9" },
+  ],
+  프리랜서: [
+    { name: "집중", colorCode: "#00008B" },
+    { name: "관리", colorCode: "#32CD32" },
+    { name: "마감", colorCode: "#000000" },
+  ],
+};
 
 export default function SignupStep2Screen() {
   const router = useRouter();
@@ -33,29 +78,35 @@ export default function SignupStep2Screen() {
   const isFormValid = age && job && gender;
 
   const handleComplete = async () => {
-    let success = false;
-    if (params.isSocial === "true") {
-      // 소셜 로그인: 이미 계정은 있으므로 프로필 업데이트만
-      success = await updateProfile(Number(age), job, gender);
-    } else {
-      // 일반 로그인: 모든 정보를 모아서 한 번에 회원가입
-      success = await signup(
-        params.email || "",
-        params.password || "",
-        params.nickname || "",
-        Number(age),
-        job,
-        gender
-      );
-    }
+    // 성별 값을 백엔드 형식(0 = 남성, 1 = 여성)으로 변환
+    let mappedGender: number | null = null;
+    if (gender === "남성") mappedGender = 0;
+    else if (gender === "여성") mappedGender = 1;
+
+    const success = await updateProfile(Number(age), job, mappedGender as any);
 
     if (success) {
+      // 직업에 따른 카테고리 자동 추가
+      const categoriesToAdd = JOB_CATEGORIES[job];
+      if (categoriesToAdd) {
+        try {
+          await Promise.all(
+            categoriesToAdd.map((cat) => CategoryApi.create(cat)),
+          );
+        } catch (e) {
+          console.error("카테고리 생성 실패:", e);
+        }
+      }
+
+      // 모든 과정 완료 후 로그인 상태로 전환
+      authStore.setLoggedIn(true);
+
       Alert.alert("환영합니다!", "회원가입이 모두 완료되었습니다.", [
-        { text: "시작하기", onPress: () => router.replace("/") },
+        { text: "시작하기", onPress: () => router.replace("/(tabs)") },
       ]);
     } else {
       if (error) {
-        Alert.alert("오류", error);
+        Alert.alert("오류 (400)", error || "입력한 정보를 다시 확인해주세요.");
       }
     }
   };
@@ -85,7 +136,6 @@ export default function SignupStep2Screen() {
           </View>
 
           <View style={styles.card}>
-            {/* 나이 입력 */}
             <View style={styles.inputWrapper}>
               <Text style={styles.inputLabel}>나이</Text>
               <TextInput
@@ -98,7 +148,6 @@ export default function SignupStep2Screen() {
               />
             </View>
 
-            {/* 직업 선택 */}
             <View style={styles.inputWrapper}>
               <Text style={styles.inputLabel}>직업</Text>
               <View style={styles.jobContainer}>
@@ -107,9 +156,9 @@ export default function SignupStep2Screen() {
                   "무직",
                   "주부",
                   "회사원",
-                  "운동 선수",
+                  "운동선수",
                   "자영업자",
-                  "은퇴",
+                  "은퇴자",
                   "프리랜서",
                 ].map((item) => (
                   <TouchableOpacity
@@ -133,11 +182,10 @@ export default function SignupStep2Screen() {
               </View>
             </View>
 
-            {/* 성별 선택 */}
             <View style={styles.inputWrapper}>
               <Text style={styles.inputLabel}>성별</Text>
               <View style={styles.genderContainer}>
-                {["남성", "여성", "선택 안함"].map((item) => (
+                {["남성", "여성"].map((item) => (
                   <TouchableOpacity
                     key={item}
                     style={[
@@ -165,9 +213,11 @@ export default function SignupStep2Screen() {
                 !isFormValid && styles.disabledSubmitButton,
               ]}
               onPress={handleComplete}
-              disabled={!isFormValid}
+              disabled={!isFormValid || isLoading}
             >
-              <Text style={styles.submitButtonText}>완료</Text>
+              <Text style={styles.submitButtonText}>
+                {isLoading ? "처리 중..." : "완료"}
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

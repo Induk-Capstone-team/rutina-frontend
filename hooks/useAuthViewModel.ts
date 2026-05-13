@@ -75,6 +75,18 @@ export const useAuthViewModel = () => {
         gender,
       );
       console.log("회원가입 성공:", data);
+
+      const accessToken =
+        data?.data?.accessToken || data?.accessToken || data?.token;
+      const refreshToken = data?.data?.refreshToken || data?.refreshToken;
+
+      if (accessToken) {
+        await AsyncStorage.setItem("userToken", accessToken);
+      }
+      if (refreshToken) {
+        await AsyncStorage.setItem("refreshToken", refreshToken);
+      }
+
       return true; // 성공 여부 반환
     } catch (err: any) {
       console.log("회원가입 에러:", err);
@@ -85,7 +97,11 @@ export const useAuthViewModel = () => {
     }
   };
 
-  const updateProfile = async (age: number, job: string, gender: string) => {
+  const updateProfile = async (
+    age: number,
+    job: string,
+    gender: number | string,
+  ) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -136,5 +152,46 @@ export const useAuthViewModel = () => {
     }
   };
 
-  return { login, signup, updateProfile, logout, checkEmail, isLoading, error, setError };
+  const sendVerificationCode = async (email: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.sendVerificationCode(email);
+      return data;
+    } catch (err: any) {
+      console.log("인증 코드 발송 에러:", err);
+      setError(err.response?.data?.message || "인증 코드 발송에 실패했습니다.");
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const verifyCode = async (email: string, code: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.verifyCode(email, code);
+      return data;
+    } catch (err: any) {
+      console.log("인증 코드 확인 에러:", err);
+      setError(err.response?.data?.message || "인증 코드 확인에 실패했습니다.");
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return {
+    login,
+    signup,
+    updateProfile,
+    logout,
+    checkEmail,
+    sendVerificationCode,
+    verifyCode,
+    isLoading,
+    error,
+    setError,
+  };
 };

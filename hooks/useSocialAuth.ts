@@ -18,11 +18,11 @@ export const useSocialAuth = () => {
     try {
       // 1. 백엔드의 소셜 로그인 시작 엔드포인트
       // Spring Security OAuth2 기본 경로는 보통 /oauth2/authorization/{provider} 입니다.
-      const BACKEND_AUTH_URL = `http://3.35.117.128:8080/oauth2/authorization/${provider}`;
+      const BACKEND_AUTH_URL = `https://rutina.co.kr/oauth2/authorization/${provider}`;
 
       // 모바일 딥링크 주소 생성 (예: exp://192.../--/oauth 또는 rutinafrontend://oauth)
       const DEEP_LINK_URI = Linking.createURL(
-        "exp://[IP_ADDRESS]/oauth/callback",
+        "exp://rutina.co.kr/oauth/callback",
       );
 
       // 브라우저 열기 (프론트 -> 백엔드로 이동)
