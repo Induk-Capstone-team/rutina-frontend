@@ -1,6 +1,6 @@
 export type NotifyOption = "NONE" | "ON_TIME";
 
-export type RepeatType = "NONE" | "DAILY" | "CUSTOM";
+export type RepeatType = "NONE" | "DAILY" | "WEEKLY" | "WEEKDAYS" | "CUSTOM";
 
 export type RepeatOption = RepeatType;
 
@@ -66,14 +66,38 @@ export interface RoutineTimeRange {
   endMinute: string;
 }
 
-export interface DailyTargetRecord {
+// 루틴 API 응답 타입
+export interface ApiRoutine {
   id: number;
-  routineId: number;
-  targetDate: string;
+  categoryId: number;
+  categoryColorCode: string; // 로컬의 color
+  title: string;
+  alarm: boolean;
+  repeatType: RepeatType;
+  repeatInterval: number;
+  repeatUnit: RepeatUnit;
+  repeatDays: RepeatWeekday[];
+  startTime: string | null;
+  endTime: string | null;
+  startAt: string; // 로컬의 startDate
+  endAt: string; // 로컬의 endDate
   isCompleted: boolean;
 }
 
-// 카테고리 API 응답 타입
+// 루틴 생성/수정 요청 타입
+export interface ApiRoutineRequest {
+  categoryId: number | null;
+  title: string;
+  alarm: boolean;
+  repeatType: RepeatType;
+  repeatInterval: number | null;
+  repeatUnit: RepeatUnit | null;
+  repeatDays: RepeatWeekday[] | null;
+  startTime: string | null;
+  endTime: string | null;
+  startAt: string; // 로컬의 startDate
+  endAt: string; // 로컬의 endDate
+}
 export interface RoutineCategory {
   id: number;
   name: string;
@@ -82,7 +106,6 @@ export interface RoutineCategory {
   sortOrder: number;
 }
 
-//카테고리 생성/수정 요청 타입
 export interface CategoryRequest {
   name: string;
   colorCode: string;

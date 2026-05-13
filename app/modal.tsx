@@ -1,3 +1,4 @@
+//modal.tsx
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import TimePickerModal from "@/components/time_picker_modal";
@@ -10,9 +11,9 @@ import {
   getCategoryBadgeStyle,
   normalizeHexColor,
   uniqueColors,
-  uniqueCustomCategories,
   type CustomCategory,
 } from "@/lib/category";
+import { CategoryService } from "@/services/category_service";
 import type {
   NotifyOption,
   RepeatType,
@@ -21,7 +22,7 @@ import type {
   SaveRoutineOptions,
 } from "@/types/routine";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -371,7 +372,7 @@ export default function ModalScreen() {
   const [repeatType, setRepeatType] = useState<RepeatType>("NONE");
   const [repeatInterval, setRepeatInterval] = useState("1");
   const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>("DAY");
-  // 추가: 주 단위 사용자 반복에서 선택한 요일 저장
+  // 주 단위 사용자 반복에서 선택한 요일 저장
   const [repeatDays, setRepeatDays] = useState<RepeatWeekday[]>([]);
 
   //커스텀 카테고리 이름 -> 색상 맵
@@ -461,89 +462,62 @@ export default function ModalScreen() {
   };
   //저장된 사용자 카테고리 불러오기
   useEffect(() => {
-    const loadCustomCategories = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(CUSTOM_CATEGORY_STORAGE_KEY);
-
-        if (!stored) {
-          setCustomCategories([]);
-          return;
-        }
-
-        const parsed = JSON.parse(stored) as string[] | CustomCategory[];
-
-        const normalized = Array.isArray(parsed)
-          ? uniqueCustomCategories(
-              parsed.map((item) => {
-                if (typeof item === "string") {
-                  return {
-                    name: item,
-                    color: DEFAULT_USER_COLOR_PALETTE[0],
-                  };
-                }
-
-                return {
-                  name: item.name,
-                  color: item.color || DEFAULT_USER_COLOR_PALETTE[0],
-                };
-              }),
-            )
-          : [];
-
-        setCustomCategories(normalized);
-      } catch (error) {
-        console.error("사용자 카테고리 불러오기 실패", error);
+    CategoryService.getAll()
+      .then((serverCategories) => {
+        const custom = serverCategories
+          .filter((c) => !Object.keys(EVENT_TYPES).includes(c.name))
+          .map((c) => ({ name: c.name, color: c.colorCode }));
+        setCustomCategories(custom);
+      })
+      .catch((error) => {
+        console.error("카테고리 불러오기 실패", error);
         setCustomCategories([]);
-      }
-    };
-
-    loadCustomCategories();
+      });
   }, []);
 
   //카테고리 저장
   const handleCategorySave = async () => {
     const newCategory = tempCategory.trim();
-
     if (!newCategory) return;
 
-    if (
-      DEFAULT_CATEGORIES.includes(
-        newCategory as (typeof DEFAULT_CATEGORIES)[number],
-      )
-    ) {
+    // 기본 카테고리면 서버 저장 없이 선택만
+    if (DEFAULT_CATEGORIES.includes(newCategory as any)) {
       setCategory(newCategory);
-
       const fixedStyle = EVENT_TYPES[newCategory as keyof typeof EVENT_TYPES];
       setSelectedColor(fixedStyle.dot);
-
       setTempCategory("");
       setIsAddingCategory(false);
       return;
     }
 
     try {
-      // 새 카테고리 저장 시 현재 선택 색상도 같이 저장
-      const nextCategories = uniqueCustomCategories([
-        ...customCategories,
-        {
-          name: newCategory,
-          color: selectedColor,
-        },
-      ]);
-
-      await AsyncStorage.setItem(
-        CUSTOM_CATEGORY_STORAGE_KEY,
-        JSON.stringify(nextCategories),
+      // 서버에 저장
+      await CategoryService.create(
+        newCategory,
+        normalizeHexColor(selectedColor),
       );
 
-      setCustomCategories(nextCategories);
+      // 서버에서 최신 목록 다시 불러오기
+      const serverCategories = await CategoryService.getAll();
+      const custom = serverCategories
+        .filter((c) => !Object.keys(EVENT_TYPES).includes(c.name))
+        .map((c) => ({ name: c.name, color: c.colorCode }));
+      setCustomCategories(custom);
+
       setCategory(newCategory);
       setSelectedColor(normalizeHexColor(selectedColor));
       setTempCategory("");
       setIsAddingCategory(false);
-    } catch (error) {
-      console.error("사용자 카테고리 저장 실패", error);
-      Alert.alert("카테고리 저장 실패", "카테고리를 저장하지 못했어요.");
+    } catch (error: any) {
+      if (error?.response?.status === 409) {
+        // 이미 존재하는 카테고리면 그냥 선택
+        setCategory(newCategory);
+        setTempCategory("");
+        setIsAddingCategory(false);
+      } else {
+        console.error("카테고리 저장 실패", error);
+        Alert.alert("카테고리 저장 실패", "카테고리를 저장하지 못했어요.");
+      }
     }
   };
 
@@ -552,47 +526,32 @@ export default function ModalScreen() {
     setIsAddingCategory(false);
   };
   //커스텀 카테고리 삭제 확인
-  const handleConfirmDeleteCustomCategory = (categoryName: string) => {
-    Alert.alert(
-      "카테고리 삭제",
-      `'${categoryName}' 카테고리를 삭제할까요?`,
-      [
-        {
-          text: "취소",
-          style: "cancel",
-        },
-        {
-          text: "삭제",
-          style: "destructive",
-          onPress: () => {
-            handleDeleteCustomCategory(categoryName);
-          },
-        },
-      ],
-      { cancelable: true },
-    );
-  };
-
-  //커스텀 카테고리 삭제
   const handleDeleteCustomCategory = async (categoryName: string) => {
     try {
-      const filtered = customCategories.filter(
-        (item) => item.name !== categoryName,
+      // 서버 ID 찾기
+      const serverCategories = await CategoryService.getAll();
+      const matched = serverCategories.find(
+        (c) =>
+          c.name.trim().toLowerCase() === categoryName.trim().toLowerCase(),
       );
 
-      await AsyncStorage.setItem(
-        CUSTOM_CATEGORY_STORAGE_KEY,
-        JSON.stringify(filtered),
-      );
+      if (matched) {
+        await CategoryService.delete(matched.id);
+      }
 
-      setCustomCategories(filtered);
+      // 삭제 후 목록 갱신
+      const updated = await CategoryService.getAll();
+      const custom = updated
+        .filter((c) => !Object.keys(EVENT_TYPES).includes(c.name))
+        .map((c) => ({ name: c.name, color: c.colorCode }));
+      setCustomCategories(custom);
 
       if (category === categoryName) {
         setCategory("기타");
         setSelectedColor(EVENT_TYPES["기타"].dot);
       }
     } catch (error) {
-      console.error("사용자 카테고리 삭제 실패", error);
+      console.error("카테고리 삭제 실패", error);
       Alert.alert("카테고리 삭제 실패", "카테고리를 삭제하지 못했어요.");
     }
   };
@@ -776,13 +735,14 @@ export default function ModalScreen() {
 
     try {
       await handleSave(saveOptions);
-    } catch (error) {
-      if (error instanceof Error && error.message === "TIME_CONFLICT") {
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 409) {
         Alert.alert("시간 중복", "같은 시간대에 이미 등록된 루틴이 있어요.");
-        return;
+      } else {
+        console.error("루틴 저장 실패", error);
+        Alert.alert("저장 실패", "루틴을 저장하지 못했어요.");
       }
-
-      Alert.alert("저장 실패", "루틴을 저장하지 못했어요.");
     }
   };
   //시간 모달에서 값 적용
@@ -1683,22 +1643,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     marginTop: 2,
     gap: 3,
-  },
-
-  categoryItemWrapper: {
-    position: "relative",
-  },
-
-  categoryDeleteMiniButton: {
-    position: "absolute",
-    right: -4,
-    top: -4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#D06C68",
-    alignItems: "center",
-    justifyContent: "center",
   },
 
   categoryBadge: {
