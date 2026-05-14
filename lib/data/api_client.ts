@@ -12,5 +12,23 @@ apiClient.interceptors.request.use(async (config) => {
   }
   return config;
 });
-
+// 응답 interceptor - 에러 처리
+apiClient.interceptors.response.use(
+  (response) => {
+    if (
+      typeof response.data === "string" &&
+      response.data.includes("<!DOCTYPE html>")
+    ) {
+      AsyncStorage.removeItem("userToken");
+      throw new Error("인증 세션이 만료되었거나 권한이 없습니다.");
+    }
+    return response;
+  },
+  async (error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      await AsyncStorage.removeItem("userToken");
+    }
+    throw error;
+  },
+);
 export default apiClient;
