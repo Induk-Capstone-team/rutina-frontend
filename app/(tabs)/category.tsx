@@ -1,4 +1,5 @@
 //category.tsx
+import { DraggableCategoryList } from "@/components/DraggableCategoryList";
 import { Header } from "@/components/ui/_header";
 import {
   DEFAULT_CATEGORIES,
@@ -10,6 +11,7 @@ import {
   type CustomCategory,
 } from "@/lib/category";
 import { getRoutineOccurrenceDates } from "@/lib/storage";
+import type { Category } from "@/services/category_service";
 import { CategoryService } from "@/services/category_service";
 import { RoutineService } from "@/services/routine_service";
 import type { ScheduleRoutine } from "@/types/routine";
@@ -20,7 +22,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -33,12 +34,12 @@ import {
   TextInput,
   View,
 } from "react-native";
+
 import ColorPicker, {
   HueSlider,
   Panel1,
   Preview,
 } from "reanimated-color-picker";
-
 // 카테고리 탭 상태 타입: 진행중 / 완료됨
 type CategoryTab = "ACTIVE" | "COMPLETED";
 
@@ -185,78 +186,51 @@ const saveCategoryMetas = async (metas: CategoryMeta[]) => {
     console.error("카테고리 메타 저장 실패", error);
   }
 };
-
-// 루틴 + 기본 카테고리 + 사용자 카테고리를 화면용 데이터로 합치기
+//서버 카테고리만 기준으로
 const buildCategorySummaries = (
   routines: ScheduleRoutine[],
   metas: CategoryMeta[],
-  customCategories: CustomCategory[],
-  serverCategoryIdMap: Record<string, number>, // 추가
+  serverCategories: Category[],
+  serverSortOrderMap: Record<number, number>,
 ): CategorySummary[] => {
   const getKey = (name: string) => normalizeCategoryName(name).toLowerCase();
   const summaryMap = new Map<string, CategorySummary>();
 
-  const presetCategories: CustomCategory[] = [
-    ...DEFAULT_CATEGORIES.map((name) => ({
-      name,
-      color: EVENT_TYPES[name].dot,
-    })),
-    ...customCategories,
-  ];
-
-  presetCategories.forEach((cat) => {
-    const key = getKey(cat.name);
-    const linkedId = serverCategoryIdMap[cat.name] ?? null;
+  // 서버에 있는 카테고리만 기준으로 목록 구성
+  serverCategories.forEach((sc) => {
+    const key = getKey(sc.name);
     summaryMap.set(key, {
       key,
-      linkedCategoryId: linkedId,
-      name: cat.name,
-      color: cat.color,
-      isHidden: false,
+      linkedCategoryId: sc.id,
+      name: sc.name,
+      color: sc.colorCode,
+      isHidden: sc.hidden,
       routines: [],
       totalCount: 0,
       completedCount: 0,
       isCompletedCategory: false,
-      isFixedCategory: isFixedCategoryName(cat.name),
+      isFixedCategory: isFixedCategoryName(sc.name),
     });
   });
 
+  // 루틴 집계
   routines.forEach((routine) => {
     const key = getKey(routine.categoryName ?? "기타");
     const existing = summaryMap.get(key);
-
     if (existing) {
       existing.routines.push(routine);
       existing.totalCount += 1;
       existing.completedCount += isRoutineCompleted(routine) ? 1 : 0;
-      if (!existing.linkedCategoryId && routine.categoryId) {
-        existing.linkedCategoryId = routine.categoryId;
-      }
-    } else {
-      summaryMap.set(key, {
-        key,
-        linkedCategoryId: routine.categoryId ?? null,
-        name: routine.categoryName ?? "기타",
-        color: routine.color ?? DEFAULT_COLOR,
-        isHidden: false,
-        routines: [routine],
-        totalCount: 1,
-        completedCount: isRoutineCompleted(routine) ? 1 : 0,
-        isCompletedCategory: false,
-        isFixedCategory: isFixedCategoryName(routine.categoryName ?? "기타"),
-      });
     }
   });
 
+  // 메타(숨김) 반영 — 서버 hidden 필드와 중복이지만 로컬 우선
   metas.forEach((meta) => {
     const key = getKey(meta.name);
     const existing = summaryMap.get(key);
     if (existing) {
       existing.isHidden = meta.isHidden;
       existing.metaId = meta.id;
-      if (!existing.linkedCategoryId && meta.linkedCategoryId) {
-        existing.linkedCategoryId = meta.linkedCategoryId;
-      }
     }
   });
 
@@ -267,11 +241,20 @@ const buildCategorySummaries = (
         category.totalCount > 0 &&
         category.completedCount === category.totalCount,
     }))
-    .sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    .sort((a, b) => {
+      const orderA = serverSortOrderMap[a.linkedCategoryId!] ?? 9999;
+      const orderB = serverSortOrderMap[b.linkedCategoryId!] ?? 9999;
+      if (orderA === orderB) return a.name.localeCompare(b.name, "ko");
+      return orderA - orderB;
+    });
 };
 export default function CategoryScreen() {
   const [selectedTab, setSelectedTab] = useState<CategoryTab>("ACTIVE");
   const [routines, setRoutines] = useState<ScheduleRoutine[]>([]);
+  const [serverSortOrderMap, setServerSortOrderMap] = useState<
+    Record<number, number>
+  >({});
+  const [serverCategoryList, setServerCategoryList] = useState<Category[]>([]);
   const [categoryMetas, setCategoryMetas] = useState<CategoryMeta[]>([]);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>(
     [],
@@ -297,33 +280,40 @@ export default function CategoryScreen() {
   const refreshData = useCallback(async () => {
     try {
       setIsLoading(true);
-
       const [
         storedRoutines,
         storedMetas,
         storedCustomColors,
-        serverCategories,
+        fetchedCategories,
       ] = await Promise.all([
         loadRoutines(),
         loadCategoryMetas(),
         loadCustomColors(),
-        CategoryService.getAll(),
+        CategoryService.getAllIncludingHidden(),
       ]);
 
-      const serverCustomCategories: CustomCategory[] = serverCategories
+      console.log("서버 카테고리:", JSON.stringify(fetchedCategories));
+      console.log("서버 카테고리 개수:", fetchedCategories.length);
+      const serverCustomCategories: CustomCategory[] = fetchedCategories
         .filter((c) => !DEFAULT_CATEGORIES.includes(c.name as any))
         .map((c) => ({ name: c.name, color: c.colorCode }));
 
       const idMap: Record<string, number> = {};
-      serverCategories.forEach((c) => {
+      fetchedCategories.forEach((c) => {
         idMap[c.name] = c.id;
       });
-
+      const sortOrderMap: Record<number, number> = {};
+      fetchedCategories.forEach((c) => {
+        idMap[c.name] = c.id;
+        sortOrderMap[c.id] = c.sortOrder;
+      });
       setRoutines(storedRoutines);
       setCategoryMetas(storedMetas);
       setCustomColors(storedCustomColors);
       setCustomCategories(serverCustomCategories);
       setServerCategoryIdMap(idMap);
+      setServerSortOrderMap(sortOrderMap);
+      setServerCategoryList(fetchedCategories);
     } finally {
       setIsLoading(false);
     }
@@ -339,13 +329,13 @@ export default function CategoryScreen() {
     return buildCategorySummaries(
       routines,
       categoryMetas,
-      customCategories,
-      serverCategoryIdMap,
+      serverCategoryList,
+      serverSortOrderMap,
     );
-  }, [routines, categoryMetas, customCategories, serverCategoryIdMap]);
+  }, [routines, categoryMetas, serverCategoryList, serverSortOrderMap]);
 
   const visibleCategories = useMemo(() => {
-    return categories
+    const result = categories
       .filter((category) => !category.isHidden)
       .map((category) => {
         const filteredRoutines = category.routines.filter((routine) => {
@@ -360,6 +350,8 @@ export default function CategoryScreen() {
           isCompletedCategory: selectedTab === "COMPLETED",
         };
       });
+    console.log("visibleCategories 개수:", result.length);
+    return result;
   }, [categories, selectedTab]);
 
   const hiddenCategories = useMemo(() => {
@@ -655,8 +647,8 @@ export default function CategoryScreen() {
           let targetId = editingCategory.linkedCategoryId ?? null;
 
           if (!targetId) {
-            const serverCategories = await CategoryService.getAll();
-            const matched = serverCategories.find(
+            const freshCategories = await CategoryService.getAll();
+            const matched = freshCategories.find(
               (c) =>
                 c.name.trim().toLowerCase() ===
                 editingCategory.name.trim().toLowerCase(),
@@ -683,20 +675,28 @@ export default function CategoryScreen() {
     }
   };
 
-  // 카테고리 숨김 — 서버 + 로컬 메타 동기화
+  // 카테고리 숨김 — 서버 실패 시 중단
   const handleHideCategory = async (category: CategorySummary) => {
+    // 서버 ID가 있으면 서버 먼저 업데이트
     if (category.linkedCategoryId) {
       try {
         await CategoryService.update(category.linkedCategoryId, {
-          name: category.name, // ← 기존 이름 함께 전송
-          colorCode: category.color, // ← 기존 색상 함께 전송
+          name: category.name,
+          colorCode: category.color,
           hidden: true,
         });
       } catch (error) {
+        // ✅ 서버 실패 시 로컬 업데이트 없이 중단
         console.error("서버 카테고리 숨김 처리 실패", error);
+        Alert.alert(
+          "숨기기 실패",
+          "서버 연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.",
+        );
+        return; // ← 핵심: 여기서 종료
       }
     }
 
+    // 서버 성공(또는 서버 ID 없는 경우)에만 로컬 메타 업데이트
     await upsertCategoryMeta((prev) => {
       const now = new Date().toISOString();
       const matchedIndex = prev.findIndex((meta) => {
@@ -729,20 +729,27 @@ export default function CategoryScreen() {
     await refreshData();
   };
 
-  // 숨긴 카테고리 복구 — 서버 + 로컬 메타 동기화
+  // 숨긴 카테고리 복구 — 서버 실패 시 중단
   const handleRestoreCategory = async (category: CategorySummary) => {
     if (category.linkedCategoryId) {
       try {
         await CategoryService.update(category.linkedCategoryId, {
-          name: category.name, // ← 기존 이름 함께 전송
-          colorCode: category.color, // ← 기존 색상 함께 전송
+          name: category.name,
+          colorCode: category.color,
           hidden: false,
         });
       } catch (error) {
+        // ✅ 서버 실패 시 로컬 업데이트 없이 중단
         console.error("서버 카테고리 복구 실패", error);
+        Alert.alert(
+          "복구 실패",
+          "서버 연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.",
+        );
+        return; // ← 핵심
       }
     }
 
+    // 서버 성공에만 로컬 메타 업데이트
     await upsertCategoryMeta((prev) =>
       prev.map((meta) => {
         const isMatched =
@@ -800,8 +807,8 @@ export default function CategoryScreen() {
     if (category.linkedCategoryId) return category.linkedCategoryId;
 
     // 숨겨진 카테고리까지 포함해서 서버에서 전체 목록을 가져와 매칭
-    const serverCategories = await CategoryService.getAllIncludingHidden();
-    const matched = serverCategories.find(
+    const allCategories = await CategoryService.getAllIncludingHidden();
+    const matched = allCategories.find(
       (item) =>
         normalizeCategoryName(item.name).toLowerCase() ===
         normalizeCategoryName(category.name).toLowerCase(),
@@ -866,6 +873,32 @@ export default function CategoryScreen() {
       },
     ]);
   };
+  // 카테고리 순서 변경 — 낙관적 업데이트 후 서버 동기화, 실패 시 롤백
+  const handleReorder = async (reorderedCategories: CategorySummary[]) => {
+    const categoryIds = reorderedCategories
+      .filter((c) => c.linkedCategoryId != null)
+      .map((c) => c.linkedCategoryId as number);
+
+    if (categoryIds.length === 0) return;
+
+    // 롤백용으로 현재 순서 저장
+    const previousSortOrderMap = { ...serverSortOrderMap };
+
+    // ✅ 낙관적 업데이트: 서버 응답 전에 로컬 상태 먼저 반영
+    const newSortOrderMap: Record<number, number> = {};
+    categoryIds.forEach((id, index) => {
+      newSortOrderMap[id] = index;
+    });
+    setServerSortOrderMap(newSortOrderMap);
+
+    try {
+      await CategoryService.reorder(categoryIds);
+    } catch (error) {
+      console.error("순서 변경 실패 — 롤백");
+
+      setServerSortOrderMap(previousSortOrderMap);
+    }
+  };
   const renderRoutineItem = (routine: ScheduleRoutine) => {
     const completed = isRoutineCompleted(routine);
 
@@ -896,72 +929,81 @@ export default function CategoryScreen() {
     );
   };
   // 카테고리 카드 한 개를 렌더링
-  const renderCategoryCard = ({ item }: { item: CategorySummary }) => {
-    const badgeText = selectedTab === "COMPLETED" ? "완료됨" : "진행중";
-    const badgeStyle =
-      selectedTab === "COMPLETED" ? styles.badgeCompleted : undefined;
-    const badgeTextStyle =
-      selectedTab === "COMPLETED" ? styles.badgeTextCompleted : undefined;
+  const renderCategoryItem = useCallback(
+    (item: CategorySummary, index: number) => {
+      const badgeText = selectedTab === "COMPLETED" ? "완료됨" : "진행중";
+      const badgeStyle =
+        selectedTab === "COMPLETED" ? styles.badgeCompleted : undefined;
+      const badgeTextStyle =
+        selectedTab === "COMPLETED" ? styles.badgeTextCompleted : undefined;
 
-    return (
-      <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <View style={styles.cardTitleRow}>
-            <View style={[styles.colorDot, { backgroundColor: item.color }]} />
-            <View style={styles.cardTitleTextBox}>
-              <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardCountText}>
-                전체 {item.totalCount}개 · 완료 {item.completedCount}개
+      return (
+        <View style={styles.card}>
+          {/* 드래그 힌트 */}
+          <View style={styles.dragHandle}>
+            <Text style={styles.dragHandleText}>⠿</Text>
+          </View>
+
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardTitleRow}>
+              <View
+                style={[styles.colorDot, { backgroundColor: item.color }]}
+              />
+              <View style={styles.cardTitleTextBox}>
+                <Text style={styles.cardTitle}>{item.name}</Text>
+                <Text style={styles.cardCountText}>
+                  전체 {item.totalCount}개 · 완료 {item.completedCount}개
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.badge, badgeStyle]}>
+              <Text style={[styles.badgeText, badgeTextStyle]}>
+                {badgeText}
               </Text>
             </View>
           </View>
 
-          <View style={[styles.badge, badgeStyle]}>
-            <Text style={[styles.badgeText, badgeTextStyle]}>{badgeText}</Text>
+          <View style={styles.routineBox}>
+            {item.routines.length > 0 ? (
+              item.routines.slice(0, 3).map(renderRoutineItem)
+            ) : (
+              <Text style={styles.emptyRoutineText}>
+                {selectedTab === "ACTIVE"
+                  ? "연결된 루틴이 아직 없어요."
+                  : "완료된 루틴이 아직 없어요."}
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.actionRow}>
+            <Pressable
+              style={[styles.actionButton, styles.editButton]}
+              onPress={() => openEditCategoryModal(item)}
+            >
+              <Text style={[styles.actionButtonText, styles.editButtonText]}>
+                수정
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.actionButton, styles.hideButton]}
+              onPress={() => handleHideCategory(item)}
+            >
+              <Text style={styles.actionButtonText}>숨기기</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={() => handleDeleteCategory(item)}
+            >
+              <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
+                삭제
+              </Text>
+            </Pressable>
           </View>
         </View>
-
-        <View style={styles.routineBox}>
-          {item.routines.length > 0 ? (
-            item.routines.slice(0, 3).map(renderRoutineItem)
-          ) : (
-            <Text style={styles.emptyRoutineText}>
-              {selectedTab === "ACTIVE"
-                ? "연결된 루틴이 아직 없어요."
-                : "완료된 루틴이 아직 없어요."}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.actionRow}>
-          <Pressable
-            style={[styles.actionButton, styles.editButton]}
-            onPress={() => openEditCategoryModal(item)}
-          >
-            <Text style={[styles.actionButtonText, styles.editButtonText]}>
-              수정
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.actionButton, styles.hideButton]}
-            onPress={() => handleHideCategory(item)}
-          >
-            <Text style={styles.actionButtonText}>숨기기</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={() => handleDeleteCategory(item)}
-          >
-            <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
-              삭제
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  };
+      );
+    },
+    [selectedTab],
+  );
 
   const renderHiddenCard = (item: CategorySummary) => {
     return (
@@ -1047,11 +1089,10 @@ export default function CategoryScreen() {
               <Text style={styles.loadingText}>카테고리를 불러오는 중...</Text>
             </View>
           ) : (
-            <FlatList
+            <DraggableCategoryList
               data={visibleCategories}
-              keyExtractor={(item) => item.key}
-              renderItem={renderCategoryCard}
-              showsVerticalScrollIndicator={false}
+              renderItem={renderCategoryItem}
+              onReorder={handleReorder}
               style={styles.list}
               contentContainerStyle={styles.listContent}
               ListEmptyComponent={
@@ -1099,6 +1140,7 @@ export default function CategoryScreen() {
             />
           )}
         </View>
+
         {/* 카테고리 추가/수정 바텀시트 모달 */}
         <Modal
           visible={isCategoryModalVisible}
@@ -1392,7 +1434,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 30,
     borderColor: "#EEF1F6",
-    overflow: "hidden",
   },
 
   headerArea: {
@@ -1943,5 +1984,17 @@ const styles = StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
     justifyContent: "flex-end",
+  },
+  dragHandle: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    padding: 4,
+    zIndex: 1,
+  },
+  dragHandleText: {
+    fontSize: 18,
+    color: "#C4C6D0",
+    letterSpacing: 1,
   },
 });
