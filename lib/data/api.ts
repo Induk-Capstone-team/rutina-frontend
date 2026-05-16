@@ -1,4 +1,4 @@
-// lib/api.ts
+// lib/data/api.ts
 import apiClient from "./api_client";
 
 export const api = async (

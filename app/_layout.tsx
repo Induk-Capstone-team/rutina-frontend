@@ -19,8 +19,8 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { authStore } from "@/store/authStore";
 import { useFonts } from "expo-font";
 import { useEffect, useState } from "react";
-
-// 스플래시 화면이 자동으로 숨겨지는 것을 방지합니다.
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+// 스플래시 화면이 자동으로 숨겨지는 것을 방지
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
@@ -102,38 +102,40 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="settings" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="onboarding/login"
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="onboarding/signup"
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="onboarding/signup2"
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="onboarding/[terms]"
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="modal"
-          options={{
-            presentation: "transparentModal",
-            headerShown: false,
-            gestureEnabled: true,
-            animation: "slide_from_bottom",
-          }}
-        />
-      </Stack>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="settings" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="onboarding/login"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="onboarding/signup"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="onboarding/signup2"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="onboarding/[terms]"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="modal"
+            options={{
+              presentation: "transparentModal",
+              headerShown: false,
+              gestureEnabled: true,
+              animation: "slide_from_bottom",
+            }}
+          />
+        </Stack>
 
-      <StatusBar style="auto" />
-    </ThemeProvider>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
