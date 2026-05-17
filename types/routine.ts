@@ -110,3 +110,13 @@ export interface CategoryRequest {
   name: string;
   colorCode: string;
 }
+export interface HeatmapRoutine {
+  routineId: number;
+  title: string;
+  category: {
+    id: number;
+    name: string;
+    colorCode: string;
+  };
+  completed: Record<string, boolean>;
+}

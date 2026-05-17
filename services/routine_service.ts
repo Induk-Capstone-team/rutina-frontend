@@ -2,7 +2,7 @@
 import { api } from "@/lib/data/api";
 import { toApiRoutineRequest, toScheduleRoutine } from "@/lib/routine_mapper";
 import { CategoryService } from "@/services/category_service";
-import type { ScheduleRoutine } from "@/types/routine";
+import type { HeatmapRoutine, ScheduleRoutine } from "@/types/routine";
 
 export const RoutineService = {
   getAll: async (date?: string): Promise<ScheduleRoutine[]> => {
@@ -72,5 +72,22 @@ export const RoutineService = {
     await api(`/routines/${id}/daily-targets/toggle?date=${date}`, {
       method: "POST",
     });
+  },
+  // 연간 히트맵 조회
+  heatmapYear: async (year: number): Promise<HeatmapRoutine[]> => {
+    return await api(`/routines/heatmap/year?year=${year}`);
+  },
+
+  // 월간 히트맵 조회
+  heatmapMonth: async (
+    year: number,
+    month: number,
+  ): Promise<HeatmapRoutine[]> => {
+    return await api(`/routines/heatmap/month?year=${year}&month=${month}`);
+  },
+
+  // 주간 히트맵 조회
+  heatmapWeek: async (date: string): Promise<HeatmapRoutine[]> => {
+    return await api(`/routines/heatmap/week?date=${date}`);
   },
 };
