@@ -1,12 +1,13 @@
 import { Header } from "@/components/ui/_header";
 import {
-  GOAL_OPTIONS,
   HOBBY_OPTIONS,
   TIME_OPTIONS,
+  PURPOSE_OPTIONS,
   useAiRecommend,
   type ChatMessage,
 } from "@/hooks/useAiRecommend";
 import type { RecommendedRoutine } from "@/lib/data/ai_api";
+import type { RoutineCategory } from "@/types/routine";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -139,10 +140,12 @@ export default function AiAnalysisScreen() {
     isLoading,
     error,
     profile,
+    categories,
     recommendedRoutines,
     checkedRoutineIds,
     startConversation,
-    submitGoals,
+    submitCategory,
+    submitPurpose,
     submitTime,
     submitHobbies,
     toggleRoutineCheck,
@@ -151,7 +154,8 @@ export default function AiAnalysisScreen() {
 
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const [localGoals, setLocalGoals] = useState<string[]>([]);
+  const [localCategory, setLocalCategory] = useState<RoutineCategory | null>(null);
+  const [localPurpose, setLocalPurpose] = useState("");
   const [localTime, setLocalTime] = useState("");
   const [localHobbies, setLocalHobbies] = useState<string[]>([]);
 
@@ -159,10 +163,6 @@ export default function AiAnalysisScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
   }, [messages, step, isLoading]);
 
-  const toggleGoal = (g: string) =>
-    setLocalGoals((p) =>
-      p.includes(g) ? p.filter((x) => x !== g) : [...p, g],
-    );
   const toggleHobby = (h: string) =>
     setLocalHobbies((p) =>
       p.includes(h) ? p.filter((x) => x !== h) : [...p, h],
@@ -290,21 +290,47 @@ export default function AiAnalysisScreen() {
           {step === "goal" && (
             <View style={s.bottomBar}>
               <View style={s.chipWrap}>
-                {GOAL_OPTIONS.map((g) => (
+                {categories.map((c) => (
                   <Chip
-                    key={g}
-                    label={g}
-                    selected={localGoals.includes(g)}
-                    onPress={() => toggleGoal(g)}
+                    key={c.id}
+                    label={c.name}
+                    selected={localCategory?.id === c.id}
+                    onPress={() => setLocalCategory(c)}
                   />
                 ))}
               </View>
               <TouchableOpacity
-                style={[s.nextBtn, localGoals.length === 0 && { opacity: 0.4 }]}
-                disabled={localGoals.length === 0}
+                style={[s.nextBtn, !localCategory && { opacity: 0.4 }]}
+                disabled={!localCategory}
                 onPress={() => {
-                  submitGoals(localGoals);
-                  setLocalGoals([]);
+                  if (localCategory) {
+                    submitCategory(localCategory);
+                    setLocalCategory(null);
+                  }
+                }}
+              >
+                <Text style={s.nextBtnText}>다음</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {step === "purpose" && (
+            <View style={s.bottomBar}>
+              <View style={s.chipWrap}>
+                {PURPOSE_OPTIONS.map((p) => (
+                  <Chip
+                    key={p}
+                    label={p}
+                    selected={localPurpose === p}
+                    onPress={() => setLocalPurpose(p)}
+                  />
+                ))}
+              </View>
+              <TouchableOpacity
+                style={[s.nextBtn, !localPurpose && { opacity: 0.4 }]}
+                disabled={!localPurpose}
+                onPress={() => {
+                  submitPurpose(localPurpose);
+                  setLocalPurpose("");
                 }}
               >
                 <Text style={s.nextBtnText}>다음</Text>
@@ -370,7 +396,8 @@ export default function AiAnalysisScreen() {
               <TouchableOpacity
                 style={s.restartBtn}
                 onPress={() => {
-                  setLocalGoals([]);
+                  setLocalCategory(null);
+                  setLocalPurpose("");
                   setLocalTime("");
                   setLocalHobbies([]);
                   startConversation();
