@@ -1,3 +1,4 @@
+//lib/category.ts
 import type { ScheduleRoutine } from "@/types/routine";
 
 export type CustomCategory = {
@@ -29,7 +30,6 @@ export function uniqueCustomCategories(
   return Array.from(map.values());
 }
 
-// getCategoryBadgeStyle도 통합
 export function getCategoryBadgeStyle(
   categoryName: string,
   categoryColor: string,

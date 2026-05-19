@@ -1,8 +1,9 @@
-import { RoutineService } from "@/app/services/routine_service";
+//data.tsx
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { Header } from "@/components/ui/_header";
-import { getCategoryStyle, normalizeCategoryName } from "@/lib/category";
-import type { ScheduleRoutine } from "@/types/routine";
+import { getCategoryStyle } from "@/lib/category";
+import { RoutineService } from "@/services/routine_service";
+import type { HeatmapRoutine, ScheduleRoutine } from "@/types/routine";
 import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useMemo, useState } from "react";
 
@@ -17,12 +18,6 @@ import {
 
 // 통계 화면 보기 모드 타입
 type ViewMode = "YEAR" | "MONTH" | "WEEK";
-
-// 카테고리별로 묶은 루틴 타입
-type GroupedRoutine = {
-  categoryName: string;
-  routines: ScheduleRoutine[];
-};
 
 // 년/주 단위 히트맵 셀 타입
 type HeatmapCell = {
@@ -39,21 +34,6 @@ type CalendarCell = {
 };
 
 const MAIN_COLOR = "#405886";
-
-const MONTH_LABELS = [
-  "1월",
-  "2월",
-  "3월",
-  "4월",
-  "5월",
-  "6월",
-  "7월",
-  "8월",
-  "9월",
-  "10월",
-  "11월",
-  "12월",
-];
 
 const WEEK_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -73,25 +53,6 @@ function getWeekEnd(date: Date) {
   return end;
 }
 
-// 문자열 날짜를 Date 객체로 변환
-function parseDateValue(value: unknown) {
-  if (typeof value !== "string" || !value.trim()) {
-    return null;
-  }
-
-  const [year, month, day] = value.split("-").map(Number);
-
-  if (!year || !month || !day) {
-    return null;
-  }
-
-  const date = new Date(year, month - 1, day);
-
-  date.setHours(0, 0, 0, 0);
-
-  return date;
-}
-
 // Date 객체를 YYYY-MM-DD 형식으로 변환
 function formatDateKey(date: Date) {
   const year = date.getFullYear();
@@ -99,106 +60,61 @@ function formatDateKey(date: Date) {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-// 루틴 시작일 가져오기
-function getRoutineStartDate(routine: ScheduleRoutine) {
-  return parseDateValue(routine.startDate) || null;
-}
 
-// 루틴 종료일 가져오기
-function getRoutineEndDate(routine: ScheduleRoutine) {
-  return parseDateValue(routine.endDate) || getRoutineStartDate(routine);
-}
-
-// 특정 날짜가 루틴 기간 안에 포함되는지 확인
-function isDateInRoutineRange(routine: ScheduleRoutine, targetDate: Date) {
-  const startDate = getRoutineStartDate(routine);
-  const endDate = getRoutineEndDate(routine);
-
-  if (!startDate || !endDate) {
-    return false;
-  }
-
-  const normalizedTarget = new Date(targetDate);
-  normalizedTarget.setHours(0, 0, 0, 0);
-  return normalizedTarget >= startDate && normalizedTarget <= endDate;
-}
-// 특정 날짜에 루틴이 완료되었는지 확인
-function isRoutineCompletedOnDate(routine: ScheduleRoutine, targetDate: Date) {
-  const targetDateKey = formatDateKey(targetDate);
-  const completedDates = routine.completedDates ?? [];
-  return completedDates.includes(targetDateKey);
-}
-
-// 루틴 기간과 현재 선택한 기간이 겹치는지 확인
-function doesRoutineOverlapPeriod(
-  routine: ScheduleRoutine,
-  periodStart: Date,
-  periodEnd: Date,
-) {
-  const startDate = getRoutineStartDate(routine);
-  const endDate = getRoutineEndDate(routine);
-
-  if (!startDate || !endDate) {
-    return false;
-  }
-
-  const normalizedStart = new Date(periodStart);
-  normalizedStart.setHours(0, 0, 0, 0);
-
-  const normalizedEnd = new Date(periodEnd);
-  normalizedEnd.setHours(23, 59, 59, 999);
-  return startDate <= normalizedEnd && endDate >= normalizedStart;
-}
-// 선택한 연도에 해당하는 루틴인지 확인
-function isRoutineInSameYear(routine: ScheduleRoutine, year: number) {
-  const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year, 11, 31);
-  return doesRoutineOverlapPeriod(routine, yearStart, yearEnd);
-}
-
-// 선택한 월에 해당하는 루틴인지 확인
-function isRoutineInSameMonth(
-  routine: ScheduleRoutine,
-  year: number,
-  month: number,
-) {
-  const monthStart = new Date(year, month, 1);
-  const monthEnd = new Date(year, month + 1, 0);
-  return doesRoutineOverlapPeriod(routine, monthStart, monthEnd);
-}
-// 선택한 주에 해당하는 루틴인지 확인
-function isRoutineInSameWeek(routine: ScheduleRoutine, selectedDate: Date) {
-  const weekStart = getWeekStart(selectedDate);
-  const weekEnd = getWeekEnd(selectedDate);
-  return doesRoutineOverlapPeriod(routine, weekStart, weekEnd);
-}
 // 연간 통계 히트맵 셀 생성
-function buildYearCells(routine: ScheduleRoutine, year: number): HeatmapCell[] {
-  const startDate = new Date(year, 0, 1);
-  const endDate = new Date(year, 11, 31);
-  const cells: HeatmapCell[] = [];
+type YearHeatmapColumn = {
+  weekIndex: number;
+  cells: (HeatmapCell | null)[];
+};
+function isFilled(completed: Record<string, boolean>, date: Date): boolean {
+  return completed[formatDateKey(date)] === true;
+}
+function buildYearColumnsFromMap(
+  routine: HeatmapRoutine,
+  year: number,
+  completed: Record<string, boolean>,
+): YearHeatmapColumn[] {
+  const jan1 = new Date(year, 0, 1);
+  const dec31 = new Date(year, 11, 31);
+  const startWeekday = jan1.getDay();
+  const allDates: (Date | null)[] = [];
 
-  const current = new Date(startDate);
+  for (let i = 0; i < startWeekday; i++) allDates.push(null);
 
-  while (current <= endDate) {
-    const currentYear = current.getFullYear();
-    const currentMonth = current.getMonth();
-    const currentDay = current.getDate();
-
-    cells.push({
-      key: `${routine.id}-year-${currentYear}-${currentMonth + 1}-${currentDay}`,
-      filled:
-        isDateInRoutineRange(routine, current) &&
-        isRoutineCompletedOnDate(routine, current),
-    });
+  const current = new Date(jan1);
+  while (current <= dec31) {
+    allDates.push(new Date(current));
     current.setDate(current.getDate() + 1);
   }
 
-  return cells;
+  while (allDates.length % 7 !== 0) allDates.push(null);
+
+  const totalWeeks = allDates.length / 7;
+  const columns: YearHeatmapColumn[] = [];
+
+  for (let week = 0; week < totalWeeks; week++) {
+    const cells: (HeatmapCell | null)[] = [];
+
+    for (let day = 0; day < 7; day++) {
+      const date = allDates[week * 7 + day];
+      if (!date) {
+        cells.push(null);
+      } else {
+        cells.push({
+          key: `${routine.routineId}-year-${formatDateKey(date)}`,
+          filled: isFilled(completed, date),
+        });
+      }
+    }
+
+    columns.push({ weekIndex: week, cells });
+  }
+
+  return columns;
 }
 // 주간 통계 히트맵 셀 생성
 function buildWeekCells(
-  routine: ScheduleRoutine,
+  routine: HeatmapRoutine,
   selectedWeekDate: Date,
 ): HeatmapCell[] {
   const weekStart = getWeekStart(selectedWeekDate);
@@ -208,16 +124,14 @@ function buildWeekCells(
     currentDate.setDate(weekStart.getDate() + index);
 
     return {
-      key: `${routine.id}-week-${index}`,
-      filled:
-        isDateInRoutineRange(routine, currentDate) &&
-        isRoutineCompletedOnDate(routine, currentDate),
+      key: `${routine.routineId}-week-${index}`,
+      filled: isFilled(routine.completed, currentDate),
     };
   });
 }
 // 월간 달력 셀 생성
 function buildMonthCalendarCells(
-  routine: ScheduleRoutine,
+  routine: HeatmapRoutine,
   year: number,
   month: number,
 ): CalendarCell[] {
@@ -226,31 +140,28 @@ function buildMonthCalendarCells(
   const startWeekday = firstDay.getDay();
 
   const cells: CalendarCell[] = [];
-  // 월 시작 전 빈 칸 채우기
+
   for (let i = 0; i < startWeekday; i++) {
     cells.push({
-      key: `${routine.id}-month-empty-start-${i}`,
+      key: `${routine.routineId}-month-empty-start-${i}`,
       filled: false,
       label: "",
       isEmpty: true,
     });
   }
-  // 실제 날짜 셀 생성
+
   for (let day = 1; day <= daysInMonth; day++) {
     const currentDate = new Date(year, month, day);
-
     cells.push({
-      key: `${routine.id}-month-${day}`,
-      filled:
-        isDateInRoutineRange(routine, currentDate) &&
-        isRoutineCompletedOnDate(routine, currentDate),
+      key: `${routine.routineId}-month-${day}`,
+      filled: isFilled(routine.completed, currentDate),
       label: String(day),
     });
   }
-  // 마지막 줄을 7칸으로 맞추기 위한 빈 칸 추가
+
   while (cells.length % 7 !== 0) {
     cells.push({
-      key: `${routine.id}-month-empty-end-${cells.length}`,
+      key: `${routine.routineId}-month-empty-end-${cells.length}`,
       filled: false,
       label: "",
       isEmpty: true,
@@ -258,24 +169,6 @@ function buildMonthCalendarCells(
   }
 
   return cells;
-}
-// 루틴을 카테고리별로 묶기
-function groupByCategory(routines: ScheduleRoutine[]): GroupedRoutine[] {
-  const groupedMap = new Map<string, ScheduleRoutine[]>();
-
-  routines.forEach((routine) => {
-    const categoryName = normalizeCategoryName(routine.categoryName);
-
-    const prev = groupedMap.get(categoryName) || [];
-    groupedMap.set(categoryName, [...prev, routine]);
-  });
-
-  return Array.from(groupedMap.entries())
-    .map(([categoryName, grouped]) => ({
-      categoryName,
-      routines: grouped.sort((a, b) => a.title.localeCompare(b.title)),
-    }))
-    .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
 }
 
 function formatYear(year: number) {
@@ -306,34 +199,37 @@ function HeatmapRow({
   selectedWeekDate,
   onPress,
 }: {
-  routine: ScheduleRoutine;
+  routine: HeatmapRoutine;
   viewMode: ViewMode;
   selectedYear: number;
   selectedMonth: number;
   selectedWeekDate: Date;
-  onPress: (routine: ScheduleRoutine) => void;
+  onPress: (routineId: number) => void;
 }) {
-  const categoryStyle = getCategoryStyle(routine);
-  // 연간 보기일 때만 연간 셀 계산
-  const yearCells = useMemo(() => {
+  const categoryStyle = getCategoryStyle({
+    categoryName: routine.category.name,
+    color: routine.category.colorCode,
+  } as any);
+  const yearColumns = useMemo(() => {
     if (viewMode !== "YEAR") return [];
-    return buildYearCells(routine, selectedYear);
+    return buildYearColumnsFromMap(routine, selectedYear, routine.completed);
   }, [routine, viewMode, selectedYear]);
 
-  // 월간 보기일 때만 월간 셀 계산
   const monthCells = useMemo(() => {
     if (viewMode !== "MONTH") return [];
     return buildMonthCalendarCells(routine, selectedYear, selectedMonth);
   }, [routine, viewMode, selectedYear, selectedMonth]);
 
-  // 주간 보기일 때만 주간 셀 계산
   const weekCells = useMemo(() => {
     if (viewMode !== "WEEK") return [];
     return buildWeekCells(routine, selectedWeekDate);
   }, [routine, viewMode, selectedWeekDate]);
 
   return (
-    <Pressable style={styles.routineCard} onPress={() => onPress(routine)}>
+    <Pressable
+      style={styles.routineCard}
+      onPress={() => onPress(routine.routineId)}
+    >
       <View style={styles.routineHeader}>
         <View
           style={[
@@ -348,32 +244,41 @@ function HeatmapRow({
 
       {/* 연간 통계 화면 */}
       {viewMode === "YEAR" && (
-        <>
-          <View style={styles.yearHeatmapWrap}>
-            {yearCells.map((cell) => (
-              <View
-                key={cell.key}
-                style={[
-                  styles.yearHeatmapCell,
-                  cell.filled && {
-                    backgroundColor: categoryStyle.dot,
-                    borderColor: categoryStyle.dot,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-
-          <View style={styles.yearLegendRow}>
-            {MONTH_LABELS.map((label) => (
-              <Text key={label} style={styles.yearLegendText}>
-                {label}
-              </Text>
-            ))}
-          </View>
-        </>
+        <View style={{ flexDirection: "row", height: 40 }}>
+          {yearColumns.map((col) => (
+            <View
+              key={String(col.weekIndex)}
+              style={{
+                flex: 1,
+                flexDirection: "column",
+                justifyContent: "space-between",
+              }}
+            >
+              {col.cells.map((cell, dayIndex) =>
+                cell === null ? (
+                  <View
+                    key={`empty-${col.weekIndex}-${dayIndex}`}
+                    style={{ flex: 1 }}
+                  />
+                ) : (
+                  <View
+                    key={cell.key}
+                    style={[
+                      {
+                        flex: 1,
+                        margin: 0.5,
+                        borderRadius: 1.5,
+                        backgroundColor: "#ECEEF3",
+                      },
+                      cell.filled && { backgroundColor: categoryStyle.dot },
+                    ]}
+                  />
+                ),
+              )}
+            </View>
+          ))}
+        </View>
       )}
-
       {/* 월간 통계 화면 */}
       {viewMode === "MONTH" && (
         <>
@@ -446,11 +351,11 @@ function HeatmapRow({
     </Pressable>
   );
 }
-
 export default function DataScreen() {
   const today = new Date();
   // 저장된 루틴 목록
-  const [routines, setRoutines] = useState<ScheduleRoutine[]>([]);
+  const [heatmapData, setHeatmapData] = useState<HeatmapRoutine[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   // 현재 통계 보기 모드
   const [viewMode, setViewMode] = useState<ViewMode>("YEAR");
   // 선택된 연도/월/주
@@ -467,43 +372,65 @@ export default function DataScreen() {
   // 상세 모달 표시 여부
   const [showDetailModal, setShowDetailModal] = useState(false);
   // 저장소에서 루틴 데이터 불러오기
-  const loadRoutines = useCallback(async () => {
+  const loadHeatmap = useCallback(async () => {
     try {
-      const stored = await RoutineService.getAll();
-      setRoutines(stored);
+      setIsLoading(true);
+
+      if (viewMode === "YEAR") {
+        const data = await RoutineService.heatmapYear(selectedYear);
+        setHeatmapData(data);
+      } else if (viewMode === "MONTH") {
+        // month는 0-based이므로 +1
+        const data = await RoutineService.heatmapMonth(
+          selectedYear,
+          selectedMonth + 1,
+        );
+        // day 숫자 key → "YYYY-MM-DD" 형식으로 정규화
+        const normalized = data.map((routine) => {
+          const completedNormalized: Record<string, boolean> = {};
+          Object.entries(routine.completed).forEach(([key, val]) => {
+            if (/^\d{1,2}$/.test(key)) {
+              const fullKey = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-${String(key).padStart(2, "0")}`;
+              completedNormalized[fullKey] = val;
+            } else {
+              completedNormalized[key] = val;
+            }
+          });
+          return { ...routine, completed: completedNormalized };
+        });
+
+        setHeatmapData(normalized);
+        console.log("month heatmap data:", JSON.stringify(data[0]?.completed));
+      } else {
+        const dateStr = formatDateKey(selectedWeekDate);
+        const data = await RoutineService.heatmapWeek(dateStr);
+        setHeatmapData(data);
+      }
     } catch (error) {
-      console.error("통계 데이터 불러오기 실패", error);
-      setRoutines([]);
+      console.error("히트맵 데이터 불러오기 실패", error);
+      setHeatmapData([]);
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
-  // 화면으로 다시 돌아올 때마다 최신 루틴 불러오기
+  }, [viewMode, selectedYear, selectedMonth, selectedWeekDate]);
+
   useFocusEffect(
     useCallback(() => {
-      loadRoutines();
-    }, [loadRoutines]),
+      loadHeatmap();
+    }, [loadHeatmap]),
   );
-  // 현재 보기 모드에 맞는 루틴만 필터링
-  const filteredRoutines = useMemo(() => {
-    if (viewMode === "YEAR") {
-      return routines.filter((routine) =>
-        isRoutineInSameYear(routine, selectedYear),
-      );
-    }
-
-    if (viewMode === "MONTH") {
-      return routines.filter((routine) =>
-        isRoutineInSameMonth(routine, selectedYear, selectedMonth),
-      );
-    }
-
-    return routines.filter((routine) =>
-      isRoutineInSameWeek(routine, selectedWeekDate),
-    );
-  }, [routines, viewMode, selectedYear, selectedMonth, selectedWeekDate]);
-  // 필터링된 루틴을 카테고리별로 묶기
   const groupedRoutines = useMemo(() => {
-    return groupByCategory(filteredRoutines);
-  }, [filteredRoutines]);
+    const groupedMap = new Map<string, HeatmapRoutine[]>();
+    heatmapData.forEach((routine) => {
+      const categoryName = routine.category.name;
+      const prev = groupedMap.get(categoryName) ?? [];
+      groupedMap.set(categoryName, [...prev, routine]);
+    });
+    return Array.from(groupedMap.entries())
+      .map(([categoryName, routines]) => ({ categoryName, routines }))
+      .sort((a, b) => a.categoryName.localeCompare(b.categoryName, "ko"));
+  }, [heatmapData]);
+
   // 새로 생긴 카테고리는 기본적으로 펼쳐진 상태로 설정
   React.useEffect(() => {
     setExpandedCategories((prev) => {
@@ -544,9 +471,14 @@ export default function DataScreen() {
     });
   };
   // 루틴 클릭 시 상세 모달 열기
-  const handlePressRoutine = (routine: ScheduleRoutine) => {
-    setSelectedRoutine(routine);
-    setShowDetailModal(true);
+  const handlePressRoutine = async (routineId: number) => {
+    try {
+      const detail = await RoutineService.getById(routineId);
+      setSelectedRoutine(detail);
+      setShowDetailModal(true);
+    } catch (error) {
+      console.error("루틴 상세 조회 실패", error);
+    }
   };
 
   return (
@@ -699,7 +631,7 @@ export default function DataScreen() {
                       <View style={styles.categoryBody}>
                         {group.routines.map((routine) => (
                           <HeatmapRow
-                            key={routine.id}
+                            key={routine.routineId}
                             routine={routine}
                             viewMode={viewMode}
                             selectedYear={selectedYear}
@@ -726,7 +658,7 @@ export default function DataScreen() {
           setSelectedRoutine(null);
         }}
         onUpdated={async () => {
-          await loadRoutines();
+          await loadHeatmap();
         }}
         readOnly
       />
@@ -803,10 +735,11 @@ const styles = StyleSheet.create({
   routineCard: {
     backgroundColor: "#FFF",
     borderRadius: 18,
-    padding: 14,
-    paddingBottom: 10,
+    padding: 8,
+    paddingBottom: 6,
     borderWidth: 1,
     borderColor: "#F1F3F7",
+    overflow: "hidden",
   },
   routineHeader: {
     flexDirection: "row",
@@ -815,23 +748,6 @@ const styles = StyleSheet.create({
   },
   routineColorDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
   routineTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: "#2A3C6B" },
-
-  yearHeatmapWrap: { flexDirection: "row", flexWrap: "wrap", gap: 2 },
-  yearHeatmapCell: {
-    width: 7,
-    height: 7,
-    borderRadius: 1.5,
-    borderWidth: 0.5,
-    borderColor: "#DADFE8",
-    backgroundColor: "#F8F9FB",
-  },
-  yearLegendRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 8,
-  },
-  yearLegendText: { fontSize: 8, color: "#A0B0D0" },
-
   monthWeekLabelRow: {
     flexDirection: "row",
     justifyContent: "space-between",

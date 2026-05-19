@@ -1,7 +1,8 @@
-import { RoutineService } from "@/app/services/routine_service";
+//schedule_content.tsx
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { DEFAULT_CATEGORY_NAME, getCategoryStyle } from "@/lib/category";
-import { normalizeRepeatDays, shouldShowRoutineOnDate } from "@/lib/storage";
+import { normalizeRepeatDays } from "@/lib/storage";
+import { RoutineService } from "@/services/routine_service";
 
 import type {
   CalendarDay,
@@ -9,9 +10,9 @@ import type {
   ScheduleRoutine,
 } from "@/types/routine";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
 import { isSameDay } from "date-fns";
-import React, { useCallback, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -20,10 +21,6 @@ import {
   View,
 } from "react-native";
 import AppCalendar from "./ui/app_calendar";
-
-type RoutineWithCompletedDates = ScheduleRoutine & {
-  completedDates?: string[];
-};
 
 const weekdayLabelMap: Record<RepeatWeekday, string> = {
   SUN: "일",
@@ -92,25 +89,18 @@ function parseTimeString(time?: string | null) {
 }
 
 // 특정 날짜 완료 여부 확인
-function isCompletedOnDate(
-  item: RoutineWithCompletedDates,
-  targetDateString: string,
-) {
+function isCompletedOnDate(item: ScheduleRoutine, targetDateString: string) {
   return item.completedDates?.includes(targetDateString) ?? false;
 }
 
 export default function ScheduleContent() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [noTimeRoutines, setNoTimeRoutines] = useState<
-    RoutineWithCompletedDates[]
-  >([]);
-  const [timedRoutines, setTimedRoutines] = useState<
-    RoutineWithCompletedDates[]
-  >([]);
+  const [noTimeRoutines, setNoTimeRoutines] = useState<ScheduleRoutine[]>([]);
+  const [timedRoutines, setTimedRoutines] = useState<ScheduleRoutine[]>([]);
 
   const [selectedRoutine, setSelectedRoutine] =
-    useState<RoutineWithCompletedDates | null>(null);
+    useState<ScheduleRoutine | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
   const selectedDateString = [
@@ -162,32 +152,21 @@ export default function ScheduleContent() {
 
   const loadRoutines = useCallback(async () => {
     try {
-      const allRoutines = await RoutineService.getAll();
+      // date를 넘겨서 해당 날짜 루틴만 받아옴
+      const allRoutines = await RoutineService.getAll(selectedDateString);
 
-      // 선택 날짜 기준으로 보여줄 루틴만 필터링
-      const filteredByDate = allRoutines.filter(
-        (item: RoutineWithCompletedDates) =>
-          shouldShowRoutineOnDate(item, selectedDateString),
+      // API가 날짜 필터링을 해주므로 shouldShowRoutineOnDate 제거
+      const timed = allRoutines.filter(
+        (item) => item.startTime !== undefined && item.startTime !== null,
       );
-      // 시간 유무에 따라 분리
-      const timed = filteredByDate.filter(
-        (item: RoutineWithCompletedDates) =>
-          item.startTime !== undefined && item.startTime !== null,
+      const noTimed = allRoutines.filter(
+        (item) => item.startTime === undefined || item.startTime === null,
       );
 
-      const noTimed = filteredByDate.filter(
-        (item: RoutineWithCompletedDates) =>
-          item.startTime === undefined || item.startTime === null,
-      );
-      // 시간 있는 루틴은 시작 시간 순으로 정렬
       timed.sort((a, b) => {
         const aTime = parseTimeString(a.startTime);
         const bTime = parseTimeString(b.startTime);
-
-        const aMinutes = aTime?.totalMinutes ?? 0;
-        const bMinutes = bTime?.totalMinutes ?? 0;
-
-        return aMinutes - bMinutes;
+        return (aTime?.totalMinutes ?? 0) - (bTime?.totalMinutes ?? 0);
       });
 
       setTimedRoutines(timed);
@@ -198,47 +177,27 @@ export default function ScheduleContent() {
       setNoTimeRoutines([]);
     }
   }, [selectedDateString]);
-  // 화면이 다시 포커스될 때마다 일정 새로 불러오기
+  // 날짜가 바뀔 때마다 루틴 새로 불러오기
+  useEffect(() => {
+    loadRoutines();
+  }, [loadRoutines]);
+
+  // 다른 화면 갔다 돌아올 때 최신 데이터 불러오기
   useFocusEffect(
     useCallback(() => {
       loadRoutines();
     }, [loadRoutines]),
   );
-
   const toggleComplete = async (id: number) => {
     try {
       await RoutineService.toggleComplete(id, selectedDateString);
       await loadRoutines();
-      setSelectedRoutine((prev) => {
-        if (!prev || prev.id !== id) return prev;
-        const completedDates = prev.completedDates ?? [];
-        const isCompleted = completedDates.includes(selectedDateString);
-        return {
-          ...prev,
-          completedDates: isCompleted
-            ? completedDates.filter((date) => date !== selectedDateString)
-            : [...completedDates, selectedDateString],
-        };
-      });
     } catch (error) {
       console.error("완료 상태 변경 실패", error);
     }
   };
-  const handleDeleteRoutine = async (id: number) => {
-    try {
-      await RoutineService.deleteById(id);
-      await loadRoutines();
 
-      if (selectedRoutine?.id === id) {
-        setSelectedRoutine(null);
-        setShowDetailModal(false);
-      }
-    } catch (error) {
-      console.error("루틴 삭제 실패", error);
-    }
-  };
-
-  const handlePressRoutine = (item: RoutineWithCompletedDates) => {
+  const handlePressRoutine = (item: ScheduleRoutine) => {
     setSelectedRoutine(item);
     setShowDetailModal(true);
   };
@@ -247,7 +206,7 @@ export default function ScheduleContent() {
     item,
     isTimed,
   }: {
-    item: RoutineWithCompletedDates;
+    item: ScheduleRoutine;
     isTimed: boolean;
   }) => {
     const typeLabel = item.categoryName ?? DEFAULT_CATEGORY_NAME;
@@ -436,7 +395,6 @@ export default function ScheduleContent() {
         onUpdated={async () => {
           await loadRoutines();
         }}
-        onDelete={handleDeleteRoutine}
       />
     </View>
   );
@@ -535,29 +493,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
     marginBottom: 10,
   },
-  swipeRowWrapper: {
-    position: "relative",
-    marginBottom: 0,
-  },
-  deleteBackground: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: 90,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#E8837D",
-    borderRadius: 14,
-  },
-  deleteBackgroundText: {
-    color: "#FFF",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  swipeAnimatedCard: {
-    backgroundColor: "#FFF",
-  },
+
   itemRow: {
     flexDirection: "row",
     alignItems: "center",
