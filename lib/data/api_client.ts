@@ -12,7 +12,6 @@ apiClient.interceptors.request.use(async (config) => {
   }
   return config;
 });
-// 응답 interceptor - 에러 처리
 apiClient.interceptors.response.use(
   (response) => {
     if (

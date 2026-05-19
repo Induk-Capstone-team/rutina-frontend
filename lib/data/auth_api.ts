@@ -36,6 +36,12 @@ export const authApi = {
     return data;
   },
 
+  /// 프로필 조회 요청
+  getProfile: async () => {
+    const { data } = await apiClient.get("/api/v1/users/me");
+    return data;
+  },
+
   ///이메일 중복 확인 요청
   checkEmail: async (email: string) => {
     const { data } = await apiClient.get(

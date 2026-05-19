@@ -1,21 +1,17 @@
 // hooks/useAiRecommend.ts
-import type {
-  ConversationInput,
-  RecommendedRoutine,
-  UserProfile,
-} from "@/lib/data/ai_api";
-import {
-  getDummyUserProfile,
-  requestRoutineRecommendation,
-} from "@/lib/data/ai_api";
+import type { RecommendedRoutine, UserProfile } from "@/lib/data/ai_api";
+import { requestRoutineRecommendation } from "@/lib/data/ai_api";
+import { authApi } from "@/lib/data/auth_api";
+import { CategoryApi } from "@/lib/data/category_api";
 import { RoutineStorage } from "@/lib/storage";
-import type { ScheduleRoutine } from "@/types/routine";
+import type { RoutineCategory, ScheduleRoutine } from "@/types/routine";
 import { useCallback, useEffect, useState } from "react";
 
 // ── 대화 단계 ──
 export type ConversationStep =
   | "init" // 시작 전
-  | "goal" // 목적 선택
+  | "goal" // 카테고리 선택
+  | "purpose" // 목적 선택
   | "time" // 활동 시간 선택
   | "hobby" // 취미 선택
   | "loading" // AI 응답 대기
@@ -30,11 +26,100 @@ export interface ChatMessage {
 }
 
 // ── 선택지 ──
-export const GOAL_OPTIONS = ["운동", "공부", "명상", "독서", "건강관리", "기타"];
-export const TIME_OPTIONS = ["아침", "점심", "저녁"];
-export const HOBBY_OPTIONS = [
-  "독서", "등산", "요리", "게임", "음악", "그림", "영화감상", "기타",
+export const TIME_OPTIONS = ["아침", "오전", "오후", "저녁", "밤"];
+export const PURPOSE_OPTIONS = [
+  "건강 관리",
+  "자기계발",
+  "공부/집중",
+  "생활 습관 개선",
+  "취미 관리",
 ];
+export const HOBBY_OPTIONS = [
+  "독서",
+  "운동",
+  "음악",
+  "영화/드라마",
+  "게임",
+  "요리",
+  "산책",
+  "일기",
+  "공부",
+  "청소/정리",
+  "없음",
+];
+
+function mapCategoryToPurpose(categoryName: string): string {
+  const name = categoryName.trim();
+  if (
+    name.includes("학습") ||
+    name.includes("공부") ||
+    name.includes("시험") ||
+    name.includes("집중") ||
+    name.includes("업무") ||
+    name.includes("코딩") ||
+    name.includes("개발")
+  ) {
+    return "공부/집중";
+  }
+  if (
+    name.includes("건강") ||
+    name.includes("훈련") ||
+    name.includes("회복") ||
+    name.includes("운동") ||
+    name.includes("활력")
+  ) {
+    return "건강 관리";
+  }
+  if (
+    name.includes("규칙") ||
+    name.includes("살림") ||
+    name.includes("관리") ||
+    name.includes("등교") ||
+    name.includes("마감") ||
+    name.includes("정산") ||
+    name.includes("운영")
+  ) {
+    return "생활 습관 개선";
+  }
+  if (
+    name.includes("취미") ||
+    name.includes("나") ||
+    name.includes("교류") ||
+    name.includes("가족")
+  ) {
+    return "취미 관리";
+  }
+  return "자기계발";
+}
+
+function mapCategoryToActivityType(categoryName: string): string {
+  const name = categoryName.trim();
+  if (
+    name.includes("훈련") ||
+    name.includes("운동") ||
+    name.includes("등교") ||
+    name.includes("활력")
+  ) {
+    return "동적인 활동";
+  }
+  if (
+    name.includes("휴식") ||
+    name.includes("멘탈") ||
+    name.includes("회복") ||
+    name.includes("정산")
+  ) {
+    return "정적인 활동";
+  }
+  if (name.includes("교류") || name.includes("가족")) {
+    return "함께 하는 활동";
+  }
+  if (name.includes("나") || name.includes("취미")) {
+    return "혼자 하는 활동";
+  }
+  return "실내 활동";
+}
+
+
 
 export const useAiRecommend = () => {
   const [step, setStep] = useState<ConversationStep>("init");
@@ -49,13 +134,22 @@ export const useAiRecommend = () => {
     ageGroup: "",
   });
 
+  // 로드된 카테고리 목록
+  const [categories, setCategories] = useState<RoutineCategory[]>([]);
+
   // 대화 입력
-  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] =
+    useState<RoutineCategory | null>(null);
+  const [selectedPurpose, setSelectedPurpose] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
 
   // 추천 결과
-  const [recommendedRoutines, setRecommendedRoutines] = useState<RecommendedRoutine[]>([]);
-  const [checkedRoutineIds, setCheckedRoutineIds] = useState<Set<string>>(new Set());
+  const [recommendedRoutines, setRecommendedRoutines] = useState<
+    RecommendedRoutine[]
+  >([]);
+  const [checkedRoutineIds, setCheckedRoutineIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   // 메시지 추가
   const addMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
@@ -66,16 +160,65 @@ export const useAiRecommend = () => {
     setMessages((prev) => [...prev, newMsg]);
   }, []);
 
-  // ── 초기화: 유저 프로필 로드 (더미) ──
+  // ── 초기화: 유저 프로필 & 카테고리 목록 로드 ──
   useEffect(() => {
-    const p = getDummyUserProfile();
-    setProfile(p);
+    const loadProfile = async () => {
+      try {
+        console.log("🤖 [Profile Request] 사용자 프로필 정보 조회 시작...");
+        const response = await authApi.getProfile();
+        // 백엔드 응답 구조가 { success: true, data: { age: 25, job: "회사원", gender: 0, ... } } 형식인 경우 대응
+        const userData = response?.data || response;
+        console.log("🤖 [Profile Response] 사용자 프로필 정보 수신 성공:", JSON.stringify(userData, null, 2));
+        if (userData) {
+          const age = Number(userData.age) || 0;
+          const ageGroup = age > 0 ? `${Math.floor(age / 10) * 10}대` : "";
+          
+          let genderStr = "";
+          if (userData.gender === 0 || userData.gender === "0" || userData.gender === "남성") {
+            genderStr = "남성";
+          } else if (userData.gender === 1 || userData.gender === "1" || userData.gender === "여성") {
+            genderStr = "여성";
+          }
+
+          setProfile({
+            job: userData.job || "",
+            gender: genderStr,
+            ageGroup: ageGroup,
+          });
+        }
+      } catch (err: any) {
+        console.error("사용자 프로필 로드 에러:", err);
+        if (err?.response) {
+          console.error("❌ [Profile Error Response Data]:", JSON.stringify(err.response.data, null, 2));
+          console.error("❌ [Profile Error Status]:", err.response.status);
+        }
+      }
+    };
+
+    const loadCategories = async () => {
+      try {
+        console.log("🤖 [Categories Request] 사용자 카테고리 목록 조회 시작...");
+        const list = await CategoryApi.getAll();
+        console.log("🤖 [Categories Response] 사용자 카테고리 목록 수신 성공:", JSON.stringify(list, null, 2));
+        setCategories(list);
+      } catch (err: any) {
+        console.error("카테고리 목록 로드 에러:", err);
+        if (err?.response) {
+          console.error("❌ [Categories Error Response Data]:", JSON.stringify(err.response.data, null, 2));
+          console.error("❌ [Categories Error Status]:", err.response.status);
+        }
+      }
+    };
+
+    loadProfile();
+    loadCategories();
   }, []);
 
   // ── 대화 시작 ──
   const startConversation = useCallback(() => {
     setMessages([]);
-    setSelectedGoals([]);
+    setSelectedCategory(null);
+    setSelectedPurpose("");
     setSelectedTime("");
     setRecommendedRoutines([]);
     setCheckedRoutineIds(new Set());
@@ -88,24 +231,38 @@ export const useAiRecommend = () => {
 
     addMessage({
       role: "ai",
-      text: `안녕하세요! 🤖\n${profileText}맞춤 루틴을 추천해 드릴게요.\n어떤 목표를 가지고 계신가요?`,
+      text: `안녕하세요! 🤖\n${profileText}맞춤 루틴을 추천해 드릴게요.\n어떤 카테고리의 루틴을 관리하고 싶으신가요?`,
     });
 
     setStep("goal");
   }, [profile, addMessage]);
 
-  // ── 목적 선택 완료 ──
-  const submitGoals = useCallback(
-    (goals: string[]) => {
-      setSelectedGoals(goals);
-      addMessage({ role: "user", text: goals.join(" + ") });
+  // ── 카테고리 선택 완료 ──
+  const submitCategory = useCallback(
+    (category: RoutineCategory) => {
+      setSelectedCategory(category);
+      addMessage({ role: "user", text: category.name });
       addMessage({
         role: "ai",
-        text: `목표: ${goals.join(" + ")} 👍\n\n주로 활동 가능한 시간은 언제인가요?`,
+        text: `선택하신 카테고리: ${category.name} 👍\n\n이 카테고리를 관리하시는 주요 목적이 무엇인가요?`,
+      });
+      setStep("purpose");
+    },
+    [addMessage],
+  );
+
+  // ── 목적 선택 완료 ──
+  const submitPurpose = useCallback(
+    (purpose: string) => {
+      setSelectedPurpose(purpose);
+      addMessage({ role: "user", text: purpose });
+      addMessage({
+        role: "ai",
+        text: `목적: ${purpose} 👍\n\n주로 활동 가능한 시간은 언제인가요?`,
       });
       setStep("time");
     },
-    [addMessage]
+    [addMessage],
   );
 
   // ── 시간대 선택 완료 ──
@@ -119,31 +276,47 @@ export const useAiRecommend = () => {
       });
       setStep("hobby");
     },
-    [addMessage]
+    [addMessage],
   );
 
   // ── 취미 선택 완료 → AI 호출 ──
   const submitHobbies = useCallback(
     async (hobbies: string[]) => {
+      if (!selectedCategory) {
+        setError("카테고리가 선택되지 않았습니다.");
+        addMessage({
+          role: "ai",
+          text: `오류: 카테고리가 선택되지 않았습니다. 대화를 다시 시작해주세요.`,
+        });
+        setStep("goal");
+        return;
+      }
+
       addMessage({ role: "user", text: hobbies.join(" + ") });
 
       setStep("loading");
       setIsLoading(true);
+      setError(null);
 
       try {
-        const input: ConversationInput = {
-          goals: selectedGoals,
-          timeSlot: selectedTime,
+        const requestBody = {
+          categoryId: selectedCategory.id,
+          purpose: selectedPurpose,
+          mainActivityTime: selectedTime,
+          activityType: mapCategoryToActivityType(selectedCategory.name),
           hobbies,
         };
 
-        const routines = await requestRoutineRecommendation(profile, input);
+        const routines = await requestRoutineRecommendation(
+          requestBody,
+          selectedCategory.name,
+        );
         setRecommendedRoutines(routines);
 
         const allIds = new Set(routines.map((r) => r.id));
         setCheckedRoutineIds(allIds);
 
-        const summary = `'${selectedGoals.join(" + ")} + ${hobbies.join(" + ")}', ${selectedTime}에 맞춰\n다음과 같은 루틴을 추천드립니다 👇`;
+        const summary = `'${selectedCategory.name} + ${hobbies.join(" + ")}', ${selectedTime}에 맞춰\n다음과 같은 루틴을 추천드립니다 👇`;
         addMessage({ role: "ai", text: summary });
 
         setStep("result");
@@ -151,14 +324,14 @@ export const useAiRecommend = () => {
         setError(e?.message || "루틴 추천에 실패했습니다.");
         addMessage({
           role: "ai",
-          text: `죄송합니다, 추천 중 오류가 발생했습니다.`,
+          text: `죄송합니다, 추천 중 오류가 발생했습니다.\n오류 내용: ${e?.message || "추천 서버 장애"}`,
         });
         setStep("goal");
       } finally {
         setIsLoading(false);
       }
     },
-    [selectedGoals, selectedTime, profile, addMessage]
+    [selectedCategory, selectedPurpose, selectedTime, addMessage],
   );
 
   // ── 루틴 체크 토글 ──
@@ -176,13 +349,14 @@ export const useAiRecommend = () => {
     try {
       const today = new Date().toISOString().split("T")[0];
       const selected = recommendedRoutines.filter((r) =>
-        checkedRoutineIds.has(r.id)
+        checkedRoutineIds.has(r.id),
       );
 
       for (const routine of selected) {
         const newRoutine: ScheduleRoutine = {
           id: Date.now() + Math.floor(Math.random() * 10000),
           title: routine.title,
+          categoryId: routine.categoryId || selectedCategory?.id || null,
           categoryName: routine.category,
           startDate: today,
           endDate: today,
@@ -191,7 +365,7 @@ export const useAiRecommend = () => {
           alarm: false,
           state: true,
           completedDates: [],
-          repeatOption: "DAILY",
+          repeatType: "DAILY",
         };
         await RoutineStorage.save(newRoutine);
       }
@@ -207,7 +381,7 @@ export const useAiRecommend = () => {
       setError("루틴 저장에 실패했습니다.");
       return false;
     }
-  }, [recommendedRoutines, checkedRoutineIds, addMessage]);
+  }, [recommendedRoutines, checkedRoutineIds, selectedCategory, addMessage]);
 
   return {
     step,
@@ -215,14 +389,17 @@ export const useAiRecommend = () => {
     isLoading,
     error,
     profile,
+    categories,
     recommendedRoutines,
     checkedRoutineIds,
     startConversation,
-    submitGoals,
+    submitCategory,
+    submitPurpose,
     submitTime,
     submitHobbies,
     toggleRoutineCheck,
     saveSelectedRoutines,
     setError,
+    selectedCategory,
   };
 };
