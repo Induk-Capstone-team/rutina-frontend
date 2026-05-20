@@ -60,7 +60,8 @@ const styles = StyleSheet.create({
   },
   logoImage: {
     width: 120,
-    height: 60,
+    height: 50,
+    maxWidth: "50%",
   },
   logoText: {
     fontSize: 32,

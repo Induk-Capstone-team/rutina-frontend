@@ -17,7 +17,9 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -671,694 +673,705 @@ export function ScheduleDetailModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade">
       <Pressable style={styles.detailOverlay} onPress={onClose}>
-        <Pressable
-          style={styles.detailCard}
-          onPress={(e) => e.stopPropagation()}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ width: "100%", alignItems: "center" }}
         >
-          <View style={styles.detailHeader}>
-            <Text style={styles.detailTitle}>
-              {isEditMode ? "루틴 수정" : "상세 정보"}
-            </Text>
+          <Pressable
+            style={styles.detailCard}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle}>
+                {isEditMode ? "루틴 수정" : "상세 정보"}
+              </Text>
 
-            <View style={styles.headerActions}>
-              {!isEditMode ? (
-                <>
-                  {/* readOnly가 아닐 때만 수정/삭제 버튼 표시 */}
-                  {!readOnly && (
-                    <>
-                      <TouchableOpacity
-                        onPress={handleEdit}
-                        style={styles.editButton}
-                      >
-                        <Text style={styles.editText}>수정</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={handleDelete}
-                        style={styles.deleteIconButton}
-                      >
-                        <Ionicons
-                          name="trash-outline"
-                          size={18}
-                          color="#D45A68"
-                        />
-                      </TouchableOpacity>
-                    </>
-                  )}
-
-                  <TouchableOpacity onPress={onClose}>
-                    <IconSymbol name="xmark" size={20} color="#B4B6C0" />
-                  </TouchableOpacity>
-                </>
-              ) : (
-                // 편집 모드 (readOnly면 이 분기 자체에 도달 안 함)
-                <>
-                  <TouchableOpacity
-                    onPress={handleCancelEdit}
-                    style={styles.editButton}
-                  >
-                    <Text style={styles.cancelText}>취소</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (!isSaving) handleSave();
-                    }}
-                    style={[styles.saveButton, isSaving && { opacity: 0.5 }]}
-                    disabled={isSaving}
-                  >
-                    <Text style={styles.saveText}>
-                      {isSaving ? "저장 중" : "저장"}
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          </View>
-          {!isEditMode ? (
-            <>
-              <View style={styles.titleRow}>
-                <Text style={styles.detailRoutineTitle} numberOfLines={2}>
-                  {previewRoutine.title}
-                </Text>
-
-                <View
-                  style={[
-                    styles.tagBadge,
-                    { backgroundColor: categoryStyle.bg },
-                  ]}
-                >
-                  <Text style={[styles.tagText, { color: categoryStyle.text }]}>
-                    {previewRoutine.categoryName ?? "기타"}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.infoList}>
-                <View style={styles.detailInfoRow}>
-                  <IconSymbol name="calendar" size={18} color="#A0B0D0" />
-                  <View style={styles.infoTextGroup}>
-                    <Text style={styles.detailLabel}>날짜</Text>
-                    <Text style={styles.detailValue}>
-                      {formatDateRange(
-                        previewRoutine.startDate,
-                        previewRoutine.endDate,
-                      )}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.detailInfoRow}>
-                  <IconSymbol name="clock" size={18} color="#A0B0D0" />
-                  <View style={styles.infoTextGroup}>
-                    <Text style={styles.detailLabel}>시간</Text>
-                    <Text style={styles.detailValue}>
-                      {formatTimeRange(
-                        previewRoutine.startTime,
-                        previewRoutine.endTime,
-                      )}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.detailInfoRow}>
-                  <IconSymbol name="bell" size={18} color="#A0B0D0" />
-                  <View style={styles.infoTextGroup}>
-                    <Text style={styles.detailLabel}>알림</Text>
-                    <Text style={styles.detailValue}>
-                      {getNotifyText(previewRoutine)}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.detailInfoRow}>
-                  <IconSymbol name="repeat" size={18} color="#A0B0D0" />
-                  <View style={styles.infoTextGroup}>
-                    <Text style={styles.detailLabel}>반복 설정</Text>
-                    <Text style={styles.detailValue}>
-                      {getRepeatText(previewRoutine)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.detailFooter}>
-                <TouchableOpacity
-                  style={styles.detailCloseButton}
-                  onPress={onClose}
-                >
-                  <Text style={styles.detailCloseButtonText}>확인</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <ScrollView
-              style={styles.editScroll}
-              contentContainerStyle={styles.editScrollContent}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-              keyboardShouldPersistTaps="always"
-            >
-              <View style={styles.inputBlock}>
-                <Text style={styles.editSectionLabel}>제목</Text>
-                <TextInput
-                  value={title}
-                  onChangeText={setTitle}
-                  placeholder="루틴 제목을 입력해 주세요"
-                  placeholderTextColor="#B4B6C0"
-                  style={styles.titleInput}
-                />
-              </View>
-
-              <View style={styles.inputBlock}>
-                <Text style={styles.editSectionLabel}>카테고리</Text>
-                <View style={styles.categoryGrid}>
-                  {categoryList.map((cat) => {
-                    const chipStyle = getCategoryChipStyle(
-                      cat,
-                      customCategoryColorMap,
-                    );
-                    const isSelected = categoryName === cat;
-
-                    return (
-                      <TouchableOpacity
-                        key={cat}
-                        style={[
-                          styles.categoryChip,
-                          {
-                            backgroundColor: chipStyle.bg,
-                            borderColor: isSelected
-                              ? chipStyle.dot
-                              : "transparent",
-                            borderWidth: isSelected ? 1.5 : 1,
-                          },
-                        ]}
-                        onPress={() => {
-                          setCategoryName(cat);
-                          setSelectedColor(chipStyle.dot);
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.categoryChipText,
-                            { color: chipStyle.text },
-                          ]}
-                        >
-                          {cat}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              <View style={styles.inputBlock}>
-                <Text style={styles.editSectionLabel}>날짜</Text>
-                <View style={styles.dateRangeBlock}>
-                  <TouchableOpacity
-                    style={styles.dateSelectButton}
-                    onPress={() => {
-                      setCalendarTarget("start");
-                      setShowCalendar((prev) =>
-                        calendarTarget === "start" ? !prev : true,
-                      );
-                    }}
-                  >
-                    <View style={styles.dateSelectLeft}>
-                      <IconSymbol name="calendar" size={18} color="#405886" />
-                      <Text style={styles.dateSelectText}>
-                        시작일 · {formatDate(selectedStartDateString)}
-                      </Text>
-                    </View>
-
-                    <IconSymbol
-                      name={
-                        showCalendar && calendarTarget === "start"
-                          ? "chevron.up"
-                          : "chevron.down"
-                      }
-                      size={16}
-                      color="#A0B0D0"
-                    />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.dateSelectButton}
-                    onPress={() => {
-                      setCalendarTarget("end");
-                      setShowCalendar((prev) =>
-                        calendarTarget === "end" ? !prev : true,
-                      );
-                    }}
-                  >
-                    <View style={styles.dateSelectLeft}>
-                      <IconSymbol name="calendar" size={18} color="#405886" />
-                      <Text style={styles.dateSelectText}>
-                        종료일 · {formatDate(selectedEndDateString)}
-                      </Text>
-                    </View>
-
-                    <IconSymbol
-                      name={
-                        showCalendar && calendarTarget === "end"
-                          ? "chevron.up"
-                          : "chevron.down"
-                      }
-                      size={16}
-                      color="#A0B0D0"
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                {showCalendar && (
-                  <View style={styles.calendarContainer}>
-                    <AppCalendar
-                      current={selectedCalendarDateString}
-                      markedDates={{
-                        [selectedCalendarDateString]: {
-                          selected: true,
-                          selectedColor: "#F1F1FB",
-                        },
-                      }}
-                      onDayPress={(day) => {
-                        const parts = parseDateParts(day.dateString);
-
-                        if (calendarTarget === "start") {
-                          setStartDateYear(parts.year);
-                          setStartDateMonth(parts.month);
-                          setStartDateDay(parts.day);
-                        } else {
-                          setEndDateYear(parts.year);
-                          setEndDateMonth(parts.month);
-                          setEndDateDay(parts.day);
-                        }
-
-                        setShowCalendar(false);
-                      }}
-                    />
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.inputBlock}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 10,
-                  }}
-                >
-                  <Text style={styles.editSectionLabel}>시간 설정</Text>
-                  <Switch
-                    value={isTimed}
-                    onValueChange={(value) => {
-                      setIsTimed(value);
-                      if (!value) setIsNotify(false);
-                    }}
-                    trackColor={{ true: "#9FA2D6" }}
-                  />
-                </View>
-
-                {isTimed && (
+              <View style={styles.headerActions}>
+                {!isEditMode ? (
                   <>
-                    <Text style={[styles.editSectionLabel, { marginTop: 8 }]}>
-                      시작 시간
-                    </Text>
-                    <View style={styles.timePickerRow}>
-                      <TimeStepperControl
-                        label="시"
-                        value={startHour}
-                        onIncrease={() => setStartHour(getNextHour(startHour))}
-                        onDecrease={() => setStartHour(getPrevHour(startHour))}
-                      />
-                      <TimeStepperControl
-                        label="분"
-                        value={startMinute}
-                        onIncrease={() =>
-                          setStartMinute(getNextMinute(startMinute))
-                        }
-                        onDecrease={() =>
-                          setStartMinute(getPrevMinute(startMinute))
-                        }
-                      />
-                    </View>
+                    {/* readOnly가 아닐 때만 수정/삭제 버튼 표시 */}
+                    {!readOnly && (
+                      <>
+                        <TouchableOpacity
+                          onPress={handleEdit}
+                          style={styles.editButton}
+                        >
+                          <Text style={styles.editText}>수정</Text>
+                        </TouchableOpacity>
 
-                    <Text style={[styles.editSectionLabel, { marginTop: 12 }]}>
-                      종료 시간
-                    </Text>
-                    <View style={styles.timePickerRow}>
-                      <TimeStepperControl
-                        label="시"
-                        value={endHour}
-                        onIncrease={() => {
-                          const next = getNextHour(endHour);
-                          const startTotal =
-                            Number(startHour) * 60 + Number(startMinute);
-                          const endTotal =
-                            Number(next) * 60 + Number(endMinute);
-                          if (endTotal <= startTotal) {
-                            Alert.alert(
-                              "안내",
-                              "종료 시간은 시작 시간보다 늦어야 해요.",
-                            );
-                            return;
-                          }
-                          setEndHour(next);
-                        }}
-                        onDecrease={() => {
-                          const next = getPrevHour(endHour);
-                          const startTotal =
-                            Number(startHour) * 60 + Number(startMinute);
-                          const endTotal =
-                            Number(next) * 60 + Number(endMinute);
-                          if (endTotal <= startTotal) {
-                            Alert.alert(
-                              "안내",
-                              "종료 시간은 시작 시간보다 늦어야 해요.",
-                            );
-                            return;
-                          }
-                          setEndHour(next);
-                        }}
-                      />
-                      <TimeStepperControl
-                        label="분"
-                        value={endMinute}
-                        onIncrease={() => {
-                          const next = getNextMinute(endMinute);
-                          const startTotal =
-                            Number(startHour) * 60 + Number(startMinute);
-                          const endTotal = Number(endHour) * 60 + Number(next);
-                          if (endTotal <= startTotal) {
-                            Alert.alert(
-                              "안내",
-                              "종료 시간은 시작 시간보다 늦어야 해요.",
-                            );
-                            return;
-                          }
-                          setEndMinute(next);
-                        }}
-                        onDecrease={() => {
-                          const next = getPrevMinute(endMinute);
-                          const startTotal =
-                            Number(startHour) * 60 + Number(startMinute);
-                          const endTotal = Number(endHour) * 60 + Number(next);
-                          if (endTotal <= startTotal) {
-                            Alert.alert(
-                              "안내",
-                              "종료 시간은 시작 시간보다 늦어야 해요.",
-                            );
-                            return;
-                          }
-                          setEndMinute(next);
-                        }}
-                      />
-                    </View>
+                        <TouchableOpacity
+                          onPress={handleDelete}
+                          style={styles.deleteIconButton}
+                        >
+                          <Ionicons
+                            name="trash-outline"
+                            size={18}
+                            color="#D45A68"
+                          />
+                        </TouchableOpacity>
+                      </>
+                    )}
+
+                    <TouchableOpacity onPress={onClose}>
+                      <IconSymbol name="xmark" size={20} color="#B4B6C0" />
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      onPress={handleCancelEdit}
+                      style={styles.editButton}
+                    >
+                      <Text style={styles.cancelText}>취소</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (!isSaving) handleSave();
+                      }}
+                      style={[styles.saveButton, isSaving && { opacity: 0.5 }]}
+                      disabled={isSaving}
+                    >
+                      <Text style={styles.saveText}>
+                        {isSaving ? "저장 중" : "저장"}
+                      </Text>
+                    </TouchableOpacity>
                   </>
                 )}
               </View>
+            </View>
+            {!isEditMode ? (
+              <>
+                <View style={styles.titleRow}>
+                  <Text style={styles.detailRoutineTitle} numberOfLines={2}>
+                    {previewRoutine.title}
+                  </Text>
 
-              <View style={styles.inputBlock}>
-                <View style={styles.notifyRow}>
-                  <View style={styles.notifyLabelWrap}>
-                    <IconSymbol name="bell" size={18} color="#405886" />
-                    <Text style={styles.editSectionLabelInline}>알림</Text>
-                  </View>
-
-                  <View style={styles.notifySwitchRow}>
-                    <Text style={styles.notifyStateText}>
-                      {isNotify ? "켜짐" : "꺼짐"}
+                  <View
+                    style={[
+                      styles.tagBadge,
+                      { backgroundColor: categoryStyle.bg },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.tagText, { color: categoryStyle.text }]}
+                    >
+                      {previewRoutine.categoryName ?? "기타"}
                     </Text>
-                    <Switch
-                      value={isNotify}
-                      onValueChange={(value) => {
-                        setIsNotify(value);
-                      }}
-                      trackColor={{ false: "#D8DEE8", true: "#9FA2D6" }}
-                    />
                   </View>
                 </View>
-              </View>
-              <View style={styles.inputBlock}>
-                <Text style={styles.editSectionLabel}>반복 설정</Text>
 
-                {/* 현재 반복 설정 표시 버튼 */}
-                <TouchableOpacity
-                  style={styles.repeatOptionButton}
-                  onPress={() => {
-                    setShowRepeatPanel((prev) => !prev);
-                    setShowCustomRepeatPanel(false);
-                  }}
-                >
-                  <Text style={styles.repeatOptionText}>
-                    {getRepeatLabel(
-                      repeatType,
-                      repeatInterval,
-                      repeatUnit,
-                      repeatDays,
-                    )}
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.infoList}>
+                  <View style={styles.detailInfoRow}>
+                    <IconSymbol name="calendar" size={18} color="#A0B0D0" />
+                    <View style={styles.infoTextGroup}>
+                      <Text style={styles.detailLabel}>날짜</Text>
+                      <Text style={styles.detailValue}>
+                        {formatDateRange(
+                          previewRoutine.startDate,
+                          previewRoutine.endDate,
+                        )}
+                      </Text>
+                    </View>
+                  </View>
 
-                {/* 빠른 선택 패널 */}
-                {showRepeatPanel && (
-                  <View style={{ marginTop: 8, gap: 6 }}>
-                    {[
-                      { label: "매일", value: "DAILY" as RepeatType },
-                      { label: "매주 평일", value: "WEEKDAYS" as RepeatType },
-                      {
-                        label: `매주 (${
-                          WEEKDAY_OPTIONS.find(
-                            (d) =>
-                              d.value ===
-                              getWeekdayValueFromDate(
-                                makeDate(
-                                  startDateYear,
-                                  startDateMonth,
-                                  startDateDay,
-                                ),
-                              ),
-                          )?.label ?? ""
-                        })`,
-                        value: "QUICK_WEEKLY",
-                      },
-                      {
-                        label: `격주 (${
-                          WEEKDAY_OPTIONS.find(
-                            (d) =>
-                              d.value ===
-                              getWeekdayValueFromDate(
-                                makeDate(
-                                  startDateYear,
-                                  startDateMonth,
-                                  startDateDay,
-                                ),
-                              ),
-                          )?.label ?? ""
-                        })`,
-                        value: "QUICK_BIWEEKLY",
-                      },
-                      { label: "사용자 설정", value: "CUSTOM" as RepeatType },
-                    ].map((item) => {
-                      const isSelected =
-                        (repeatType === "DAILY" && item.value === "DAILY") ||
-                        (repeatType === "WEEKDAYS" &&
-                          item.value === "WEEKDAYS") ||
-                        (repeatType === "CUSTOM" &&
-                          repeatUnit === "WEEK" &&
-                          repeatInterval === "1" &&
-                          item.value === "QUICK_WEEKLY") ||
-                        (repeatType === "CUSTOM" &&
-                          repeatUnit === "WEEK" &&
-                          repeatInterval === "2" &&
-                          item.value === "QUICK_BIWEEKLY") ||
-                        (repeatType === "CUSTOM" &&
-                          !(
-                            repeatUnit === "WEEK" &&
-                            (repeatInterval === "1" || repeatInterval === "2")
-                          ) &&
-                          item.value === "CUSTOM");
+                  <View style={styles.detailInfoRow}>
+                    <IconSymbol name="clock" size={18} color="#A0B0D0" />
+                    <View style={styles.infoTextGroup}>
+                      <Text style={styles.detailLabel}>시간</Text>
+                      <Text style={styles.detailValue}>
+                        {formatTimeRange(
+                          previewRoutine.startTime,
+                          previewRoutine.endTime,
+                        )}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailInfoRow}>
+                    <IconSymbol name="bell" size={18} color="#A0B0D0" />
+                    <View style={styles.infoTextGroup}>
+                      <Text style={styles.detailLabel}>알림</Text>
+                      <Text style={styles.detailValue}>
+                        {getNotifyText(previewRoutine)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailInfoRow}>
+                    <IconSymbol name="repeat" size={18} color="#A0B0D0" />
+                    <View style={styles.infoTextGroup}>
+                      <Text style={styles.detailLabel}>반복 설정</Text>
+                      <Text style={styles.detailValue}>
+                        {getRepeatText(previewRoutine)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.detailFooter}>
+                  <TouchableOpacity
+                    style={styles.detailCloseButton}
+                    onPress={onClose}
+                  >
+                    <Text style={styles.detailCloseButtonText}>확인</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <ScrollView
+                style={styles.editScroll}
+                contentContainerStyle={styles.editScrollContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="always"
+              >
+                <View style={styles.inputBlock}>
+                  <Text style={styles.editSectionLabel}>제목</Text>
+                  <TextInput
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder="루틴 제목을 입력해 주세요"
+                    placeholderTextColor="#B4B6C0"
+                    style={styles.titleInput}
+                  />
+                </View>
+
+                <View style={styles.inputBlock}>
+                  <Text style={styles.editSectionLabel}>카테고리</Text>
+                  <View style={styles.categoryGrid}>
+                    {categoryList.map((cat) => {
+                      const chipStyle = getCategoryChipStyle(
+                        cat,
+                        customCategoryColorMap,
+                      );
+                      const isSelected = categoryName === cat;
 
                       return (
                         <TouchableOpacity
-                          key={item.value}
+                          key={cat}
                           style={[
-                            styles.repeatOptionButton,
-                            isSelected && styles.repeatOptionButtonSelected,
+                            styles.categoryChip,
+                            {
+                              backgroundColor: chipStyle.bg,
+                              borderColor: isSelected
+                                ? chipStyle.dot
+                                : "transparent",
+                              borderWidth: isSelected ? 1.5 : 1,
+                            },
                           ]}
                           onPress={() => {
-                            if (item.value === "QUICK_WEEKLY") {
-                              handleSelectQuickWeeklyRepeat("1");
-                            } else if (item.value === "QUICK_BIWEEKLY") {
-                              handleSelectQuickWeeklyRepeat("2");
-                            } else {
-                              handleSelectRepeatType(item.value as RepeatType);
-                            }
+                            setCategoryName(cat);
+                            setSelectedColor(chipStyle.dot);
                           }}
                         >
                           <Text
                             style={[
-                              styles.repeatOptionText,
-                              isSelected && styles.repeatOptionTextSelected,
+                              styles.categoryChipText,
+                              { color: chipStyle.text },
                             ]}
                           >
-                            {item.label}
+                            {cat}
                           </Text>
                         </TouchableOpacity>
                       );
                     })}
                   </View>
-                )}
+                </View>
 
-                {/* 사용자 설정 패널 */}
-                {showCustomRepeatPanel && (
-                  <View style={{ marginTop: 12, gap: 14 }}>
-                    {/* 단위 - 일/주 */}
-                    <View>
-                      <Text style={styles.dialLabel}>단위</Text>
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        {(["DAY", "WEEK"] as RepeatUnit[]).map((unit) => (
+                <View style={styles.inputBlock}>
+                  <Text style={styles.editSectionLabel}>날짜</Text>
+                  <View style={styles.dateRangeBlock}>
+                    <TouchableOpacity
+                      style={styles.dateSelectButton}
+                      onPress={() => {
+                        setCalendarTarget("start");
+                        setShowCalendar((prev) =>
+                          calendarTarget === "start" ? !prev : true,
+                        );
+                      }}
+                    >
+                      <View style={styles.dateSelectLeft}>
+                        <IconSymbol name="calendar" size={18} color="#405886" />
+                        <Text style={styles.dateSelectText}>
+                          시작일 · {formatDate(selectedStartDateString)}
+                        </Text>
+                      </View>
+
+                      <IconSymbol
+                        name={
+                          showCalendar && calendarTarget === "start"
+                            ? "chevron.up"
+                            : "chevron.down"
+                        }
+                        size={16}
+                        color="#A0B0D0"
+                      />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.dateSelectButton}
+                      onPress={() => {
+                        setCalendarTarget("end");
+                        setShowCalendar((prev) =>
+                          calendarTarget === "end" ? !prev : true,
+                        );
+                      }}
+                    >
+                      <View style={styles.dateSelectLeft}>
+                        <IconSymbol name="calendar" size={18} color="#405886" />
+                        <Text style={styles.dateSelectText}>
+                          종료일 · {formatDate(selectedEndDateString)}
+                        </Text>
+                      </View>
+
+                      <IconSymbol
+                        name={
+                          showCalendar && calendarTarget === "end"
+                            ? "chevron.up"
+                            : "chevron.down"
+                        }
+                        size={16}
+                        color="#A0B0D0"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {showCalendar && (
+                    <View style={styles.calendarContainer}>
+                      <AppCalendar
+                        current={selectedCalendarDateString}
+                        markedDates={{
+                          [selectedCalendarDateString]: {
+                            selected: true,
+                            selectedColor: "#F1F1FB",
+                          },
+                        }}
+                        onDayPress={(day) => {
+                          const parts = parseDateParts(day.dateString);
+
+                          if (calendarTarget === "start") {
+                            setStartDateYear(parts.year);
+                            setStartDateMonth(parts.month);
+                            setStartDateDay(parts.day);
+                          } else {
+                            setEndDateYear(parts.year);
+                            setEndDateMonth(parts.month);
+                            setEndDateDay(parts.day);
+                          }
+
+                          setShowCalendar(false);
+                        }}
+                      />
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.inputBlock}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <Text style={styles.editSectionLabel}>시간 설정</Text>
+                    <Switch
+                      value={isTimed}
+                      onValueChange={(value) => {
+                        setIsTimed(value);
+                        if (!value) setIsNotify(false);
+                      }}
+                      trackColor={{ true: "#9FA2D6" }}
+                    />
+                  </View>
+
+                  {isTimed && (
+                    <>
+                      <Text style={[styles.editSectionLabel, { marginTop: 8 }]}>
+                        시작 시간
+                      </Text>
+                      <View style={styles.timePickerRow}>
+                        <TimeStepperControl
+                          label="시"
+                          value={startHour}
+                          onIncrease={() =>
+                            setStartHour(getNextHour(startHour))
+                          }
+                          onDecrease={() =>
+                            setStartHour(getPrevHour(startHour))
+                          }
+                        />
+                        <TimeStepperControl
+                          label="분"
+                          value={startMinute}
+                          onIncrease={() =>
+                            setStartMinute(getNextMinute(startMinute))
+                          }
+                          onDecrease={() =>
+                            setStartMinute(getPrevMinute(startMinute))
+                          }
+                        />
+                      </View>
+
+                      <Text
+                        style={[styles.editSectionLabel, { marginTop: 12 }]}
+                      >
+                        종료 시간
+                      </Text>
+                      <View style={styles.timePickerRow}>
+                        <TimeStepperControl
+                          label="시"
+                          value={endHour}
+                          onIncrease={() => {
+                            const next = getNextHour(endHour);
+                            const startTotal =
+                              Number(startHour) * 60 + Number(startMinute);
+                            const endTotal =
+                              Number(next) * 60 + Number(endMinute);
+                            if (endTotal <= startTotal) {
+                              Alert.alert(
+                                "안내",
+                                "종료 시간은 시작 시간보다 늦어야 해요.",
+                              );
+                              return;
+                            }
+                            setEndHour(next);
+                          }}
+                          onDecrease={() => {
+                            const next = getPrevHour(endHour);
+                            const startTotal =
+                              Number(startHour) * 60 + Number(startMinute);
+                            const endTotal =
+                              Number(next) * 60 + Number(endMinute);
+                            if (endTotal <= startTotal) {
+                              Alert.alert(
+                                "안내",
+                                "종료 시간은 시작 시간보다 늦어야 해요.",
+                              );
+                              return;
+                            }
+                            setEndHour(next);
+                          }}
+                        />
+                        <TimeStepperControl
+                          label="분"
+                          value={endMinute}
+                          onIncrease={() => {
+                            const next = getNextMinute(endMinute);
+                            const startTotal =
+                              Number(startHour) * 60 + Number(startMinute);
+                            const endTotal =
+                              Number(endHour) * 60 + Number(next);
+                            if (endTotal <= startTotal) {
+                              Alert.alert(
+                                "안내",
+                                "종료 시간은 시작 시간보다 늦어야 해요.",
+                              );
+                              return;
+                            }
+                            setEndMinute(next);
+                          }}
+                          onDecrease={() => {
+                            const next = getPrevMinute(endMinute);
+                            const startTotal =
+                              Number(startHour) * 60 + Number(startMinute);
+                            const endTotal =
+                              Number(endHour) * 60 + Number(next);
+                            if (endTotal <= startTotal) {
+                              Alert.alert(
+                                "안내",
+                                "종료 시간은 시작 시간보다 늦어야 해요.",
+                              );
+                              return;
+                            }
+                            setEndMinute(next);
+                          }}
+                        />
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                <View style={styles.inputBlock}>
+                  <View style={styles.notifyRow}>
+                    <View style={styles.notifyLabelWrap}>
+                      <IconSymbol name="bell" size={18} color="#405886" />
+                      <Text style={styles.editSectionLabelInline}>알림</Text>
+                    </View>
+
+                    <View style={styles.notifySwitchRow}>
+                      <Text style={styles.notifyStateText}>
+                        {isNotify ? "켜짐" : "꺼짐"}
+                      </Text>
+                      <Switch
+                        value={isNotify}
+                        onValueChange={(value) => {
+                          setIsNotify(value);
+                        }}
+                        trackColor={{ false: "#D8DEE8", true: "#9FA2D6" }}
+                      />
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.inputBlock}>
+                  <Text style={styles.editSectionLabel}>반복 설정</Text>
+
+                  {/* 현재 반복 설정 표시 버튼 */}
+                  <TouchableOpacity
+                    style={styles.repeatOptionButton}
+                    onPress={() => {
+                      setShowRepeatPanel((prev) => !prev);
+                      setShowCustomRepeatPanel(false);
+                    }}
+                  >
+                    <Text style={styles.repeatOptionText}>
+                      {getRepeatLabel(
+                        repeatType,
+                        repeatInterval,
+                        repeatUnit,
+                        repeatDays,
+                      )}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* 빠른 선택 패널 */}
+                  {showRepeatPanel && (
+                    <View style={{ marginTop: 8, gap: 6 }}>
+                      {[
+                        { label: "매일", value: "DAILY" as RepeatType },
+                        { label: "매주 평일", value: "WEEKDAYS" as RepeatType },
+                        {
+                          label: `매주 (${
+                            WEEKDAY_OPTIONS.find(
+                              (d) =>
+                                d.value ===
+                                getWeekdayValueFromDate(
+                                  makeDate(
+                                    startDateYear,
+                                    startDateMonth,
+                                    startDateDay,
+                                  ),
+                                ),
+                            )?.label ?? ""
+                          })`,
+                          value: "QUICK_WEEKLY",
+                        },
+                        {
+                          label: `격주 (${
+                            WEEKDAY_OPTIONS.find(
+                              (d) =>
+                                d.value ===
+                                getWeekdayValueFromDate(
+                                  makeDate(
+                                    startDateYear,
+                                    startDateMonth,
+                                    startDateDay,
+                                  ),
+                                ),
+                            )?.label ?? ""
+                          })`,
+                          value: "QUICK_BIWEEKLY",
+                        },
+                        { label: "사용자 설정", value: "CUSTOM" as RepeatType },
+                      ].map((item) => {
+                        const isSelected =
+                          (repeatType === "DAILY" && item.value === "DAILY") ||
+                          (repeatType === "WEEKDAYS" &&
+                            item.value === "WEEKDAYS") ||
+                          (repeatType === "CUSTOM" &&
+                            repeatUnit === "WEEK" &&
+                            repeatInterval === "1" &&
+                            item.value === "QUICK_WEEKLY") ||
+                          (repeatType === "CUSTOM" &&
+                            repeatUnit === "WEEK" &&
+                            repeatInterval === "2" &&
+                            item.value === "QUICK_BIWEEKLY") ||
+                          (repeatType === "CUSTOM" &&
+                            !(
+                              repeatUnit === "WEEK" &&
+                              (repeatInterval === "1" || repeatInterval === "2")
+                            ) &&
+                            item.value === "CUSTOM");
+
+                        return (
                           <TouchableOpacity
-                            key={unit}
+                            key={item.value}
                             style={[
                               styles.repeatOptionButton,
-                              repeatUnit === unit &&
-                                styles.repeatOptionButtonSelected,
-                              { flex: 1, alignItems: "center" },
+                              isSelected && styles.repeatOptionButtonSelected,
                             ]}
-                            onPress={() => handleSelectCustomRepeatUnit(unit)}
+                            onPress={() => {
+                              if (item.value === "QUICK_WEEKLY") {
+                                handleSelectQuickWeeklyRepeat("1");
+                              } else if (item.value === "QUICK_BIWEEKLY") {
+                                handleSelectQuickWeeklyRepeat("2");
+                              } else {
+                                handleSelectRepeatType(
+                                  item.value as RepeatType,
+                                );
+                              }
+                            }}
                           >
                             <Text
                               style={[
                                 styles.repeatOptionText,
-                                repeatUnit === unit &&
-                                  styles.repeatOptionTextSelected,
+                                isSelected && styles.repeatOptionTextSelected,
                               ]}
                             >
-                              {unit === "DAY" ? "일" : "주"}
+                              {item.label}
                             </Text>
                           </TouchableOpacity>
-                        ))}
-                      </View>
+                        );
+                      })}
                     </View>
+                  )}
 
-                    {/* 빈도 */}
-                    <View>
-                      <Text style={styles.dialLabel}>빈도</Text>
-                      {repeatUnit === "WEEK" ? (
+                  {/* 사용자 설정 패널 */}
+                  {showCustomRepeatPanel && (
+                    <View style={{ marginTop: 12, gap: 14 }}>
+                      {/* 단위 - 일/주 */}
+                      <View>
+                        <Text style={styles.dialLabel}>단위</Text>
                         <View style={{ flexDirection: "row", gap: 8 }}>
-                          {WEEK_REPEAT_EVERY_OPTIONS.map((opt) => (
+                          {(["DAY", "WEEK"] as RepeatUnit[]).map((unit) => (
                             <TouchableOpacity
-                              key={opt}
+                              key={unit}
                               style={[
                                 styles.repeatOptionButton,
-                                repeatInterval === opt &&
+                                repeatUnit === unit &&
                                   styles.repeatOptionButtonSelected,
                                 { flex: 1, alignItems: "center" },
                               ]}
-                              onPress={() => setRepeatInterval(opt)}
+                              onPress={() => handleSelectCustomRepeatUnit(unit)}
                             >
                               <Text
                                 style={[
                                   styles.repeatOptionText,
-                                  repeatInterval === opt &&
+                                  repeatUnit === unit &&
                                     styles.repeatOptionTextSelected,
                                 ]}
                               >
-                                {opt === "1" ? "매주" : "격주"}
+                                {unit === "DAY" ? "일" : "주"}
                               </Text>
                             </TouchableOpacity>
                           ))}
                         </View>
-                      ) : (
-                        <View style={styles.frequencyGrid}>
-                          {REPEAT_EVERY_OPTIONS.slice(0, 10).map((opt) => (
-                            <TouchableOpacity
-                              key={opt}
-                              style={[
-                                styles.frequencyGridChip,
-                                repeatInterval === opt &&
-                                  styles.repeatOptionButtonSelected,
-                              ]}
-                              onPress={() => setRepeatInterval(opt)}
-                            >
-                              <Text
-                                style={[
-                                  styles.repeatOptionText,
-                                  repeatInterval === opt &&
-                                    styles.repeatOptionTextSelected,
-                                ]}
-                              >
-                                {opt}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      )}
-                    </View>
+                      </View>
 
-                    {/* 요일 (주 단위일 때만) */}
-                    {repeatUnit === "WEEK" && (
+                      {/* 빈도 */}
                       <View>
-                        <Text style={styles.dialLabel}>요일</Text>
-                        <View style={styles.weekdayRow}>
-                          {WEEKDAY_OPTIONS.map((day) => {
-                            const isSelected = repeatDays.includes(day.value);
-                            return (
+                        <Text style={styles.dialLabel}>빈도</Text>
+                        {repeatUnit === "WEEK" ? (
+                          <View style={{ flexDirection: "row", gap: 8 }}>
+                            {WEEK_REPEAT_EVERY_OPTIONS.map((opt) => (
                               <TouchableOpacity
-                                key={day.value}
+                                key={opt}
                                 style={[
-                                  styles.weekdayChip,
-                                  isSelected && styles.weekdayChipSelected,
+                                  styles.repeatOptionButton,
+                                  repeatInterval === opt &&
+                                    styles.repeatOptionButtonSelected,
+                                  { flex: 1, alignItems: "center" },
                                 ]}
-                                onPress={() => handleToggleWeekday(day.value)}
+                                onPress={() => setRepeatInterval(opt)}
                               >
                                 <Text
                                   style={[
-                                    styles.weekdayChipText,
-                                    isSelected &&
-                                      styles.weekdayChipTextSelected,
+                                    styles.repeatOptionText,
+                                    repeatInterval === opt &&
+                                      styles.repeatOptionTextSelected,
                                   ]}
                                 >
-                                  {day.label}
+                                  {opt === "1" ? "매주" : "격주"}
                                 </Text>
                               </TouchableOpacity>
-                            );
-                          })}
-                        </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <View style={styles.frequencyGrid}>
+                            {REPEAT_EVERY_OPTIONS.slice(0, 10).map((opt) => (
+                              <TouchableOpacity
+                                key={opt}
+                                style={[
+                                  styles.frequencyGridChip,
+                                  repeatInterval === opt &&
+                                    styles.repeatOptionButtonSelected,
+                                ]}
+                                onPress={() => setRepeatInterval(opt)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.repeatOptionText,
+                                    repeatInterval === opt &&
+                                      styles.repeatOptionTextSelected,
+                                  ]}
+                                >
+                                  {opt}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
                       </View>
-                    )}
 
-                    <TouchableOpacity
-                      style={[
-                        styles.repeatOptionButton,
-                        styles.repeatOptionButtonSelected,
-                      ]}
-                      onPress={handleSaveCustomRepeat}
-                    >
-                      <Text
+                      {/* 요일 (주 단위일 때만) */}
+                      {repeatUnit === "WEEK" && (
+                        <View>
+                          <Text style={styles.dialLabel}>요일</Text>
+                          <View style={styles.weekdayRow}>
+                            {WEEKDAY_OPTIONS.map((day) => {
+                              const isSelected = repeatDays.includes(day.value);
+                              return (
+                                <TouchableOpacity
+                                  key={day.value}
+                                  style={[
+                                    styles.weekdayChip,
+                                    isSelected && styles.weekdayChipSelected,
+                                  ]}
+                                  onPress={() => handleToggleWeekday(day.value)}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.weekdayChipText,
+                                      isSelected &&
+                                        styles.weekdayChipTextSelected,
+                                    ]}
+                                  >
+                                    {day.label}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      )}
+
+                      <TouchableOpacity
                         style={[
-                          styles.repeatOptionText,
-                          styles.repeatOptionTextSelected,
-                          { textAlign: "center" },
+                          styles.repeatOptionButton,
+                          styles.repeatOptionButtonSelected,
                         ]}
+                        onPress={handleSaveCustomRepeat}
                       >
-                        완료
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            </ScrollView>
-          )}
-        </Pressable>
+                        <Text
+                          style={[
+                            styles.repeatOptionText,
+                            styles.repeatOptionTextSelected,
+                            { textAlign: "center" },
+                          ]}
+                        >
+                          완료
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+            )}
+          </Pressable>
+        </KeyboardAvoidingView>
       </Pressable>
     </Modal>
   );

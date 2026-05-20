@@ -3,10 +3,10 @@ import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { Header } from "@/components/ui/_header";
 import { getCategoryStyle } from "@/lib/category";
 import { RoutineService } from "@/services/routine_service";
+import { authStore } from "@/store/authStore";
 import type { HeatmapRoutine, ScheduleRoutine } from "@/types/routine";
 import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useMemo, useState } from "react";
-
 import {
   Pressable,
   SafeAreaView,
@@ -373,6 +373,7 @@ export default function DataScreen() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   // 저장소에서 루틴 데이터 불러오기
   const loadHeatmap = useCallback(async () => {
+    if (!authStore.isLoggedIn) return;
     try {
       setIsLoading(true);
 
@@ -400,13 +401,13 @@ export default function DataScreen() {
         });
 
         setHeatmapData(normalized);
-        console.log("month heatmap data:", JSON.stringify(data[0]?.completed));
       } else {
         const dateStr = formatDateKey(selectedWeekDate);
         const data = await RoutineService.heatmapWeek(dateStr);
         setHeatmapData(data);
       }
     } catch (error) {
+      if ((error as any)?.name === "NoTokenError") return;
       console.error("히트맵 데이터 불러오기 실패", error);
       setHeatmapData([]);
     } finally {
@@ -739,7 +740,6 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     borderWidth: 1,
     borderColor: "#F1F3F7",
-    overflow: "hidden",
   },
   routineHeader: {
     flexDirection: "row",
