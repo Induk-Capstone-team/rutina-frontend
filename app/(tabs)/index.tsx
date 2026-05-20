@@ -3,6 +3,7 @@ import { Header } from "@/components/ui/_header";
 import AppCalendar from "@/components/ui/app_calendar";
 import { EVENT_TYPES } from "@/lib/category";
 import { RoutineService } from "@/services/routine_service";
+import { authStore } from "@/store/authStore";
 import type { MarkedDates } from "@/types/calendar";
 import type { ScheduleRoutine } from "@/types/routine";
 import { addDays, format, isSameDay, startOfWeek } from "date-fns";
@@ -27,6 +28,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import "react-native-gesture-handler";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 // 시간표에 표시할 일정 타입
@@ -128,11 +130,15 @@ export default function HomeScreen() {
   const weekDays = Array.from({ length: 7 }).map((_, i) =>
     addDays(startOfCurrentWeek, i),
   );
-  // 위/아래 스와이프로 캘린더 열고 닫기
+
+  //  수직 이동이 수평 이동보다 클 때만 반응
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dy) > 10;
+        return (
+          Math.abs(gestureState.dy) > 10 &&
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx)
+        );
       },
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dy > 40) {
@@ -145,11 +151,13 @@ export default function HomeScreen() {
   ).current;
 
   const loadStoredRoutines = useCallback(async () => {
+    if (!authStore.isLoggedIn) return;
     try {
       const routines = await RoutineService.getAll(currentDateString);
       setStoredRoutines(routines);
     } catch (error) {
-      console.error("저장된 루틴 불러오기 실패", error);
+      if ((error as any)?.name === "NoTokenError") return;
+      console.error("루틴 불러오기 실패", error);
       setStoredRoutines([]);
     }
   }, [currentDateString]);
@@ -465,7 +473,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 10,
-    backgroundColor: "#F6F8FC",
+    backgroundColor: "#F3F4F8",
   },
   horizontalContent: {
     flexGrow: 1,

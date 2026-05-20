@@ -14,6 +14,7 @@ import { getRoutineOccurrenceDates } from "@/lib/storage";
 import type { Category } from "@/services/category_service";
 import { CategoryService } from "@/services/category_service";
 import { RoutineService } from "@/services/routine_service";
+import { authStore } from "@/store/authStore";
 import type { ScheduleRoutine } from "@/types/routine";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "expo-router";
@@ -278,6 +279,7 @@ export default function CategoryScreen() {
   const CATEGORY_MODAL_CLOSE_THRESHOLD = 120;
 
   const refreshData = useCallback(async () => {
+    if (!authStore.isLoggedIn) return;
     try {
       setIsLoading(true);
       const [
@@ -292,8 +294,6 @@ export default function CategoryScreen() {
         CategoryService.getAllIncludingHidden(),
       ]);
 
-      console.log("서버 카테고리:", JSON.stringify(fetchedCategories));
-      console.log("서버 카테고리 개수:", fetchedCategories.length);
       const serverCustomCategories: CustomCategory[] = fetchedCategories
         .filter((c) => !DEFAULT_CATEGORIES.includes(c.name as any))
         .map((c) => ({ name: c.name, color: c.colorCode }));
@@ -314,6 +314,9 @@ export default function CategoryScreen() {
       setServerCategoryIdMap(idMap);
       setServerSortOrderMap(sortOrderMap);
       setServerCategoryList(fetchedCategories);
+    } catch (error) {
+      if ((error as any)?.name === "NoTokenError") return;
+      console.error("카테고리 데이터 불러오기 실패", error);
     } finally {
       setIsLoading(false);
     }
@@ -350,7 +353,7 @@ export default function CategoryScreen() {
           isCompletedCategory: selectedTab === "COMPLETED",
         };
       });
-    console.log("visibleCategories 개수:", result.length);
+
     return result;
   }, [categories, selectedTab]);
 
@@ -686,13 +689,13 @@ export default function CategoryScreen() {
           hidden: true,
         });
       } catch (error) {
-        // ✅ 서버 실패 시 로컬 업데이트 없이 중단
+        //서버 실패 시 로컬 업데이트 없이 중단
         console.error("서버 카테고리 숨김 처리 실패", error);
         Alert.alert(
           "숨기기 실패",
           "서버 연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.",
         );
-        return; // ← 핵심: 여기서 종료
+        return;
       }
     }
 
@@ -739,13 +742,13 @@ export default function CategoryScreen() {
           hidden: false,
         });
       } catch (error) {
-        // ✅ 서버 실패 시 로컬 업데이트 없이 중단
+        //서버 실패 시 로컬 업데이트 없이 중단
         console.error("서버 카테고리 복구 실패", error);
         Alert.alert(
           "복구 실패",
           "서버 연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.",
         );
-        return; // ← 핵심
+        return;
       }
     }
 
@@ -884,7 +887,7 @@ export default function CategoryScreen() {
     // 롤백용으로 현재 순서 저장
     const previousSortOrderMap = { ...serverSortOrderMap };
 
-    // ✅ 낙관적 업데이트: 서버 응답 전에 로컬 상태 먼저 반영
+    //  낙관적 업데이트: 서버 응답 전에 로컬 상태 먼저 반영
     const newSortOrderMap: Record<number, number> = {};
     categoryIds.forEach((id, index) => {
       newSortOrderMap[id] = index;
@@ -1153,8 +1156,7 @@ export default function CategoryScreen() {
           />
           <KeyboardAvoidingView
             style={styles.keyboardAvoidingView}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
           >
             <Animated.View
               style={[
@@ -1415,11 +1417,11 @@ export default function CategoryScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F6F8FC",
+    backgroundColor: "#F3F4F8",
   },
   container: {
     flex: 1,
-    backgroundColor: "#F6F8FC",
+    backgroundColor: "#F3F4F8",
   },
 
   headerWrapper: {
@@ -1499,6 +1501,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 26,
     marginTop: -1,
+    includeFontPadding: false,
   },
 
   loadingContainer: {

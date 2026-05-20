@@ -3,7 +3,7 @@ import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { DEFAULT_CATEGORY_NAME, getCategoryStyle } from "@/lib/category";
 import { normalizeRepeatDays } from "@/lib/storage";
 import { RoutineService } from "@/services/routine_service";
-
+import { authStore } from "@/store/authStore";
 import type {
   CalendarDay,
   RepeatWeekday,
@@ -151,11 +151,11 @@ export default function ScheduleContent() {
   };
 
   const loadRoutines = useCallback(async () => {
+    if (!authStore.isLoggedIn) return;
     try {
       // date를 넘겨서 해당 날짜 루틴만 받아옴
       const allRoutines = await RoutineService.getAll(selectedDateString);
 
-      // API가 날짜 필터링을 해주므로 shouldShowRoutineOnDate 제거
       const timed = allRoutines.filter(
         (item) => item.startTime !== undefined && item.startTime !== null,
       );
@@ -172,6 +172,7 @@ export default function ScheduleContent() {
       setTimedRoutines(timed);
       setNoTimeRoutines(noTimed);
     } catch (error) {
+      if ((error as any)?.name === "NoTokenError") return;
       console.error("루틴 불러오기 실패", error);
       setTimedRoutines([]);
       setNoTimeRoutines([]);
