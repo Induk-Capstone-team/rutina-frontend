@@ -671,14 +671,13 @@ export function ScheduleDetailModal({
       setIsSaving(false);
     }
   };
-
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <Pressable style={styles.detailOverlay} onPress={onClose}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{ width: "100%", alignItems: "center" }}
-        >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
+        <Pressable style={styles.detailOverlay} onPress={onClose}>
           <Pressable
             style={styles.detailCard}
             onPress={(e) => e.stopPropagation()}
@@ -1371,8 +1370,8 @@ export function ScheduleDetailModal({
               </ScrollView>
             )}
           </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
