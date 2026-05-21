@@ -173,6 +173,11 @@ export default function ScheduleContent() {
       setNoTimeRoutines(noTimed);
     } catch (error) {
       if ((error as any)?.name === "NoTokenError") return;
+      if (
+        (error as any)?.response?.status === 401 ||
+        (error as any)?.response?.status === 403
+      )
+        return;
       console.error("루틴 불러오기 실패", error);
       setTimedRoutines([]);
       setNoTimeRoutines([]);
