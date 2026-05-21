@@ -316,6 +316,11 @@ export default function CategoryScreen() {
       setServerCategoryList(fetchedCategories);
     } catch (error) {
       if ((error as any)?.name === "NoTokenError") return;
+      if (
+        (error as any)?.response?.status === 401 ||
+        (error as any)?.response?.status === 403
+      )
+        return;
       console.error("카테고리 데이터 불러오기 실패", error);
     } finally {
       setIsLoading(false);

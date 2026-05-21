@@ -408,6 +408,11 @@ export default function DataScreen() {
       }
     } catch (error) {
       if ((error as any)?.name === "NoTokenError") return;
+      if (
+        (error as any)?.response?.status === 401 ||
+        (error as any)?.response?.status === 403
+      )
+        return;
       console.error("히트맵 데이터 불러오기 실패", error);
       setHeatmapData([]);
     } finally {

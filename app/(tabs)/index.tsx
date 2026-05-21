@@ -155,8 +155,10 @@ export default function HomeScreen() {
     try {
       const routines = await RoutineService.getAll(currentDateString);
       setStoredRoutines(routines);
-    } catch (error) {
-      if ((error as any)?.name === "NoTokenError") return;
+    } catch (error: any) {
+      if (error?.name === "NoTokenError") return;
+      if (error?.response?.status === 401 || error?.response?.status === 403)
+        return;
       console.error("루틴 불러오기 실패", error);
       setStoredRoutines([]);
     }
