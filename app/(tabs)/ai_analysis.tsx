@@ -13,7 +13,6 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -76,36 +75,32 @@ function Chip({
 
 function RoutineCheckItem({
   routine,
-  checked,
-  onToggle,
   onEdit,
 }: {
   routine: RecommendedRoutine;
-  checked: boolean;
-  onToggle: () => void;
   onEdit: () => void;
 }) {
+  const hasTimeRange = routine.startTime.includes(":") && routine.endTime.includes(":");
+  const timeLabel = hasTimeRange
+    ? `${routine.startTime} – ${routine.endTime}`
+    : `추천: ${routine.startTime}`;
+
   return (
     <View style={s.routineItemWrapper}>
       <TouchableOpacity
         style={s.routineItem}
-        onPress={onToggle}
+        onPress={onEdit}
         activeOpacity={0.7}
       >
-        <View style={[s.checkbox, checked && s.checkboxChecked]}>
-          {checked && <Ionicons name="checkmark" size={14} color="#fff" />}
-        </View>
         <View style={{ flex: 1 }}>
           <Text style={s.routineTitle}>
-            {routine.startTime} – {routine.endTime} {routine.title}
+            {timeLabel} | {routine.title}
           </Text>
           {routine.description ? (
             <Text style={s.routineDesc}>({routine.description})</Text>
           ) : null}
         </View>
-      </TouchableOpacity>
-      <TouchableOpacity style={s.editBtn} onPress={onEdit}>
-        <Ionicons name="add-circle-outline" size={24} color={C.primary} />
+        <Ionicons name="add-circle-outline" size={24} color={C.primary} style={{ alignSelf: "center", marginRight: 4 }} />
       </TouchableOpacity>
     </View>
   );
@@ -139,17 +134,13 @@ export default function AiAnalysisScreen() {
     messages,
     isLoading,
     error,
-    profile,
     categories,
     recommendedRoutines,
-    checkedRoutineIds,
     startConversation,
     submitCategory,
     submitPurpose,
     submitTime,
     submitHobbies,
-    toggleRoutineCheck,
-    saveSelectedRoutines,
   } = useAiRecommend();
 
   const router = useRouter();
@@ -174,8 +165,6 @@ export default function AiAnalysisScreen() {
         pathname: "/modal",
         params: {
           title: routine.title,
-          startTime: routine.startTime,
-          endTime: routine.endTime,
           category: routine.category,
           description: routine.description,
         },
@@ -183,21 +172,6 @@ export default function AiAnalysisScreen() {
     },
     [router],
   );
-
-  const handleSaveRoutines = useCallback(async () => {
-    if (checkedRoutineIds.size === 0) {
-      Alert.alert("선택 없음", "추가할 루틴을 선택해주세요.");
-      return;
-    }
-
-    // 첫 번째로 선택된 루틴을 가져옴 (현재는 하나씩 직접 추가하는 흐름을 위해)
-    const firstId = Array.from(checkedRoutineIds)[0];
-    const routine = recommendedRoutines.find((r) => r.id === firstId);
-
-    if (routine) {
-      handleEditAndAdd(routine);
-    }
-  }, [checkedRoutineIds, recommendedRoutines, handleEditAndAdd]);
 
   // ── 대화 시작 전 ──
   if (step === "init") {
@@ -236,6 +210,8 @@ export default function AiAnalysisScreen() {
             style={s.chatArea}
             contentContainerStyle={s.chatContent}
             showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            onLayout={() => scrollRef.current?.scrollToEnd({ animated: true })}
           >
             {messages.map((msg) =>
               msg.role === "ai" ? (
@@ -263,19 +239,9 @@ export default function AiAnalysisScreen() {
                   <RoutineCheckItem
                     key={r.id}
                     routine={r}
-                    checked={checkedRoutineIds.has(r.id)}
-                    onToggle={() => toggleRoutineCheck(r.id)}
                     onEdit={() => handleEditAndAdd(r)}
                   />
                 ))}
-                <TouchableOpacity
-                  style={s.addRoutineBtn}
-                  onPress={handleSaveRoutines}
-                >
-                  <Text style={s.addRoutineBtnText}>
-                    선택한 루틴 직접 추가하기
-                  </Text>
-                </TouchableOpacity>
               </View>
             )}
 

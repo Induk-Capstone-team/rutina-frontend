@@ -17,6 +17,7 @@ export interface RecommendedRoutine {
   description: string; // 부가 설명
   category: string;
   categoryId?: number;
+  durationMinutes?: number;
 }
 
 // ── 대화 단계별 사용자 입력 ──
@@ -111,9 +112,10 @@ export const requestRoutineRecommendation = async (
         title: r.title,
         startTime,
         endTime,
-        description: "AI 추천 루틴",
+        description: `예상 시간: ${r.durationMinutes}분`,
         category: categoryName,
         categoryId: categoryId,
+        durationMinutes: r.durationMinutes,
       };
     });
   } catch (error: any) {
