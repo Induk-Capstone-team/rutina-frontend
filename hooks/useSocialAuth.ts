@@ -13,7 +13,7 @@ export const useSocialAuth = () => {
   const router = useRouter();
 
   // 공통 소셜 로그인 핸들러 (백엔드 주도로 처리)
-  const handleSocialLogin = async (provider: "kakao" | "naver") => {
+  const handleSocialLogin = async (provider: "kakao" | "naver" | "google") => {
     setIsSocialLoading(true);
     try {
       // 1. 백엔드의 소셜 로그인 시작 엔드포인트
@@ -78,6 +78,7 @@ export const useSocialAuth = () => {
   return {
     handleKakaoLogin: () => handleSocialLogin("kakao"),
     handleNaverLogin: () => handleSocialLogin("naver"),
+    handleGoogleLogin: () => handleSocialLogin("google"),
     isSocialLoading,
   };
 };
