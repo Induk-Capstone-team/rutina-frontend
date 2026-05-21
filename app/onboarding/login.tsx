@@ -22,7 +22,7 @@ export default function LoginScreen() {
 
   // ViewModel에서 필요한 기능만 쏙 빼오기
   const { login, isLoading, error } = useAuthViewModel();
-  const { handleKakaoLogin, handleNaverLogin, isSocialLoading } = useSocialAuth();
+  const { handleKakaoLogin, handleNaverLogin, handleGoogleLogin, isSocialLoading } = useSocialAuth();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -99,7 +99,8 @@ export default function LoginScreen() {
                     borderWidth: 1,
                   },
                 ]}
-                onPress={() => {}}
+                onPress={handleGoogleLogin}
+                disabled={isSocialLoading}
               >
                 <Image
                   source={require("../../assets/images/google_icon.png")}
