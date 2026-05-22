@@ -1,7 +1,7 @@
 import ScheduleContent from "@/components/schedule_content";
 import { Header } from "@/components/ui/_header";
 import AppCalendar from "@/components/ui/app_calendar";
-import { EVENT_TYPES } from "@/lib/category";
+
 import { RoutineService } from "@/services/routine_service";
 import { authStore } from "@/store/authStore";
 import type { MarkedDates } from "@/types/calendar";
@@ -83,14 +83,7 @@ function buildTimetableEvents(routines: ScheduleRoutine[]): TimetableEvent[] {
   });
   return events.sort((a, b) => a.startMinute - b.startMinute);
 }
-// 카테고리명에 맞는 색상 스타일 반환
 function getEventStyle(type: string, color?: string) {
-  const fixedStyle = EVENT_TYPES[type as keyof typeof EVENT_TYPES];
-
-  if (fixedStyle) {
-    return fixedStyle;
-  }
-
   const fallbackColor = color || "#9FA2D6";
 
   return {
@@ -223,15 +216,6 @@ export default function HomeScreen() {
         });
       }
     });
-    // 일정이 없을 때는 기본 카테고리 범례 표시
-    if (uniqueMap.size === 0) {
-      Object.keys(EVENT_TYPES).forEach((key) => {
-        uniqueMap.set(key, {
-          label: key,
-          dot: EVENT_TYPES[key as keyof typeof EVENT_TYPES].dot,
-        });
-      });
-    }
 
     return Array.from(uniqueMap.values());
   }, [timetableEvents]);

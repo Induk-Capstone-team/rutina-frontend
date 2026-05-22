@@ -5,7 +5,7 @@ import TimePickerModal from "@/components/time_picker_modal";
 import AppCalendar from "@/components/ui/app_calendar";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRoutineForm } from "@/hooks/use_routine_form";
-import { EVENT_TYPES, type CustomCategory } from "@/lib/category";
+import { type CustomCategory } from "@/lib/category";
 import { CategoryService } from "@/services/category_service";
 import type {
   NotifyOption,
@@ -27,6 +27,7 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
+  Text,
   TextInput,
   TouchableOpacity,
   View,
@@ -153,11 +154,6 @@ const REPEAT_EVERY_OPTIONS = Array.from({ length: 30 }, (_, i) =>
   String(i + 1),
 );
 
-//기본 카테고리인지 확인
-function isFixedCategory(categoryName: string) {
-  return Object.prototype.hasOwnProperty.call(EVENT_TYPES, categoryName);
-}
-
 //반복 단위 선택 컬럼
 function UnitOptionColumn({
   title,
@@ -266,8 +262,8 @@ export default function ModalScreen() {
   }>();
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimeModal, setShowTimeModal] = useState(false);
-  const [showRepeatModal, setShowRepeatModal] = useState(false);
-  const [showCustomRepeatModal, setShowCustomRepeatModal] = useState(false);
+  const [showRepeatPanel, setShowRepeatPanel] = useState(false);
+  const [showCustomRepeatPanel, setShowCustomRepeatPanel] = useState(false);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>(
     [],
   );
@@ -309,11 +305,6 @@ export default function ModalScreen() {
     if (params.title) setTitle(params.title);
     if (params.category) {
       setCategory(params.category);
-      // 고정 카테고리면 색상도 같이 설정
-      if (isFixedCategory(params.category)) {
-        const style = EVENT_TYPES[params.category as keyof typeof EVENT_TYPES];
-        if (style) setSelectedColor(style.dot);
-      }
     }
     if (params.startTime) {
       const [h, m] = params.startTime.split(":");
@@ -440,12 +431,15 @@ export default function ModalScreen() {
   useEffect(() => {
     CategoryService.getAll()
       .then((serverCategories) => {
-        const custom = serverCategories
-          .filter((c) => !Object.keys(EVENT_TYPES).includes(c.name))
-          .map((c) => ({ name: c.name, color: c.colorCode }));
-        setCustomCategories(custom);
+        const categories = serverCategories.map((c) => ({
+          name: c.name,
+          color: c.colorCode,
+        }));
+        setCustomCategories(categories);
       })
       .catch((error) => {
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) return;
         console.error("카테고리 불러오기 실패", error);
         setCustomCategories([]);
       });
@@ -529,15 +523,15 @@ export default function ModalScreen() {
   //반복 옵션 선택
   const handleSelectRepeatType = (option: RepeatType) => {
     if (option === "CUSTOM") {
-      setShowRepeatModal(false);
-      setShowCustomRepeatModal(true);
+      setShowRepeatPanel(false);
+      setShowCustomRepeatPanel(true);
       return;
     }
     setRepeatType(option);
     setRepeatInterval("1");
     setRepeatUnit("DAY");
     setRepeatDays([]);
-    setShowRepeatModal(false);
+    setShowRepeatPanel(false);
   };
 
   const handleSelectQuickWeeklyRepeat = (interval: "1" | "2") => {
@@ -545,7 +539,7 @@ export default function ModalScreen() {
     setRepeatInterval(interval);
     setRepeatUnit("WEEK");
     setRepeatDays([getWeekdayValueFromDate(startDate)]);
-    setShowRepeatModal(false);
+    setShowRepeatPanel(false);
   };
 
   // 사용자 설정 반복 단위는 일/주만 사용하고, 주 단위는 1주/2주까지만 허용
@@ -581,7 +575,7 @@ export default function ModalScreen() {
     }
 
     setRepeatType("CUSTOM");
-    setShowCustomRepeatModal(false);
+    setShowCustomRepeatPanel(false);
   };
 
   //시작/종료 시간 검증
@@ -943,32 +937,268 @@ export default function ModalScreen() {
 
               <View
                 style={[
-                  styles.rowBetween,
+                  styles.repeatSection,
                   isTimed ? styles.innerOptionRow : styles.repeatRowOnly,
                 ]}
               >
-                <View style={styles.iconLabel}>
-                  <IconSymbol name="repeat" size={18} color="#9FA2D6" />
-                  <ThemedText style={styles.optionLabel}>반복</ThemedText>
-                </View>
-
-                <TouchableOpacity
-                  style={[
-                    styles.valueButton,
-                    repeatType === "NONE" && styles.requiredValueButton,
-                  ]}
-                  onPress={() => setShowRepeatModal(true)}
-                >
-                  <ThemedText
-                    style={[
-                      styles.valueButtonText,
-                      repeatType === "NONE" && styles.requiredValueText,
-                    ]}
+                <View style={styles.repeatHeaderRow}>
+                  <View style={styles.iconLabel}>
+                    <IconSymbol name="repeat" size={18} color="#9FA2D6" />
+                    <ThemedText style={styles.optionLabel}>반복</ThemedText>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.repeatOptionButton}
+                    onPress={() => {
+                      setShowRepeatPanel((prev) => !prev);
+                      setShowCustomRepeatPanel(false);
+                    }}
                   >
-                    {repeatLabel}
-                  </ThemedText>
-                  <IconSymbol name="chevron.right" size={14} color="#A0B0D0" />
-                </TouchableOpacity>
+                    <ThemedText style={styles.repeatOptionText}>
+                      {repeatLabel}
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+                {showRepeatPanel && (
+                  <View style={styles.repeatPanel}>
+                    {[
+                      { label: "매일", value: "DAILY" as RepeatType },
+                      {
+                        label: `매주(${getQuickWeekdayLabel(startDate)})`,
+                        value: "QUICK_WEEKLY",
+                      },
+                      {
+                        label: `격주(${getQuickWeekdayLabel(startDate)})`,
+                        value: "QUICK_BIWEEKLY",
+                      },
+                      { label: "사용자 설정", value: "CUSTOM" as RepeatType },
+                    ].map((item) => {
+                      const isQuickWeekly = item.value === "QUICK_WEEKLY";
+                      const isQuickBiweekly = item.value === "QUICK_BIWEEKLY";
+
+                      const isSelected =
+                        (repeatType === "DAILY" && item.value === "DAILY") ||
+                        (repeatType === "CUSTOM" &&
+                          repeatUnit === "WEEK" &&
+                          repeatInterval === "1" &&
+                          isQuickWeekly) ||
+                        (repeatType === "CUSTOM" &&
+                          repeatUnit === "WEEK" &&
+                          repeatInterval === "2" &&
+                          isQuickBiweekly) ||
+                        (repeatType === "CUSTOM" &&
+                          !(
+                            repeatUnit === "WEEK" &&
+                            (repeatInterval === "1" || repeatInterval === "2")
+                          ) &&
+                          item.value === "CUSTOM");
+
+                      return (
+                        <TouchableOpacity
+                          key={item.value}
+                          style={[
+                            styles.repeatOptionButton,
+                            isSelected && styles.repeatOptionButtonSelected,
+                          ]}
+                          onPress={() => {
+                            if (isQuickWeekly) {
+                              handleSelectQuickWeeklyRepeat("1");
+                              return;
+                            }
+
+                            if (isQuickBiweekly) {
+                              handleSelectQuickWeeklyRepeat("2");
+                              return;
+                            }
+
+                            handleSelectRepeatType(item.value as RepeatType);
+                          }}
+                        >
+                          <ThemedText
+                            style={[
+                              styles.repeatOptionText,
+                              isSelected && styles.repeatOptionTextSelected,
+                            ]}
+                          >
+                            {item.label}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+                {showCustomRepeatPanel && (
+                  <View style={styles.customRepeatPanel}>
+                    <View>
+                      <ThemedText style={styles.dialLabel}>단위</ThemedText>
+
+                      <View style={styles.repeatTwoColumnRow}>
+                        {(["DAY", "WEEK"] as RepeatUnit[]).map((unit) => (
+                          <TouchableOpacity
+                            key={unit}
+                            style={[
+                              styles.repeatOptionButton,
+                              repeatUnit === unit &&
+                                styles.repeatOptionButtonSelected,
+                              styles.repeatFlexButton,
+                            ]}
+                            onPress={() => handleSelectCustomRepeatUnit(unit)}
+                          >
+                            <ThemedText
+                              style={[
+                                styles.repeatOptionText,
+                                repeatUnit === unit &&
+                                  styles.repeatOptionTextSelected,
+                              ]}
+                            >
+                              {unit === "DAY" ? "일" : "주"}
+                            </ThemedText>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+
+                    <View>
+                      <ThemedText style={styles.dialLabel}>빈도</ThemedText>
+
+                      {repeatUnit === "WEEK" ? (
+                        <View style={styles.repeatTwoColumnRow}>
+                          {WEEK_REPEAT_EVERY_OPTIONS.map((opt) => (
+                            <TouchableOpacity
+                              key={opt}
+                              style={[
+                                styles.repeatOptionButton,
+                                repeatInterval === opt &&
+                                  styles.repeatOptionButtonSelected,
+                                styles.repeatFlexButton,
+                              ]}
+                              onPress={() => setRepeatInterval(opt)}
+                            >
+                              <ThemedText
+                                style={[
+                                  styles.repeatOptionText,
+                                  repeatInterval === opt &&
+                                    styles.repeatOptionTextSelected,
+                                ]}
+                              >
+                                {opt === "1" ? "매주" : "격주"}
+                              </ThemedText>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      ) : (
+                        <View style={styles.repeatIntervalStepper}>
+                          <TouchableOpacity
+                            style={styles.repeatStepperButton}
+                            onPress={() => {
+                              const current = Number(repeatInterval || "1");
+                              const next = Math.max(1, current - 1);
+                              setRepeatInterval(String(next));
+                            }}
+                          >
+                            <Text style={styles.repeatStepperButtonText}>
+                              -
+                            </Text>
+                          </TouchableOpacity>
+
+                          <View style={styles.repeatIntervalInputBox}>
+                            <TextInput
+                              style={styles.repeatIntervalInput}
+                              value={repeatInterval}
+                              onChangeText={(text) => {
+                                const onlyNumber = text.replace(/[^0-9]/g, "");
+
+                                if (onlyNumber === "") {
+                                  setRepeatInterval("");
+                                  return;
+                                }
+
+                                const safeValue = String(
+                                  Math.min(
+                                    999,
+                                    Math.max(1, Number(onlyNumber)),
+                                  ),
+                                );
+                                setRepeatInterval(safeValue);
+                              }}
+                              onBlur={() => {
+                                if (
+                                  !repeatInterval ||
+                                  Number(repeatInterval) < 1
+                                ) {
+                                  setRepeatInterval("1");
+                                }
+                              }}
+                              keyboardType="number-pad"
+                              returnKeyType="done"
+                              maxLength={3}
+                            />
+
+                            <Text style={styles.repeatIntervalSuffix}>
+                              일마다
+                            </Text>
+                          </View>
+
+                          <TouchableOpacity
+                            style={styles.repeatStepperButton}
+                            onPress={() => {
+                              const current = Number(repeatInterval || "1");
+                              const next = Math.min(999, current + 1);
+                              setRepeatInterval(String(next));
+                            }}
+                          >
+                            <Text style={styles.repeatStepperButtonText}>
+                              +
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+
+                    {repeatUnit === "WEEK" && (
+                      <View>
+                        <ThemedText style={styles.dialLabel}>요일</ThemedText>
+
+                        <View style={styles.weekdayRow}>
+                          {WEEKDAY_OPTIONS.map((day) => {
+                            const isSelected = repeatDays.includes(day.value);
+
+                            return (
+                              <TouchableOpacity
+                                key={day.value}
+                                style={[
+                                  styles.weekdayChip,
+                                  isSelected && styles.weekdayChipSelected,
+                                ]}
+                                onPress={() => handleToggleWeekday(day.value)}
+                              >
+                                <ThemedText
+                                  style={[
+                                    styles.weekdayChipText,
+                                    isSelected &&
+                                      styles.weekdayChipTextSelected,
+                                  ]}
+                                >
+                                  {day.label}
+                                </ThemedText>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
+
+                    <View style={styles.customRepeatFooter}>
+                      <TouchableOpacity
+                        style={styles.customRepeatDoneButton}
+                        onPress={handleSaveCustomRepeat}
+                      >
+                        <ThemedText style={styles.customRepeatDoneText}>
+                          적용
+                        </ThemedText>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
               </View>
             </View>
             {/* 저장 버튼 */}
@@ -991,180 +1221,6 @@ export default function ModalScreen() {
         onClose={() => setShowTimeModal(false)}
         onApply={handleApplyTime}
       />
-
-      {/* 반복 옵션 선택 모달 */}
-      {showRepeatModal && (
-        <Pressable
-          style={styles.inlineModalOverlay}
-          onPress={() => setShowRepeatModal(false)}
-        >
-          <Pressable
-            style={styles.inlineModalCard}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.inlineModalHeader}>
-              <ThemedText style={styles.inlineModalTitle}>반복 설정</ThemedText>
-
-              <TouchableOpacity onPress={() => setShowRepeatModal(false)}>
-                <ThemedText style={styles.inlineModalDone}>닫기</ThemedText>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.optionList}>
-              {[
-                { label: "매일", value: "DAILY" as RepeatType },
-
-                {
-                  label: `매주(${getQuickWeekdayLabel(startDate)})`,
-                  value: "QUICK_WEEKLY",
-                },
-                {
-                  label: `격주(${getQuickWeekdayLabel(startDate)})`,
-                  value: "QUICK_BIWEEKLY",
-                },
-
-                { label: "사용자 설정", value: "CUSTOM" as RepeatType },
-              ].map((item) => {
-                const isQuickWeekly = item.value === "QUICK_WEEKLY";
-                const isQuickBiweekly = item.value === "QUICK_BIWEEKLY";
-                const isSelected =
-                  (repeatType === "DAILY" && item.value === "DAILY") ||
-                  (repeatType === "CUSTOM" &&
-                    repeatUnit === "WEEK" &&
-                    repeatInterval === "1" &&
-                    isQuickWeekly) ||
-                  (repeatType === "CUSTOM" &&
-                    repeatUnit === "WEEK" &&
-                    repeatInterval === "2" &&
-                    isQuickBiweekly) ||
-                  (repeatType === "CUSTOM" &&
-                    !(
-                      repeatUnit === "WEEK" &&
-                      (repeatInterval === "1" || repeatInterval === "2")
-                    ) &&
-                    item.value === "CUSTOM");
-
-                return (
-                  <TouchableOpacity
-                    key={item.value}
-                    style={styles.optionListItem}
-                    onPress={() => {
-                      if (isQuickWeekly) {
-                        handleSelectQuickWeeklyRepeat("1");
-                        return;
-                      }
-
-                      if (isQuickBiweekly) {
-                        handleSelectQuickWeeklyRepeat("2");
-                        return;
-                      }
-
-                      handleSelectRepeatType(item.value as RepeatType);
-                    }}
-                  >
-                    <ThemedText
-                      style={[
-                        styles.optionListItemText,
-                        isSelected && styles.optionListItemTextSelected,
-                      ]}
-                    >
-                      {item.label}
-                    </ThemedText>
-
-                    {isSelected && item.value !== "CUSTOM" && (
-                      <IconSymbol name="checkmark" size={16} color="#405886" />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </Pressable>
-        </Pressable>
-      )}
-
-      {/* 사용자 설정 반복 모달 */}
-      {showCustomRepeatModal && (
-        <Pressable
-          style={styles.inlineModalOverlay}
-          onPress={() => setShowCustomRepeatModal(false)}
-        >
-          <Pressable
-            style={styles.inlineModalCard}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.inlineModalHeader}>
-              <ThemedText style={styles.inlineModalTitle}>
-                사용자 설정 반복
-              </ThemedText>
-
-              <TouchableOpacity onPress={handleSaveCustomRepeat}>
-                <ThemedText style={styles.inlineModalDone}>완료</ThemedText>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.inlinePickerRow}>
-              <NumberOptionColumn
-                title="빈도"
-                options={
-                  repeatUnit === "WEEK"
-                    ? WEEK_REPEAT_EVERY_OPTIONS
-                    : REPEAT_EVERY_OPTIONS
-                }
-                selectedValue={repeatInterval}
-                onSelect={setRepeatInterval}
-              />
-
-              <UnitOptionColumn
-                title="단위"
-                options={[
-                  { label: "일", value: "DAY" },
-                  { label: "주", value: "WEEK" },
-                ]}
-                selectedValue={repeatUnit}
-                onSelect={handleSelectCustomRepeatUnit}
-              />
-            </View>
-
-            {/* 주 단위일 때만 요일 선택 영역 표시 */}
-            {repeatUnit === "WEEK" && (
-              <View style={styles.weekdaySection}>
-                <View style={styles.weekdayTitleRow}>
-                  <ThemedText style={styles.weekdayTitle}>요일</ThemedText>
-                  <ThemedText style={styles.weekdayHelperText}>
-                    주 반복은 격주까지만 가능해요
-                  </ThemedText>
-                </View>
-
-                <View style={styles.weekdayGrid}>
-                  {WEEKDAY_OPTIONS.map((day) => {
-                    const isSelected = repeatDays.includes(day.value);
-
-                    return (
-                      <TouchableOpacity
-                        key={day.value}
-                        style={[
-                          styles.weekdayChip,
-                          isSelected && styles.weekdayChipSelected,
-                        ]}
-                        onPress={() => handleToggleWeekday(day.value)}
-                      >
-                        <ThemedText
-                          style={[
-                            styles.weekdayChipText,
-                            isSelected && styles.weekdayChipTextSelected,
-                          ]}
-                        >
-                          {day.label}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-          </Pressable>
-        </Pressable>
-      )}
     </ThemedView>
   );
 }
@@ -1195,7 +1251,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 32,
     paddingHorizontal: 24,
     paddingTop: 0,
-    paddingBottom: 0,
+    paddingBottom: 100,
+    marginBottom: -100,
     maxHeight: "92%",
     overflow: "hidden",
   },
@@ -1542,22 +1599,28 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
+  weekdayRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
 
   weekdayChip: {
-    width: "22%",
-    minHeight: 38,
-    borderRadius: 999,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: "#F3F4F8",
     alignItems: "center",
     justifyContent: "center",
   },
 
   weekdayChipSelected: {
-    backgroundColor: "#6BBFCC",
+    borderColor: "#405886",
+    backgroundColor: "#405886",
   },
-
   weekdayChipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
     color: "#8A8C9A",
   },
@@ -1588,5 +1651,196 @@ const styles = StyleSheet.create({
     color: "#7A87A6",
     marginBottom: 8,
     paddingHorizontal: 4,
+  },
+  repeatPanel: {
+    marginTop: 10,
+    gap: 6,
+  },
+
+  customRepeatPanel: {
+    marginTop: 12,
+    gap: 14,
+  },
+
+  dialLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#A0B0D0",
+    marginBottom: 8,
+  },
+
+  repeatOptionButton: {
+    borderWidth: 0.5,
+    borderColor: "#E4E7EE",
+    borderRadius: 11,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    minHeight: 34,
+    backgroundColor: "#FAFBFD",
+  },
+
+  repeatOptionButtonSelected: {
+    borderColor: "#405886",
+    backgroundColor: "#F3F6FB",
+  },
+
+  repeatOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6D7690",
+  },
+
+  repeatOptionTextSelected: {
+    color: "#405886",
+  },
+
+  repeatTwoColumnRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+
+  repeatFlexButton: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  frequencyGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  frequencyChip: {
+    minWidth: 42,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E4E7EE",
+    backgroundColor: "#FAFBFD",
+    alignItems: "center",
+  },
+
+  frequencyChipSelected: {
+    borderColor: "#405886",
+    backgroundColor: "#EEF2FF",
+  },
+
+  frequencyChipText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6D7690",
+  },
+
+  frequencyChipTextSelected: {
+    color: "#405886",
+  },
+  customRepeatFooter: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: -2,
+  },
+
+  customRepeatDoneButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "#EEF2FF",
+  },
+
+  customRepeatDoneText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#405886",
+  },
+
+  repeatSection: {
+    width: "100%",
+  },
+
+  repeatHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  repeatSelectButton: {
+    minWidth: 96,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E4E7EE",
+    borderRadius: 14,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    backgroundColor: "#FFFFFF",
+  },
+
+  repeatIntervalValueBox: {
+    flex: 1,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FAFBFD",
+    borderWidth: 1,
+    borderColor: "#E4E7EE",
+  },
+
+  repeatIntervalValueText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#405886",
+  },
+  repeatIntervalStepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  repeatStepperButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F8",
+    borderWidth: 1,
+    borderColor: "#E4E7EE",
+  },
+
+  repeatStepperButtonText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#405886",
+  },
+
+  repeatIntervalInputBox: {
+    flex: 1,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#E7EAF3",
+    backgroundColor: "#FAFBFD",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+  },
+  repeatIntervalInput: {
+    minWidth: 28,
+    maxWidth: 52,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#2F3550",
+    textAlign: "center",
+  },
+
+  repeatIntervalSuffix: {
+    marginLeft: 4,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6D7690",
   },
 });
