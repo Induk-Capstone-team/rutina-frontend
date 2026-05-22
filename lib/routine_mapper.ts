@@ -25,7 +25,7 @@ export const toScheduleRoutine = (
   endTime: api.endTime,
   startDate: api.startAt,
   endDate: api.endAt,
-  state: true,
+  state: api.isCompleted,
   completedDates,
 });
 // 로컬 타입 → API 요청으로 변환
