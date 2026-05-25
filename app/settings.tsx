@@ -1,6 +1,7 @@
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { authApi } from "@/lib/data/auth_api";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useState, useCallback } from "react";
 import {
   Alert,
   SafeAreaView,
@@ -60,11 +61,42 @@ const SettingItem = ({
   );
 };
 
+const getEmailDisplay = (emailStr: string) => {
+  if (!emailStr) return { isSocial: false, text: "이메일 정보 없음" };
+  const lower = emailStr.toLowerCase();
+  if (lower.includes("kakao")) return { isSocial: true, text: "카카오 로그인" };
+  if (lower.includes("naver")) return { isSocial: true, text: "네이버 로그인" };
+  if (lower.includes("google")) return { isSocial: true, text: "구글 로그인" };
+  if (lower.includes("apple")) return { isSocial: true, text: "애플 로그인" };
+  return { isSocial: false, text: emailStr };
+};
+
 export default function SettingsScreen() {
   const router = useRouter();
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const { logout } = useAuthViewModel();
+
+  const [profileName, setProfileName] = useState("홍길동");
+  const [profileEmail, setProfileEmail] = useState("gildong@rutia.app");
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadProfile = async () => {
+        try {
+          const response = await authApi.getProfile();
+          const userData = response?.data || response;
+          if (userData) {
+            if (userData.nickname) setProfileName(userData.nickname);
+            if (userData.email) setProfileEmail(userData.email);
+          }
+        } catch (error) {
+          console.error("Failed to load profile in settings:", error);
+        }
+      };
+      loadProfile();
+    }, [])
+  );
 
   const handleLogout = () => {
     Alert.alert("로그아웃", "정말 로그아웃 하시겠습니까?", [
@@ -95,18 +127,19 @@ export default function SettingsScreen() {
       </View>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Profile Section */}
-        <View style={styles.profileSection}>
-          <View style={styles.profileImageContainer}>
-            <Text style={styles.profileImageText}>나</Text>
-          </View>
+        <TouchableOpacity
+          style={styles.profileSection}
+          onPress={() => router.push("/profile")}
+          activeOpacity={0.7}
+        >
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>홍길동</Text>
-            <Text style={styles.profileEmail}>gildong@rutia.app</Text>
+            <Text style={styles.profileName}>{profileName}</Text>
+            <Text style={styles.profileEmail}>{getEmailDisplay(profileEmail).text}</Text>
           </View>
-          <TouchableOpacity style={styles.editProfileBtn}>
+          <View style={styles.editProfileBtn}>
             <Text style={styles.editProfileText}>수정</Text>
-          </TouchableOpacity>
-        </View>
+          </View>
+        </TouchableOpacity>
 
         {/* General Settings */}
         <Text style={styles.sectionTitle}>일반</Text>
@@ -118,24 +151,6 @@ export default function SettingsScreen() {
             value={notifications}
             onToggle={setNotifications}
           />
-          <View style={styles.divider} />
-          <SettingItem
-            icon="🌙"
-            title="다크 모드"
-            type="switch"
-            value={darkMode}
-            onToggle={setDarkMode}
-          />
-          <View style={styles.divider} />
-          <SettingItem icon="⏱" title="시간 형식" value="24시간" />
-        </View>
-
-        {/* Routine Settings */}
-        <Text style={styles.sectionTitle}>루틴 관리</Text>
-        <View style={styles.card}>
-          <SettingItem icon="🎨" title="루틴 색상 테마" value="기본" />
-          <View style={styles.divider} />
-          <SettingItem icon="📦" title="카테고 편집" />
         </View>
 
         {/* Support & Info empty */}

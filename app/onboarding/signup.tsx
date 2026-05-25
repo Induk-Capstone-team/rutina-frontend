@@ -46,18 +46,7 @@ export default function SignupScreen() {
     }
   }, [params.email, params.nickname]);
 
-  const [agreePrivacy, setAgreePrivacy] = useState(false);
-  const [agreeProfile, setAgreeProfile] = useState(false);
-  const [agreePush, setAgreePush] = useState(false);
 
-  const allAgreed = agreePrivacy && agreeProfile && agreePush;
-
-  const handleAllAgree = () => {
-    const nextState = !allAgreed;
-    setAgreePrivacy(nextState);
-    setAgreeProfile(nextState);
-    setAgreePush(nextState);
-  };
 
   const handleSendCode = async () => {
     if (!email || !email.includes("@")) {
@@ -93,19 +82,7 @@ export default function SignupScreen() {
       setError("비밀번호가 서로 다릅니다.");
       return;
     }
-    if (!agreePrivacy) {
-      setError("필수 약관에 동의해주세요.");
-      return;
-    }
 
-    const success = await signup(email, password, nickname);
-    if (success) {
-      // 회원가입 성공 시 토큰이 저장되므로, 바로 2단계(추가정보) 화면으로 이동
-      router.replace({
-        pathname: "/onboarding/signup2",
-        params: { email, nickname },
-      });
-    }
   };
 
   const isFormValid =
@@ -232,61 +209,7 @@ export default function SignupScreen() {
               />
             </View>
 
-            {/* 약관 동의 섹션 */}
-            <View style={styles.agreementSection}>
-              <TouchableOpacity
-                style={styles.allAgreeRow}
-                onPress={handleAllAgree}
-              >
-                <Ionicons
-                  name={allAgreed ? "checkbox" : "square-outline"}
-                  size={24}
-                  color={allAgreed ? "#2A3C6B" : "#A0B0D0"}
-                />
-                <Text style={styles.allAgreeText}>약관에 모두 동의합니다</Text>
-              </TouchableOpacity>
 
-              <View style={styles.divider} />
-
-              {[
-                {
-                  label: "[필수] 개인정보 수집 및 이용",
-                  state: agreePrivacy,
-                  setState: setAgreePrivacy,
-                  link: "/privacy",
-                },
-                {
-                  label: "[선택] 프로필 정보 이용",
-                  state: agreeProfile,
-                  setState: setAgreeProfile,
-                  link: "/profile",
-                },
-                {
-                  label: "[선택] 마케팅 푸시 알림",
-                  state: agreePush,
-                  setState: setAgreePush,
-                  link: "/push",
-                },
-              ].map((item, index) => (
-                <View key={index} style={styles.agreeRow}>
-                  <TouchableOpacity onPress={() => item.setState(!item.state)}>
-                    <Ionicons
-                      name={item.state ? "checkmark-circle" : "ellipse-outline"}
-                      size={22}
-                      color={item.state ? "#2A3C6B" : "#D1D9E6"}
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.agreeTextBtn}>
-                    <Text style={styles.agreeText}>{item.label}</Text>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={14}
-                      color="#A0B0D0"
-                    />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
 
             {error && <Text style={styles.mainErrorText}>{error}</Text>}
 

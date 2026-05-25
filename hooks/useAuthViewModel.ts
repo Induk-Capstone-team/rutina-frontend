@@ -182,10 +182,49 @@ export const useAuthViewModel = () => {
     }
   };
 
+  const updateNickname = async (nickname: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.updateNickname(nickname);
+      console.log("닉네임 업데이트 성공:", data);
+      return true;
+    } catch (err: any) {
+      console.log("닉네임 업데이트 에러:", err);
+      setError(err.response?.data?.message || err.message || "닉네임 업데이트 실패");
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.deleteAccount();
+      console.log("회원 탈퇴 성공:", data);
+      
+      await AsyncStorage.removeItem("userToken");
+      await AsyncStorage.removeItem("refreshToken");
+      authStore.setLoggedIn(false);
+      router.replace("/onboarding/login");
+      return true;
+    } catch (err: any) {
+      console.log("회원 탈퇴 에러:", err);
+      setError(err.response?.data?.message || err.message || "회원 탈퇴 실패");
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     login,
     signup,
     updateProfile,
+    updateNickname,
+    deleteAccount,
     logout,
     checkEmail,
     sendVerificationCode,
