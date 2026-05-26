@@ -1,10 +1,11 @@
 import { Header } from "@/components/ui/_header";
 import {
   HOBBY_OPTIONS,
-  TIME_OPTIONS,
   PURPOSE_OPTIONS,
+  START_OPTIONS,
+  TIME_OPTIONS, // 💡 훅에서 선언된 시작 옵션 배열 가져오기
   useAiRecommend,
-  type ChatMessage,
+  type ChatMessage
 } from "@/hooks/useAiRecommend";
 import type { RecommendedRoutine } from "@/lib/data/ai_api";
 import type { RoutineCategory } from "@/types/routine";
@@ -13,7 +14,6 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -76,36 +76,32 @@ function Chip({
 
 function RoutineCheckItem({
   routine,
-  checked,
-  onToggle,
   onEdit,
 }: {
   routine: RecommendedRoutine;
-  checked: boolean;
-  onToggle: () => void;
   onEdit: () => void;
 }) {
+  const hasTimeRange = routine.startTime.includes(":") && routine.endTime.includes(":");
+  const timeLabel = hasTimeRange
+    ? `${routine.startTime} – ${routine.endTime}`
+    : `추천: ${routine.startTime}`;
+
   return (
     <View style={s.routineItemWrapper}>
       <TouchableOpacity
         style={s.routineItem}
-        onPress={onToggle}
+        onPress={onEdit}
         activeOpacity={0.7}
       >
-        <View style={[s.checkbox, checked && s.checkboxChecked]}>
-          {checked && <Ionicons name="checkmark" size={14} color="#fff" />}
-        </View>
         <View style={{ flex: 1 }}>
           <Text style={s.routineTitle}>
-            {routine.startTime} – {routine.endTime} {routine.title}
+            {timeLabel} | {routine.title}
           </Text>
           {routine.description ? (
             <Text style={s.routineDesc}>({routine.description})</Text>
           ) : null}
         </View>
-      </TouchableOpacity>
-      <TouchableOpacity style={s.editBtn} onPress={onEdit}>
-        <Ionicons name="add-circle-outline" size={24} color={C.primary} />
+        <Ionicons name="add-circle-outline" size={24} color={C.primary} style={{ alignSelf: "center", marginRight: 4 }} />
       </TouchableOpacity>
     </View>
   );
@@ -139,17 +135,14 @@ export default function AiAnalysisScreen() {
     messages,
     isLoading,
     error,
-    profile,
     categories,
     recommendedRoutines,
-    checkedRoutineIds,
     startConversation,
     submitCategory,
     submitPurpose,
     submitTime,
     submitHobbies,
-    toggleRoutineCheck,
-    saveSelectedRoutines,
+    viewTodayRecords,
   } = useAiRecommend();
 
   const router = useRouter();
@@ -174,8 +167,6 @@ export default function AiAnalysisScreen() {
         pathname: "/modal",
         params: {
           title: routine.title,
-          startTime: routine.startTime,
-          endTime: routine.endTime,
           category: routine.category,
           description: routine.description,
         },
@@ -184,44 +175,7 @@ export default function AiAnalysisScreen() {
     [router],
   );
 
-  const handleSaveRoutines = useCallback(async () => {
-    if (checkedRoutineIds.size === 0) {
-      Alert.alert("선택 없음", "추가할 루틴을 선택해주세요.");
-      return;
-    }
 
-    // 첫 번째로 선택된 루틴을 가져옴 (현재는 하나씩 직접 추가하는 흐름을 위해)
-    const firstId = Array.from(checkedRoutineIds)[0];
-    const routine = recommendedRoutines.find((r) => r.id === firstId);
-
-    if (routine) {
-      handleEditAndAdd(routine);
-    }
-  }, [checkedRoutineIds, recommendedRoutines, handleEditAndAdd]);
-
-  // ── 대화 시작 전 ──
-  if (step === "init") {
-    return (
-      <SafeAreaView style={s.safe}>
-        <View style={s.container}>
-          <Header />
-          <View style={s.centerCard}>
-            <Text style={s.centerIcon}>🤖</Text>
-            <Text style={s.centerTitle}>AI 루틴 추천</Text>
-            <Text style={s.centerDesc}>
-              대화를 통해 나에게 맞는{"\n"}루틴을 추천받아 보세요!
-            </Text>
-            <TouchableOpacity style={s.primaryBtn} onPress={startConversation}>
-              <Ionicons name="chatbubbles" size={20} color="#fff" />
-              <Text style={s.primaryBtnText}>대화 시작하기</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // ── 대화 진행 중 ──
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.container}>
@@ -236,6 +190,8 @@ export default function AiAnalysisScreen() {
             style={s.chatArea}
             contentContainerStyle={s.chatContent}
             showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            onLayout={() => scrollRef.current?.scrollToEnd({ animated: true })}
           >
             {messages.map((msg) =>
               msg.role === "ai" ? (
@@ -251,7 +207,7 @@ export default function AiAnalysisScreen() {
                 <View style={[s.aiBubble, { flexDirection: "row" }]}>
                   <ActivityIndicator size="small" color={C.primary} />
                   <Text style={[s.aiBubbleText, { marginLeft: 8 }]}>
-                    루틴을 생성하고 있어요...
+                    기록을 가져오는 중입니다...
                   </Text>
                 </View>
               </View>
@@ -263,19 +219,9 @@ export default function AiAnalysisScreen() {
                   <RoutineCheckItem
                     key={r.id}
                     routine={r}
-                    checked={checkedRoutineIds.has(r.id)}
-                    onToggle={() => toggleRoutineCheck(r.id)}
                     onEdit={() => handleEditAndAdd(r)}
                   />
                 ))}
-                <TouchableOpacity
-                  style={s.addRoutineBtn}
-                  onPress={handleSaveRoutines}
-                >
-                  <Text style={s.addRoutineBtnText}>
-                    선택한 루틴 직접 추가하기
-                  </Text>
-                </TouchableOpacity>
               </View>
             )}
 
@@ -287,6 +233,36 @@ export default function AiAnalysisScreen() {
           </ScrollView>
 
           {/* ── 하단 선택 영역 ── */}
+          {/* 💡 수정 2: 대화창에 첫 진입했을 때 하단 바에 분기 옵션 버튼 노출 */}
+          {step === "start" && (
+            <View style={s.bottomBar}>
+              <Text style={s.optionGuidance}>원하시는 진행 방식을 선택해 주세요</Text>
+              <View style={s.chipWrap}>
+                {START_OPTIONS.map((o) => (
+                  <Chip
+                    key={o.key}
+                    label={o.label}
+                    selected={false}
+                    onPress={() => {
+                      if (o.key === "start") {
+                        // 바로 다음 질문(카테고리 선택) 단계로 메시지 처리 연계
+                        if (categories.length > 0) {
+                          // 유저 응답을 가상화하여 플로우 진행
+                          submitCategory(categories[0]); 
+                        } else {
+                          // 카테고리가 안 불러와졌을 경우 예외 처리 대응
+                          submitPurpose("새 루틴 매니징");
+                        }
+                      } else if (o.key === "records") {
+                        viewTodayRecords();
+                      }
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+
           {step === "goal" && (
             <View style={s.bottomBar}>
               <View style={s.chipWrap}>
@@ -313,6 +289,7 @@ export default function AiAnalysisScreen() {
               </TouchableOpacity>
             </View>
           )}
+
           {step === "purpose" && (
             <View style={s.bottomBar}>
               <View style={s.chipWrap}>
@@ -404,7 +381,7 @@ export default function AiAnalysisScreen() {
                 }}
               >
                 <Ionicons name="refresh" size={18} color={C.primary} />
-                <Text style={s.restartBtnText}>다시 추천받기</Text>
+                <Text style={s.restartBtnText}>다시 선택하기</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -430,20 +407,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 4,
     paddingBottom: 10,
   },
-  headerTitle: { fontSize: 20, fontWeight: "800", color: C.text },
-  stepBadge: {
-    backgroundColor: C.primary,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  stepBadgeText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-
   centerCard: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
     backgroundColor: "#fff",
     borderRadius: 30,
     marginBottom: 20,
@@ -460,34 +428,25 @@ const s = StyleSheet.create({
     color: C.textSub,
     textAlign: "center",
     lineHeight: 22,
-    marginBottom: 20,
+    marginBottom: 32,
   },
-  profileBadge: {
-    backgroundColor: C.checkBg,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    marginBottom: 20,
-  },
-  profileBadgeText: { color: C.primary, fontSize: 13, fontWeight: "600" },
-  primaryBtn: {
+  /* 진입용 대형 단일 버튼 스타일 */
+  startBtn: {
     flexDirection: "row",
     backgroundColor: C.primary,
-    borderRadius: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 28,
+    borderRadius: 22,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
     alignItems: "center",
-    gap: 8,
+    justifyContent: "center",
+    gap: 10,
     shadowColor: C.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
-    marginTop: 4,
-    width: "100%",
-    justifyContent: "center",
   },
-  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  startBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 
   chatArea: {
     flex: 1,
@@ -519,8 +478,6 @@ const s = StyleSheet.create({
     borderTopLeftRadius: 4,
     padding: 14,
     maxWidth: "78%",
-    flexWrap: "wrap",
-    alignItems: "center",
     borderWidth: 1,
     borderColor: C.border,
   },
@@ -554,8 +511,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#fff",
     borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderWidth: 1.5,
     borderColor: C.border,
   },
@@ -567,17 +524,25 @@ const s = StyleSheet.create({
     backgroundColor: "#fff",
     borderTopWidth: 1,
     borderColor: C.border,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: Platform.OS === "ios" ? 28 : 14,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === "ios" ? 28 : 16,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
+  },
+  optionGuidance: {
+    fontSize: 13,
+    color: C.textSub,
+    fontWeight: "600",
+    marginBottom: 10,
+    textAlign: "center"
   },
   chipWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
     marginBottom: 12,
+    justifyContent: "center",
   },
   nextBtn: {
     backgroundColor: C.primary,
@@ -606,19 +571,6 @@ const s = StyleSheet.create({
     alignItems: "flex-start",
     paddingVertical: 12,
   },
-  editBtn: { padding: 8, marginLeft: 4 },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: C.border,
-    marginRight: 12,
-    marginTop: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkboxChecked: { backgroundColor: C.check, borderColor: C.check },
   routineTitle: {
     fontSize: 14,
     fontWeight: "700",
@@ -626,14 +578,6 @@ const s = StyleSheet.create({
     lineHeight: 20,
   },
   routineDesc: { fontSize: 12, color: C.textSub, marginTop: 2 },
-  addRoutineBtn: {
-    backgroundColor: C.primary,
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 14,
-  },
-  addRoutineBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 
   restartBtn: {
     flexDirection: "row",

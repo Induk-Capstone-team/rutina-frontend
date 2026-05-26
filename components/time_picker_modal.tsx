@@ -2,9 +2,12 @@
 import { ThemedText } from "@/components/themed-text";
 import React, { useEffect, useState } from "react";
 import {
+  Keyboard,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -90,7 +93,84 @@ function StepperPicker({
     </View>
   );
 }
+function HourStepperPicker({
+  label,
+  value,
+  onIncrease,
+  onDecrease,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onIncrease: () => void;
+  onDecrease: () => void;
+  onChange: (v: string) => void;
+}) {
+  const [inputValue, setInputValue] = useState(value);
+  const [isFocused, setIsFocused] = useState(false);
 
+  useEffect(() => {
+    if (!isFocused) {
+      setInputValue(value);
+    }
+  }, [value, isFocused]);
+
+  const handleChangeText = (text: string) => {
+    const cleaned = text.replace(/[^0-9]/g, "").slice(0, 2);
+    setInputValue(cleaned);
+
+    if (Platform.OS === "android" && cleaned.length === 2) {
+      const num = parseInt(cleaned, 10);
+      const clamped = Math.min(23, Math.max(0, num));
+      const padded = padTwo(clamped);
+      setInputValue(padded);
+      onChange(padded);
+      Keyboard.dismiss();
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    const num = parseInt(inputValue, 10);
+    if (isNaN(num) || inputValue === "") {
+      setInputValue(value); // 원래 값 복원
+      return;
+    }
+    const clamped = Math.min(23, Math.max(0, num));
+    const padded = padTwo(clamped);
+    setInputValue(padded);
+    onChange(padded);
+  };
+
+  return (
+    <View style={styles.stepperBox}>
+      <ThemedText style={styles.stepperLabel}>{label}</ThemedText>
+      <View style={styles.stepperRow}>
+        <TouchableOpacity style={styles.stepperButton} onPress={onDecrease}>
+          <ThemedText style={styles.stepperButtonText}>-</ThemedText>
+        </TouchableOpacity>
+
+        <TextInput
+          style={styles.stepperValueInput}
+          value={inputValue}
+          onChangeText={handleChangeText}
+          onFocus={() => {
+            setIsFocused(true);
+            setInputValue("");
+          }}
+          onBlur={handleBlur}
+          keyboardType="number-pad"
+          maxLength={2}
+          returnKeyType="done"
+        />
+
+        <TouchableOpacity style={styles.stepperButton} onPress={onIncrease}>
+          <ThemedText style={styles.stepperButtonText}>+</ThemedText>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 const TimePickerModal = ({
   visible,
   startHour,
@@ -158,11 +238,12 @@ const TimePickerModal = ({
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>시작 시간</ThemedText>
             <View style={styles.pickerRow}>
-              <StepperPicker
+              <HourStepperPicker
                 label="시"
                 value={tempStartHour}
                 onIncrease={() => setTempStartHour(getNextHour(tempStartHour))}
                 onDecrease={() => setTempStartHour(getPrevHour(tempStartHour))}
+                onChange={setTempStartHour}
               />
               <StepperPicker
                 label="분"
@@ -180,11 +261,12 @@ const TimePickerModal = ({
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>종료 시간</ThemedText>
             <View style={styles.pickerRow}>
-              <StepperPicker
+              <HourStepperPicker
                 label="시"
                 value={tempEndHour}
                 onIncrease={() => setTempEndHour(getNextHour(tempEndHour))}
                 onDecrease={() => setTempEndHour(getPrevHour(tempEndHour))}
+                onChange={setTempEndHour}
               />
               <StepperPicker
                 label="분"
@@ -355,5 +437,17 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "800",
+  },
+  stepperValueInput: {
+    flex: 2,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 6,
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#2A3C6B",
+    textAlign: "center",
   },
 });

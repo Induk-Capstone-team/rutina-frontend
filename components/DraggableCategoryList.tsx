@@ -25,6 +25,8 @@ interface Props<T extends DraggableItem> {
   contentContainerStyle?: any;
 }
 
+const SPRING_CONFIG = { damping: 20, stiffness: 100, mass: 0.6 };
+
 function DraggableRow<T extends DraggableItem>({
   item,
   index,
@@ -32,6 +34,7 @@ function DraggableRow<T extends DraggableItem>({
   hoverIndex,
   dragY,
   draggedHeight,
+  startAbsoluteY,
   onLayout,
   onDragStart,
   onDragUpdate,
@@ -44,6 +47,7 @@ function DraggableRow<T extends DraggableItem>({
   hoverIndex: number | null;
   dragY: SharedValue<number>;
   draggedHeight: number;
+  startAbsoluteY: SharedValue<number>;
   onLayout: (index: number, e: LayoutChangeEvent) => void;
   onDragStart: (index: number, absoluteY: number) => void;
   onDragUpdate: (absoluteY: number) => void;
@@ -62,6 +66,9 @@ function DraggableRow<T extends DraggableItem>({
         })
         .onUpdate((e) => {
           "worklet";
+          // dragY를 worklet에서 직접 업데이트 — JS 스레드 경유 없이 즉시 반영
+          dragY.value = e.absoluteY - startAbsoluteY.value;
+          // hover 인덱스 계산만 JS 스레드로
           runOnJS(onDragUpdate)(e.absoluteY);
         })
         .onEnd(() => {
@@ -72,7 +79,7 @@ function DraggableRow<T extends DraggableItem>({
           "worklet";
           runOnJS(onDragEnd)();
         }),
-    [index, onDragStart, onDragUpdate, onDragEnd],
+    [index, onDragStart, onDragUpdate, onDragEnd, dragY, startAbsoluteY],
   );
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -88,9 +95,7 @@ function DraggableRow<T extends DraggableItem>({
 
     if (draggingIndex === null || hoverIndex === null) {
       return {
-        transform: [
-          { translateY: withSpring(0, { damping: 20, stiffness: 200 }) },
-        ],
+        transform: [{ translateY: withSpring(0, SPRING_CONFIG) }],
         zIndex: 1,
         opacity: 1,
       };
@@ -101,14 +106,7 @@ function DraggableRow<T extends DraggableItem>({
 
     if (from > to && index >= to && index < from) {
       return {
-        transform: [
-          {
-            translateY: withSpring(draggedHeight, {
-              damping: 20,
-              stiffness: 200,
-            }),
-          },
-        ],
+        transform: [{ translateY: withSpring(draggedHeight, SPRING_CONFIG) }],
         zIndex: 1,
         opacity: 1,
       };
@@ -116,23 +114,14 @@ function DraggableRow<T extends DraggableItem>({
 
     if (from < to && index > from && index <= to) {
       return {
-        transform: [
-          {
-            translateY: withSpring(-draggedHeight, {
-              damping: 20,
-              stiffness: 200,
-            }),
-          },
-        ],
+        transform: [{ translateY: withSpring(-draggedHeight, SPRING_CONFIG) }],
         zIndex: 1,
         opacity: 1,
       };
     }
 
     return {
-      transform: [
-        { translateY: withSpring(0, { damping: 20, stiffness: 200 }) },
-      ],
+      transform: [{ translateY: withSpring(0, SPRING_CONFIG) }],
       zIndex: 1,
       opacity: 1,
     };
@@ -172,23 +161,24 @@ export function DraggableCategoryList<T extends DraggableItem>({
   const itemsRef = useRef<T[]>(data);
   const draggingIndexRef = useRef<number | null>(null);
   const hoverIndexRef = useRef<number | null>(null);
-  const startAbsoluteYRef = useRef(0);
   const isEndedRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
-  const containerRef = useRef<View>(null); // ← View ref로 measure
+  const containerRef = useRef<View>(null);
   const autoScrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastReorderTime = useRef<number>(0);
 
   const dragY = useSharedValue(0);
   const isDragging = useSharedValue(false);
+  const startAbsoluteY = useSharedValue(0);
 
   useEffect(() => {
     if (draggingIndex === null) {
-      // 드래그 종료 후 500ms 이내엔 외부 data 변경 무시
       if (Date.now() - lastReorderTime.current < 500) return;
       setItems([...data]);
       itemsRef.current = data;
     }
   }, [data, draggingIndex]);
+
   const stopAutoScroll = useCallback(() => {
     if (autoScrollTimer.current) {
       clearInterval(autoScrollTimer.current);
@@ -200,7 +190,7 @@ export function DraggableCategoryList<T extends DraggableItem>({
     (direction: "up" | "down") => {
       stopAutoScroll();
       autoScrollTimer.current = setInterval(() => {
-        scrollOffsetY.current += direction === "down" ? 8 : -8;
+        scrollOffsetY.current += direction === "down" ? 10 : -10;
         if (scrollOffsetY.current < 0) scrollOffsetY.current = 0;
         flatListRef.current?.scrollToOffset({
           offset: scrollOffsetY.current,
@@ -244,23 +234,28 @@ export function DraggableCategoryList<T extends DraggableItem>({
 
   const handleDragStart = useCallback(
     (index: number, absoluteY: number) => {
+      // 드래그 시작마다 재측정
+      containerRef.current?.measureInWindow((_x, y, _w, h) => {
+        listTopY.current = y;
+        listHeight.current = h;
+      });
+
       isEndedRef.current = false;
       draggingIndexRef.current = index;
       hoverIndexRef.current = index;
-      startAbsoluteYRef.current = absoluteY;
+      startAbsoluteY.value = absoluteY;
       dragY.value = 0;
       isDragging.value = true;
       setDraggedHeight(itemHeights.current[index] ?? 200);
       setDraggingIndex(index);
       setHoverIndex(index);
     },
-    [dragY, isDragging],
+    [dragY, isDragging, startAbsoluteY],
   );
 
   const handleDragUpdate = useCallback(
     (absoluteY: number) => {
-      dragY.value = absoluteY - startAbsoluteYRef.current;
-
+      // dragY는 이미 worklet에서 업데이트됨 — 여기선 hover 인덱스와 오토스크롤만 처리
       const listBottom = listTopY.current + listHeight.current;
       const scrollZone = 80;
       if (absoluteY > listBottom - scrollZone) {
@@ -277,9 +272,9 @@ export function DraggableCategoryList<T extends DraggableItem>({
         setHoverIndex(newHover);
       }
     },
-    [dragY, getIndexFromY, startAutoScroll, stopAutoScroll],
+    [getIndexFromY, startAutoScroll, stopAutoScroll],
   );
-  const lastReorderTime = useRef<number>(0);
+
   const handleDragEnd = useCallback(() => {
     if (isEndedRef.current) return;
     isEndedRef.current = true;
@@ -288,13 +283,9 @@ export function DraggableCategoryList<T extends DraggableItem>({
 
     const from = draggingIndexRef.current;
     const to = hoverIndexRef.current;
-    console.log("from:", from, "to:", to);
-    console.log(
-      "현재 내부 순서:",
-      itemsRef.current.map((item) => item.name),
-    );
+
     isDragging.value = false;
-    dragY.value = withSpring(0, { damping: 20, stiffness: 200 });
+    dragY.value = withSpring(0, { damping: 20, stiffness: 100, mass: 0.6 });
 
     if (from !== null && to !== null && from !== to) {
       const currentItems = [...itemsRef.current];
@@ -305,6 +296,7 @@ export function DraggableCategoryList<T extends DraggableItem>({
       setItems(currentItems);
       onReorder(currentItems);
     }
+
     setDraggingIndex(null);
     setHoverIndex(null);
     draggingIndexRef.current = null;
@@ -316,20 +308,11 @@ export function DraggableCategoryList<T extends DraggableItem>({
     <View
       ref={containerRef}
       style={style}
-      onLayout={(e) => {
-        listHeight.current = e.nativeEvent.layout.height;
-        containerRef.current?.measure(
-          (
-            _x: number,
-            _y: number,
-            _w: number,
-            _h: number,
-            _px: number,
-            py: number,
-          ) => {
-            listTopY.current = py;
-          },
-        );
+      onLayout={() => {
+        containerRef.current?.measureInWindow((_x, y, _w, h) => {
+          listTopY.current = y;
+          listHeight.current = h;
+        });
       }}
     >
       <FlatList
@@ -355,6 +338,7 @@ export function DraggableCategoryList<T extends DraggableItem>({
             hoverIndex={hoverIndex}
             dragY={dragY}
             draggedHeight={draggedHeight}
+            startAbsoluteY={startAbsoluteY}
             onLayout={onItemLayout}
             onDragStart={handleDragStart}
             onDragUpdate={handleDragUpdate}
