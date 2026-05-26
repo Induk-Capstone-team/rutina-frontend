@@ -1,6 +1,6 @@
-import { authStore } from "@/store/authStore";
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
 import { CategoryApi } from "@/lib/data/category_api";
+import { authStore } from "@/store/authStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -69,7 +69,7 @@ export default function SignupStep2Screen() {
     isSocial?: string;
   }>();
 
-  const { signup, updateProfile, isLoading, error } = useAuthViewModel();
+  const {updateProfile, isLoading, error } = useAuthViewModel();
 
   const [age, setAge] = useState("");
   const [job, setJob] = useState("");

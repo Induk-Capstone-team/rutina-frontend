@@ -1,4 +1,5 @@
 // lib/data/ai_api.ts
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "./api_client";
 
 // ── 유저 프로필 (DB에서 가져올 정보) ──
@@ -17,6 +18,7 @@ export interface RecommendedRoutine {
   description: string; // 부가 설명
   category: string;
   categoryId?: number;
+  durationMinutes?: number;
 }
 
 // ── 대화 단계별 사용자 입력 ──
@@ -52,6 +54,17 @@ export interface BackendRecommendationResponse {
   };
 }
 
+export interface BackendTodayRecommendationResponse {
+  success: boolean;
+  code: string;
+  message: string;
+  data: {
+    recommendationId: number;
+    categoryId: number;
+    routines: BackendRecommendationRoutine[];
+  }[];
+}
+
 // ── 시작 시간과 진행 시간을 통해 종료 시간 계산 ──
 export function calculateEndTime(
   startTime: string,
@@ -84,9 +97,13 @@ export const requestRoutineRecommendation = async (
     console.log(JSON.stringify(requestBody, null, 2));
     console.log("=========================================");
 
+    const token = await AsyncStorage.getItem("userToken");
     const response = await apiClient.post<BackendRecommendationResponse>(
       "/api/v1/ai-routines/recommend",
       requestBody,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
     );
 
     console.log("=========================================");
@@ -111,9 +128,10 @@ export const requestRoutineRecommendation = async (
         title: r.title,
         startTime,
         endTime,
-        description: "AI 추천 루틴",
+        description: `예상 시간: ${r.durationMinutes}분`,
         category: categoryName,
         categoryId: categoryId,
+        durationMinutes: r.durationMinutes,
       };
     });
   } catch (error: any) {
@@ -133,4 +151,46 @@ export const requestRoutineRecommendation = async (
       serverMessage || error?.message || "AI 응답을 처리하는데 실패했습니다.",
     );
   }
+}
+export const requestTodayRecommendations = async (): Promise<RecommendedRoutine[]> => {
+  try {
+    console.log("🤖 [AI API Request] 오늘 기록 조회 요청");
+    const token = await AsyncStorage.getItem("userToken");
+    const response = await apiClient.get<BackendTodayRecommendationResponse>(
+      "/api/v1/ai-routines/recommendations/today",
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    console.log("🤖 [AI API Response] 오늘 기록 조회 성공");
+    console.log(JSON.stringify(response.data, null, 2));
+    if (!response.data.success) {
+      throw new Error(response.data.message || "오늘 기록을 가져오는데 실패했습니다.");
+    }
+    const recommendationList = response.data.data;
+    if (!recommendationList || recommendationList.length === 0) {
+      throw new Error("오늘 추천된 루틴 기록이 존재하지 않습니다.");
+    }
+    const { categoryId, routines } = recommendationList[0];
+    const categoryName = "오늘 기록"; // fallback name
+    return routines.map((r, i) => {
+      const startTime = r.recommendedTime;
+      const endTime = calculateEndTime(startTime, r.durationMinutes);
+      return {
+        id: `today-${r.optionId || i}-${Date.now()}`,
+        title: r.title,
+        startTime,
+        endTime,
+        description: `예상 시간: ${r.durationMinutes}분`,
+        category: categoryName,
+        categoryId: categoryId,
+        durationMinutes: r.durationMinutes,
+      };
+    });
+  } catch (error: any) {
+    console.error("오늘 기록 조회 에러:", error);
+    const serverMessage = error?.response?.data?.message || error?.response?.data?.error;
+    throw new Error(serverMessage || error?.message || "오늘 기록을 처리하는데 실패했습니다.");
+  }
 };
+
