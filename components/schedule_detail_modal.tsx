@@ -1,10 +1,6 @@
 //schedule_detail_modal.tsx
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import {
-  EVENT_TYPES,
-  getCategoryChipStyle,
-  getCategoryStyle,
-} from "@/lib/category";
+import { getCategoryChipStyle, getCategoryStyle } from "@/lib/category";
 import { CategoryService } from "@/services/category_service";
 import { RoutineService } from "@/services/routine_service";
 import type {
@@ -17,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -249,12 +245,55 @@ function TimeStepperControl({
   value,
   onIncrease,
   onDecrease,
+  onChange,
 }: {
   label: string;
   value: string;
   onIncrease: () => void;
   onDecrease: () => void;
+  onChange?: (value: string) => void;
 }) {
+  const [inputValue, setInputValue] = useState(value);
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setInputValue(value);
+    }
+  }, [value, isFocused]);
+
+  const handleChangeText = (text: string) => {
+    const cleaned = text.replace(/[^0-9]/g, "").slice(0, 2);
+    setInputValue(cleaned);
+
+    if (Platform.OS === "android" && cleaned.length === 2) {
+      const num = Number(cleaned);
+      const safeHour = padNumber(clamp(num, 0, 23));
+      setInputValue(safeHour);
+      onChange?.(safeHour);
+      Keyboard.dismiss();
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+
+    if (!onChange || inputValue === "") {
+      setInputValue(value);
+      return;
+    }
+
+    const num = Number(inputValue);
+    if (Number.isNaN(num)) {
+      setInputValue(value);
+      return;
+    }
+
+    const safeHour = padNumber(clamp(num, 0, 23));
+    setInputValue(safeHour);
+    onChange(safeHour);
+  };
+
   return (
     <View style={styles.timeStepperBox}>
       <Text style={styles.timeStepperLabel}>{label}</Text>
@@ -264,9 +303,29 @@ function TimeStepperControl({
           <Text style={styles.timeStepperButtonText}>-</Text>
         </TouchableOpacity>
 
-        <View style={styles.timeStepperValueBox}>
-          <Text style={styles.timeStepperValueText}>{value}</Text>
-        </View>
+        {onChange ? (
+          <TextInput
+            style={styles.timeStepperValueInput}
+            value={inputValue}
+            onChangeText={handleChangeText}
+            onFocus={() => {
+              setIsFocused(true);
+              setInputValue("");
+            }}
+            onBlur={handleBlur}
+            keyboardType="number-pad"
+            maxLength={2}
+            returnKeyType="done"
+            blurOnSubmit
+            onSubmitEditing={() => {
+              Keyboard.dismiss();
+            }}
+          />
+        ) : (
+          <View style={styles.timeStepperValueBox}>
+            <Text style={styles.timeStepperValueText}>{value}</Text>
+          </View>
+        )}
 
         <TouchableOpacity style={styles.timeStepperButton} onPress={onIncrease}>
           <Text style={styles.timeStepperButtonText}>+</Text>
@@ -275,7 +334,6 @@ function TimeStepperControl({
     </View>
   );
 }
-
 export function ScheduleDetailModal({
   visible,
   routine,
@@ -286,7 +344,7 @@ export function ScheduleDetailModal({
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [title, setTitle] = useState("");
-  const [categoryName, setCategoryName] = useState("기타");
+  const [categoryName, setCategoryName] = useState("");
   const [selectedColor, setSelectedColor] = useState("#C4C6D0");
 
   const [startDateYear, setStartDateYear] = useState("2026");
@@ -327,9 +385,8 @@ export function ScheduleDetailModal({
     setIsEditMode(false);
     setShowCalendar(false);
     setTitle(targetRoutine.title);
-    setCategoryName(targetRoutine.categoryName ?? "기타");
-    setSelectedColor(targetRoutine.color ?? EVENT_TYPES["기타"].dot);
-
+    setCategoryName(targetRoutine.categoryName ?? "");
+    setSelectedColor(targetRoutine.color ?? "#C4C6D0");
     setStartDateYear(startDateParts.year);
     setStartDateMonth(startDateParts.month);
     setStartDateDay(startDateParts.day);
@@ -354,12 +411,17 @@ export function ScheduleDetailModal({
 
     CategoryService.getAll()
       .then((serverCategories) => {
-        const custom = serverCategories
-          .filter((c) => !Object.keys(EVENT_TYPES).includes(c.name))
-          .map((c) => ({ name: c.name, color: c.colorCode }));
-        setCustomCategories(custom);
+        const categories = serverCategories.map((c) => ({
+          name: c.name,
+          color: c.colorCode,
+        }));
+        setCustomCategories(categories);
       })
-      .catch(console.error);
+      .catch((error) => {
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) return;
+        console.error("카테고리 불러오기 실패", error);
+      });
   }, [visible]);
 
   useEffect(() => {
@@ -375,10 +437,7 @@ export function ScheduleDetailModal({
   }, [customCategories]);
 
   const categoryList = useMemo(() => {
-    return [
-      ...Object.keys(EVENT_TYPES),
-      ...customCategories.map((item) => item.name),
-    ];
+    return customCategories.map((item) => item.name);
   }, [customCategories]);
 
   const previewRoutine = useMemo(() => {
@@ -462,10 +521,6 @@ export function ScheduleDetailModal({
         style: "destructive",
         onPress: async () => {
           try {
-            // 서버 버그 우회:
-            // isCompleted: true 상태의 루틴은 삭제 시 500 에러 발생
-            // 삭제 전 오늘 날짜 기준으로 완료 상태를 확인하고
-            // true면 토글로 false로 되돌린 뒤 삭제
             const today = new Date();
             const todayString = [
               today.getFullYear(),
@@ -479,9 +534,7 @@ export function ScheduleDetailModal({
             if (isCompletedToday) {
               try {
                 await RoutineService.toggleComplete(routine.id, todayString);
-              } catch {
-                // 토글 실패 시 그냥 삭제 시도
-              }
+              } catch {}
             }
 
             await RoutineService.deleteById(routine.id);
@@ -600,27 +653,9 @@ export function ScheduleDetailModal({
           c.name.trim().toLowerCase() === categoryName.trim().toLowerCase(),
       );
       let resolvedCategoryId: number | null = matched?.id ?? null;
-
       if (resolvedCategoryId === null) {
-        try {
-          const created = await CategoryService.create(
-            categoryName,
-            selectedColor,
-          );
-          resolvedCategoryId = created.id;
-        } catch (createError: any) {
-          if (createError?.response?.status === 409) {
-            const retry = await CategoryService.getAll();
-            const retryMatched = retry.find(
-              (c) =>
-                c.name.trim().toLowerCase() ===
-                categoryName.trim().toLowerCase(),
-            );
-            resolvedCategoryId = retryMatched?.id ?? null;
-          } else {
-            throw createError;
-          }
-        }
+        Alert.alert("안내", "카테고리를 선택해주세요.");
+        return;
       }
 
       const newStartTime = makeTime(
@@ -656,7 +691,7 @@ export function ScheduleDetailModal({
       });
 
       setIsEditMode(false);
-      onClose(); // ← 먼저 닫고
+      onClose();
       await onUpdated();
     } catch (error: any) {
       const status = error?.response?.status;
@@ -671,14 +706,12 @@ export function ScheduleDetailModal({
       setIsSaving(false);
     }
   };
-
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <Pressable style={styles.detailOverlay} onPress={onClose}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{ width: "100%", alignItems: "center" }}
-        >
+      <View style={styles.modalRoot}>
+        <Pressable style={styles.detailOverlay} onPress={onClose} />
+
+        <View style={styles.keyboardAvoidingArea} pointerEvents="box-none">
           <Pressable
             style={styles.detailCard}
             onPress={(e) => e.stopPropagation()}
@@ -696,9 +729,13 @@ export function ScheduleDetailModal({
                       <>
                         <TouchableOpacity
                           onPress={handleEdit}
-                          style={styles.editButton}
+                          style={styles.editIconButton}
                         >
-                          <Text style={styles.editText}>수정</Text>
+                          <Ionicons
+                            name="pencil-outline"
+                            size={18}
+                            color="#405886"
+                          />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -757,7 +794,7 @@ export function ScheduleDetailModal({
                     <Text
                       style={[styles.tagText, { color: categoryStyle.text }]}
                     >
-                      {previewRoutine.categoryName ?? "기타"}
+                      {previewRoutine.categoryName ?? "카테고리 없음"}{" "}
                     </Text>
                   </View>
                 </View>
@@ -826,6 +863,7 @@ export function ScheduleDetailModal({
                 showsVerticalScrollIndicator={false}
                 nestedScrollEnabled
                 keyboardShouldPersistTaps="always"
+                keyboardDismissMode="on-drag"
               >
                 <View style={styles.inputBlock}>
                   <Text style={styles.editSectionLabel}>제목</Text>
@@ -1003,6 +1041,7 @@ export function ScheduleDetailModal({
                           onDecrease={() =>
                             setStartHour(getPrevHour(startHour))
                           }
+                          onChange={setStartHour}
                         />
                         <TimeStepperControl
                           label="분"
@@ -1025,70 +1064,19 @@ export function ScheduleDetailModal({
                         <TimeStepperControl
                           label="시"
                           value={endHour}
-                          onIncrease={() => {
-                            const next = getNextHour(endHour);
-                            const startTotal =
-                              Number(startHour) * 60 + Number(startMinute);
-                            const endTotal =
-                              Number(next) * 60 + Number(endMinute);
-                            if (endTotal <= startTotal) {
-                              Alert.alert(
-                                "안내",
-                                "종료 시간은 시작 시간보다 늦어야 해요.",
-                              );
-                              return;
-                            }
-                            setEndHour(next);
-                          }}
-                          onDecrease={() => {
-                            const next = getPrevHour(endHour);
-                            const startTotal =
-                              Number(startHour) * 60 + Number(startMinute);
-                            const endTotal =
-                              Number(next) * 60 + Number(endMinute);
-                            if (endTotal <= startTotal) {
-                              Alert.alert(
-                                "안내",
-                                "종료 시간은 시작 시간보다 늦어야 해요.",
-                              );
-                              return;
-                            }
-                            setEndHour(next);
-                          }}
+                          onIncrease={() => setEndHour(getNextHour(endHour))}
+                          onDecrease={() => setEndHour(getPrevHour(endHour))}
+                          onChange={setEndHour}
                         />
                         <TimeStepperControl
                           label="분"
                           value={endMinute}
-                          onIncrease={() => {
-                            const next = getNextMinute(endMinute);
-                            const startTotal =
-                              Number(startHour) * 60 + Number(startMinute);
-                            const endTotal =
-                              Number(endHour) * 60 + Number(next);
-                            if (endTotal <= startTotal) {
-                              Alert.alert(
-                                "안내",
-                                "종료 시간은 시작 시간보다 늦어야 해요.",
-                              );
-                              return;
-                            }
-                            setEndMinute(next);
-                          }}
-                          onDecrease={() => {
-                            const next = getPrevMinute(endMinute);
-                            const startTotal =
-                              Number(startHour) * 60 + Number(startMinute);
-                            const endTotal =
-                              Number(endHour) * 60 + Number(next);
-                            if (endTotal <= startTotal) {
-                              Alert.alert(
-                                "안내",
-                                "종료 시간은 시작 시간보다 늦어야 해요.",
-                              );
-                              return;
-                            }
-                            setEndMinute(next);
-                          }}
+                          onIncrease={() =>
+                            setEndMinute(getNextMinute(endMinute))
+                          }
+                          onDecrease={() =>
+                            setEndMinute(getPrevMinute(endMinute))
+                          }
                         />
                       </View>
                     </>
@@ -1117,32 +1105,45 @@ export function ScheduleDetailModal({
                   </View>
                 </View>
                 <View style={styles.inputBlock}>
-                  <Text style={styles.editSectionLabel}>반복 설정</Text>
-
-                  {/* 현재 반복 설정 표시 버튼 */}
-                  <TouchableOpacity
-                    style={styles.repeatOptionButton}
-                    onPress={() => {
-                      setShowRepeatPanel((prev) => !prev);
-                      setShowCustomRepeatPanel(false);
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 8,
                     }}
                   >
-                    <Text style={styles.repeatOptionText}>
-                      {getRepeatLabel(
-                        repeatType,
-                        repeatInterval,
-                        repeatUnit,
-                        repeatDays,
-                      )}
+                    <Text
+                      style={[styles.editSectionLabel, { marginBottom: 0 }]}
+                    >
+                      반복 설정
                     </Text>
-                  </TouchableOpacity>
 
+                    <TouchableOpacity
+                      style={styles.repeatCurrentChip}
+                      onPress={() => {
+                        setShowRepeatPanel((prev) => !prev);
+                        setShowCustomRepeatPanel(false);
+                      }}
+                    >
+                      <View style={styles.repeatCurrentChipContent}>
+                        <Text style={styles.repeatCurrentChipText}>
+                          {getRepeatLabel(
+                            repeatType,
+                            repeatInterval,
+                            repeatUnit,
+                            repeatDays,
+                          )}
+                        </Text>
+                        <Text style={styles.repeatCurrentChevron}>▾</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
                   {/* 빠른 선택 패널 */}
                   {showRepeatPanel && (
                     <View style={{ marginTop: 8, gap: 6 }}>
                       {[
                         { label: "매일", value: "DAILY" as RepeatType },
-                        { label: "매주 평일", value: "WEEKDAYS" as RepeatType },
                         {
                           label: `매주 (${
                             WEEKDAY_OPTIONS.find(
@@ -1290,28 +1291,74 @@ export function ScheduleDetailModal({
                             ))}
                           </View>
                         ) : (
-                          <View style={styles.frequencyGrid}>
-                            {REPEAT_EVERY_OPTIONS.slice(0, 10).map((opt) => (
-                              <TouchableOpacity
-                                key={opt}
-                                style={[
-                                  styles.frequencyGridChip,
-                                  repeatInterval === opt &&
-                                    styles.repeatOptionButtonSelected,
-                                ]}
-                                onPress={() => setRepeatInterval(opt)}
-                              >
-                                <Text
-                                  style={[
-                                    styles.repeatOptionText,
-                                    repeatInterval === opt &&
-                                      styles.repeatOptionTextSelected,
-                                  ]}
-                                >
-                                  {opt}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
+                          <View style={styles.repeatIntervalStepper}>
+                            <TouchableOpacity
+                              style={styles.repeatStepperButton}
+                              onPress={() => {
+                                const next = Math.max(
+                                  1,
+                                  Number(repeatInterval || "1") - 1,
+                                );
+                                setRepeatInterval(String(next));
+                              }}
+                            >
+                              <Text style={styles.repeatStepperButtonText}>
+                                -
+                              </Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.repeatIntervalInputBox}>
+                              <TextInput
+                                style={styles.repeatIntervalInput}
+                                value={repeatInterval}
+                                onChangeText={(text) => {
+                                  const onlyNumber = text.replace(
+                                    /[^0-9]/g,
+                                    "",
+                                  );
+                                  if (onlyNumber === "") {
+                                    setRepeatInterval("");
+                                    return;
+                                  }
+                                  setRepeatInterval(
+                                    String(
+                                      Math.min(
+                                        999,
+                                        Math.max(1, Number(onlyNumber)),
+                                      ),
+                                    ),
+                                  );
+                                }}
+                                onBlur={() => {
+                                  if (
+                                    !repeatInterval ||
+                                    Number(repeatInterval) < 1
+                                  )
+                                    setRepeatInterval("1");
+                                }}
+                                keyboardType="number-pad"
+                                returnKeyType="done"
+                                maxLength={3}
+                              />
+                              <Text style={styles.repeatIntervalSuffix}>
+                                일마다
+                              </Text>
+                            </View>
+
+                            <TouchableOpacity
+                              style={styles.repeatStepperButton}
+                              onPress={() => {
+                                const next = Math.min(
+                                  999,
+                                  Number(repeatInterval || "1") + 1,
+                                );
+                                setRepeatInterval(String(next));
+                              }}
+                            >
+                              <Text style={styles.repeatStepperButtonText}>
+                                +
+                              </Text>
+                            </TouchableOpacity>
                           </View>
                         )}
                       </View>
@@ -1371,16 +1418,22 @@ export function ScheduleDetailModal({
               </ScrollView>
             )}
           </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  detailOverlay: {
+  modalRoot: {
     flex: 1,
+  },
+  detailOverlay: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
+  },
+  keyboardAvoidingArea: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 28,
@@ -1398,6 +1451,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 30,
     elevation: 8,
+    flexShrink: 0,
   },
   detailHeader: {
     flexDirection: "row",
@@ -1682,7 +1736,7 @@ const styles = StyleSheet.create({
   },
 
   repeatOptionButton: {
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: "#E4E7EE",
     borderRadius: 14,
     paddingVertical: 12,
@@ -1701,14 +1755,15 @@ const styles = StyleSheet.create({
   repeatOptionTextSelected: {
     color: "#405886",
   },
-
   deleteIconButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FCEBEC",
+    backgroundColor: "#F3F4F8",
+    borderWidth: 1,
+    borderColor: "#E7EAF0",
   },
 
   weekdayRow: {
@@ -1738,18 +1793,105 @@ const styles = StyleSheet.create({
     color: "#405886",
   },
 
-  frequencyGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  frequencyGridChip: {
-    width: "18%",
+  editIconButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F8",
+    borderWidth: 1,
+    borderColor: "#E7EAF0",
+  },
+  timeStepperValueInput: {
+    flex: 2,
+    height: 40,
+    borderRadius: 12,
+    marginVertical: 6,
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#2A3C6B",
+    textAlign: "center",
+    includeFontPadding: false,
+    lineHeight: 20,
+  },
+
+  repeatCurrentChip: {
+    minHeight: 28,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: "#F3F5FA",
     borderWidth: 1,
     borderColor: "#E4E7EE",
-    borderRadius: 14,
-    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  repeatCurrentChipContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  repeatCurrentChipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#405886",
+  },
+
+  repeatCurrentChevron: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#9AA3B2",
+    marginTop: -1,
+  },
+  repeatIntervalStepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  repeatStepperButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F8",
+    borderWidth: 1,
+    borderColor: "#E4E7EE",
+  },
+  repeatStepperButtonText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#405886",
+  },
+  repeatIntervalInputBox: {
+    flex: 1,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#E7EAF3",
     backgroundColor: "#FAFBFD",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+  },
+  repeatIntervalInput: {
+    minWidth: 28,
+    maxWidth: 52,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#2F3550",
+    textAlign: "center",
+  },
+  repeatIntervalSuffix: {
+    marginLeft: 4,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6D7690",
   },
 });

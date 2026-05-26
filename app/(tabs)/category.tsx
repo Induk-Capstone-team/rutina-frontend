@@ -2,8 +2,6 @@
 import { DraggableCategoryList } from "@/components/DraggableCategoryList";
 import { Header } from "@/components/ui/_header";
 import {
-  DEFAULT_CATEGORIES,
-  EVENT_TYPES,
   getCategoryBadgeStyle,
   normalizeCategoryName,
   normalizeHexColor,
@@ -17,8 +15,9 @@ import { RoutineService } from "@/services/routine_service";
 import { authStore } from "@/store/authStore";
 import type { ScheduleRoutine } from "@/types/routine";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -67,7 +66,6 @@ interface CategorySummary {
   totalCount: number;
   completedCount: number;
   isCompletedCategory: boolean;
-  isFixedCategory: boolean;
 }
 // 카테고리 숨김/수정 상태를 저장하는 AsyncStorage 키
 const CATEGORY_META_STORAGE_KEY = "category_meta_v1";
@@ -84,10 +82,6 @@ const DEFAULT_USER_COLOR_PALETTE = [
   "#A8CD9B",
   "#C4C6D0",
 ];
-// 기본 카테고리인지 확인
-const isFixedCategoryName = (categoryName: string) => {
-  return Object.prototype.hasOwnProperty.call(EVENT_TYPES, categoryName);
-};
 // 오늘 날짜를 YYYY-MM-DD 형식으로 반환
 const getTodayString = () => {
   const today = new Date();
@@ -105,39 +99,49 @@ const isPastEndDate = (endDate?: string | null) => {
   return endDate < getTodayString();
 };
 // 루틴이 완료 상태인지 판단
-const isRoutineCompleted = (routine: ScheduleRoutine): boolean => {
-  // 종료일이 지났으면 완료로 처리
-  if (isPastEndDate(routine.endDate)) return true;
+const normalizeDate = (date?: string | null) => {
+  return date ? date.split("T")[0] : "";
+};
 
-  // state가 false이면 수동 완료로 처리
-  if (routine.state === false) return true;
+// 루틴이 완료 상태인지 판단
+const isRoutineCompleted = (routine: ScheduleRoutine): boolean => {
+  const startDate = normalizeDate(routine.startDate);
+  const endDate = normalizeDate(routine.endDate);
+
+  // 1. 기간이 끝난 루틴은 완료 처리
+  if (isPastEndDate(endDate)) return true;
 
   const completedDates = routine.completedDates ?? [];
-  if (completedDates.length === 0) return false;
+  const normalizedCompletedDates = completedDates.map(normalizeDate);
 
-  // 단일 날짜 루틴은 해당 날짜가 완료 목록에 있는지 확인
-  if (routine.startDate === routine.endDate) {
-    return completedDates.includes(routine.startDate);
+  // 2. 오늘 시작해서 오늘 끝나는 단일 날짜 루틴
+  if (startDate === endDate) {
+    return (
+      normalizedCompletedDates.includes(startDate) || routine.state === true
+    );
   }
 
-  // 반복/기간 루틴은 시작일부터 오늘 또는 종료일까지의 발생 날짜를 계산
   const today = getTodayString();
-  const effectiveEnd =
-    routine.endDate && routine.endDate <= today ? routine.endDate : today;
+  const effectiveEnd = endDate || today;
 
   const allDates = getRoutineOccurrenceDates(
-    routine,
-    routine.startDate,
+    {
+      ...routine,
+      startDate,
+      endDate,
+    },
+    startDate,
     effectiveEnd,
   );
 
-  const normalizedCompletedDates = completedDates.map(
-    (date) => date.split("T")[0],
-  );
+  // 3. 반복 날짜가 없으면 state 기준으로라도 완료 판단
+  if (allDates.length === 0) {
+    return routine.state === true;
+  }
 
-  return (
-    allDates.length > 0 &&
-    allDates.every((date) => normalizedCompletedDates.includes(date))
+  // 4. 기간 안의 모든 반복 날짜가 완료됐으면 완료 처리
+  return allDates.every((date) =>
+    normalizedCompletedDates.includes(normalizeDate(date)),
   );
 };
 
@@ -187,7 +191,7 @@ const saveCategoryMetas = async (metas: CategoryMeta[]) => {
     console.error("카테고리 메타 저장 실패", error);
   }
 };
-//서버 카테고리만 기준으로
+//서버에서 받아온 카테고리 목록을 기준으로 루틴 집계 및 정렬된 CategorySummary 배열을 반환
 const buildCategorySummaries = (
   routines: ScheduleRoutine[],
   metas: CategoryMeta[],
@@ -210,7 +214,6 @@ const buildCategorySummaries = (
       totalCount: 0,
       completedCount: 0,
       isCompletedCategory: false,
-      isFixedCategory: isFixedCategoryName(sc.name),
     });
   });
 
@@ -250,6 +253,7 @@ const buildCategorySummaries = (
     });
 };
 export default function CategoryScreen() {
+  const router = useRouter();
   const [selectedTab, setSelectedTab] = useState<CategoryTab>("ACTIVE");
   const [routines, setRoutines] = useState<ScheduleRoutine[]>([]);
   const [serverSortOrderMap, setServerSortOrderMap] = useState<
@@ -294,14 +298,10 @@ export default function CategoryScreen() {
         CategoryService.getAllIncludingHidden(),
       ]);
 
-      const serverCustomCategories: CustomCategory[] = fetchedCategories
-        .filter((c) => !DEFAULT_CATEGORIES.includes(c.name as any))
-        .map((c) => ({ name: c.name, color: c.colorCode }));
-
+      const serverCustomCategories: CustomCategory[] = fetchedCategories.map(
+        (c) => ({ name: c.name, color: c.colorCode }),
+      );
       const idMap: Record<string, number> = {};
-      fetchedCategories.forEach((c) => {
-        idMap[c.name] = c.id;
-      });
       const sortOrderMap: Record<number, number> = {};
       fetchedCategories.forEach((c) => {
         idMap[c.name] = c.id;
@@ -316,6 +316,11 @@ export default function CategoryScreen() {
       setServerCategoryList(fetchedCategories);
     } catch (error) {
       if ((error as any)?.name === "NoTokenError") return;
+      if (
+        (error as any)?.response?.status === 401 ||
+        (error as any)?.response?.status === 403
+      )
+        return;
       console.error("카테고리 데이터 불러오기 실패", error);
     } finally {
       setIsLoading(false);
@@ -459,13 +464,6 @@ export default function CategoryScreen() {
     await saveCategoryMetas(next);
   };
 
-  const handleSelectFixedCategory = (categoryName: string) => {
-    const fixedStyle = EVENT_TYPES[categoryName as keyof typeof EVENT_TYPES];
-    setCategoryNameInput(categoryName);
-    setSelectedColor(fixedStyle.dot);
-    setPickerColor(fixedStyle.dot);
-  };
-
   const handleSavePickedColor = async () => {
     const normalizedColor = normalizeHexColor(pickerColor);
     const isHexColor = /^#([0-9A-F]{6}|[0-9A-F]{3})$/i.test(normalizedColor);
@@ -523,7 +521,7 @@ export default function CategoryScreen() {
     }
   };
 
-  // 카테고리 삭제 (서버 + 메타)
+  // 모달 내 카테고리 뱃지에서 직접 삭제할 때 호출 (서버 + 로컬 메타 삭제)
   const handleDeleteCustomCategory = async (category: CategorySummary) => {
     try {
       setIsLoading(true);
@@ -558,7 +556,7 @@ export default function CategoryScreen() {
 
       await refreshData();
     } catch (error) {
-      console.error("사용자 카테고리 삭제 실패", error);
+      console.error("카테고리 삭제 실패", error);
       Alert.alert(
         "카테고리 삭제 실패",
         "루틴 또는 카테고리를 삭제하지 못했어요.",
@@ -567,15 +565,14 @@ export default function CategoryScreen() {
       setIsLoading(false);
     }
   };
-
+  // 카테고리 뱃지 롱프레스 시 삭제 확인 Alert 표시
   const handleConfirmDeleteCustomCategory = (
     customCategory: CustomCategory,
   ) => {
     const matchedCategory = categories.find(
       (category) =>
-        !category.isFixedCategory &&
         category.name.trim().toLowerCase() ===
-          customCategory.name.trim().toLowerCase(),
+        customCategory.name.trim().toLowerCase(),
     );
 
     const categoryToDelete: CategorySummary = matchedCategory ?? {
@@ -588,7 +585,6 @@ export default function CategoryScreen() {
       totalCount: 0,
       completedCount: 0,
       isCompletedCategory: false,
-      isFixedCategory: false,
     };
 
     if (categoryToDelete.totalCount > 0) {
@@ -643,31 +639,29 @@ export default function CategoryScreen() {
       setIsSaving(true);
       const normalizedColor = normalizeHexColor(selectedColor);
 
-      if (!isFixedCategoryName(trimmedName)) {
-        if (!editingCategory) {
-          await CategoryService.create(trimmedName, normalizedColor);
+      if (!editingCategory) {
+        await CategoryService.create(trimmedName, normalizedColor);
+      } else {
+        let targetId = editingCategory.linkedCategoryId ?? null;
+
+        if (!targetId) {
+          const freshCategories = await CategoryService.getAll();
+          const matched = freshCategories.find(
+            (c) =>
+              c.name.trim().toLowerCase() ===
+              editingCategory.name.trim().toLowerCase(),
+          );
+          targetId = matched?.id ?? null;
+        }
+
+        if (targetId) {
+          await CategoryService.update(targetId, {
+            name: trimmedName,
+            colorCode: normalizedColor,
+            hidden: editingCategory.isHidden ?? false,
+          });
         } else {
-          let targetId = editingCategory.linkedCategoryId ?? null;
-
-          if (!targetId) {
-            const freshCategories = await CategoryService.getAll();
-            const matched = freshCategories.find(
-              (c) =>
-                c.name.trim().toLowerCase() ===
-                editingCategory.name.trim().toLowerCase(),
-            );
-            targetId = matched?.id ?? null;
-          }
-
-          if (targetId) {
-            await CategoryService.update(targetId, {
-              name: trimmedName,
-              colorCode: normalizedColor,
-              hidden: editingCategory.isHidden ?? false,
-            });
-          } else {
-            await CategoryService.create(trimmedName, normalizedColor);
-          }
+          await CategoryService.create(trimmedName, normalizedColor);
         }
       }
 
@@ -801,7 +795,7 @@ export default function CategoryScreen() {
           `루틴 ID ${routine.id} 삭제 중 서버 에러:`,
           error.response?.status,
         );
-        // 서버 에러가 나더라도 다음 루틴 삭제를 계속 시도하려면 skip, 아니면 throw
+        // 서버 에러가 발생해도 나머지 루틴 삭제를 계속 진행 (skip)
       }
     }
   };
@@ -820,14 +814,6 @@ export default function CategoryScreen() {
     return matched?.id ?? null;
   };
   const handleDeleteCategory = async (category: CategorySummary) => {
-    if (category.isFixedCategory) {
-      Alert.alert(
-        "삭제 불가",
-        `"${category.name}"은 기본 카테고리라 삭제할 수 없어요.`,
-      );
-      return;
-    }
-
     const hasRoutines = category.totalCount > 0;
 
     const message = hasRoutines
@@ -933,7 +919,7 @@ export default function CategoryScreen() {
   };
   // 카테고리 카드 한 개를 렌더링
   const renderCategoryItem = useCallback(
-    (item: CategorySummary, index: number) => {
+    (item: CategorySummary) => {
       const badgeText = selectedTab === "COMPLETED" ? "완료됨" : "진행중";
       const badgeStyle =
         selectedTab === "COMPLETED" ? styles.badgeCompleted : undefined;
@@ -942,11 +928,6 @@ export default function CategoryScreen() {
 
       return (
         <View style={styles.card}>
-          {/* 드래그 힌트 */}
-          <View style={styles.dragHandle}>
-            <Text style={styles.dragHandleText}>⠿</Text>
-          </View>
-
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardTitleRow}>
               <View
@@ -965,16 +946,31 @@ export default function CategoryScreen() {
               </Text>
             </View>
           </View>
-
           <View style={styles.routineBox}>
-            {item.routines.length > 0 ? (
-              item.routines.slice(0, 3).map(renderRoutineItem)
-            ) : (
-              <Text style={styles.emptyRoutineText}>
-                {selectedTab === "ACTIVE"
-                  ? "연결된 루틴이 아직 없어요."
-                  : "완료된 루틴이 아직 없어요."}
-              </Text>
+            <View style={styles.routineContentBox}>
+              {item.routines.length > 0 ? (
+                item.routines.slice(0, 3).map(renderRoutineItem)
+              ) : (
+                <Text style={styles.emptyRoutineText}>
+                  {selectedTab === "ACTIVE"
+                    ? "연결된 루틴이 아직 없어요."
+                    : "완료된 루틴이 아직 없어요."}
+                </Text>
+              )}
+            </View>
+
+            {selectedTab === "ACTIVE" && (
+              <Pressable
+                style={styles.emptyRoutineAddButton}
+                onPress={() =>
+                  router.push({
+                    pathname: "/modal",
+                    params: { category: item.name },
+                  })
+                }
+              >
+                <Text style={styles.emptyRoutineAddButtonText}>+</Text>
+              </Pressable>
             )}
           </View>
 
@@ -1005,7 +1001,12 @@ export default function CategoryScreen() {
         </View>
       );
     },
-    [selectedTab],
+    [
+      selectedTab,
+      handleHideCategory,
+      handleDeleteCategory,
+      openEditCategoryModal,
+    ],
   );
 
   const renderHiddenCard = (item: CategorySummary) => {
@@ -1039,7 +1040,12 @@ export default function CategoryScreen() {
         </View>
 
         <View style={styles.mainCard}>
-          <View style={styles.headerArea} />
+          <View style={styles.headerArea}>
+            <Text style={styles.screenTitle}>카테고리</Text>
+            <Text style={styles.screenSubTitle}>
+              루틴을 카테고리별로 관리해보세요
+            </Text>
+          </View>
 
           <View style={styles.tabRow}>
             <View style={styles.tabWrapper}>
@@ -1077,15 +1083,13 @@ export default function CategoryScreen() {
                 </Text>
               </Pressable>
             </View>
-
-            <Pressable
-              style={styles.floatingAddButton}
-              onPress={openAddCategoryModal}
-            >
-              <Text style={styles.floatingAddButtonText}>+</Text>
-            </Pressable>
           </View>
-
+          <Pressable
+            style={styles.addCategoryButton}
+            onPress={openAddCategoryModal}
+          >
+            <Text style={styles.addCategoryButtonText}>+ 카테고리 추가</Text>
+          </Pressable>
           {isLoading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#405886" />
@@ -1145,19 +1149,20 @@ export default function CategoryScreen() {
         </View>
 
         {/* 카테고리 추가/수정 바텀시트 모달 */}
+        {/* 카테고리 추가/수정 바텀시트 모달 */}
         <Modal
           visible={isCategoryModalVisible}
           transparent
           animationType="fade"
         >
-          <Pressable
-            style={styles.modalBackdrop}
-            onPress={closeCategoryModal}
-          />
           <KeyboardAvoidingView
             style={styles.keyboardAvoidingView}
             behavior={Platform.OS === "ios" ? "padding" : undefined}
           >
+            <Pressable
+              style={styles.modalBackdrop}
+              onPress={closeCategoryModal}
+            />
             <Animated.View
               style={[
                 styles.modalContainer,
@@ -1185,59 +1190,10 @@ export default function CategoryScreen() {
                   onChangeText={setCategoryNameInput}
                   maxLength={20}
                 />
-                {!editingCategory && (
-                  <>
-                    <Text style={styles.inputLabel}>고정 카테고리</Text>
-                    <View style={styles.categoryGrid}>
-                      {DEFAULT_CATEGORIES.map((categoryName) => {
-                        const fixedStyle = EVENT_TYPES[categoryName];
-                        const badgeStyle = getCategoryBadgeStyle(
-                          categoryName,
-                          fixedStyle.dot,
-                        );
-                        const isSelected =
-                          categoryNameInput.trim() === categoryName;
 
-                        return (
-                          <Pressable
-                            key={categoryName}
-                            style={[
-                              styles.categoryBadge,
-                              {
-                                backgroundColor: badgeStyle.backgroundColor,
-                                borderColor: isSelected
-                                  ? badgeStyle.borderColor
-                                  : "transparent",
-                                borderWidth: isSelected ? 1.5 : 1,
-                              },
-                            ]}
-                            onPress={() =>
-                              handleSelectFixedCategory(categoryName)
-                            }
-                          >
-                            <View
-                              style={[
-                                styles.categoryBadgeDot,
-                                { backgroundColor: fixedStyle.dot },
-                              ]}
-                            />
-                            <Text
-                              style={[
-                                styles.categoryBadgeText,
-                                { color: badgeStyle.textColor },
-                              ]}
-                            >
-                              {categoryName}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </>
-                )}
                 {!editingCategory && customCategories.length > 0 && (
                   <>
-                    <Text style={styles.inputLabel}>사용자 카테고리</Text>
+                    <Text style={styles.inputLabel}>카테고리</Text>
                     <View style={styles.categoryGrid}>
                       {customCategories.map((item) => {
                         const badgeStyle = getCategoryBadgeStyle(
@@ -1265,7 +1221,7 @@ export default function CategoryScreen() {
                               setSelectedColor(item.color);
                               setPickerColor(item.color);
                             }}
-                            //사용자 카테고리를 길게 누르면 삭제 확인창 표시
+                            // 카테고리를 길게 누르면 삭제 확인창 표시
                             onLongPress={() =>
                               handleConfirmDeleteCustomCategory(item)
                             }
@@ -1348,7 +1304,6 @@ export default function CategoryScreen() {
                       <Text style={styles.inlineColorPickerTitle}>
                         색상 선택
                       </Text>
-
                       <Pressable onPress={handleSavePickedColor}>
                         <Text style={styles.inlineColorPickerSaveText}>
                           저장
@@ -1358,9 +1313,7 @@ export default function CategoryScreen() {
 
                     <ColorPicker
                       value={pickerColor}
-                      onCompleteJS={(color) => {
-                        setPickerColor(color.hex);
-                      }}
+                      onCompleteJS={(color) => setPickerColor(color.hex)}
                       style={styles.colorPicker}
                     >
                       <Preview hideInitialColor style={styles.colorPreview} />
@@ -1438,10 +1391,6 @@ const styles = StyleSheet.create({
     borderColor: "#EEF1F6",
   },
 
-  headerArea: {
-    height: 10,
-  },
-
   tabRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1480,28 +1429,6 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: "#233255",
-  },
-
-  floatingAddButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#233255",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#233255",
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  floatingAddButtonText: {
-    color: "#FFFFFF",
-    fontSize: 24,
-    fontWeight: "600",
-    lineHeight: 26,
-    marginTop: -1,
-    includeFontPadding: false,
   },
 
   loadingContainer: {
@@ -1587,13 +1514,18 @@ const styles = StyleSheet.create({
   badgeTextCompleted: {
     color: "#4C7A53",
   },
-
+  routineContentBox: {
+    flex: 1,
+  },
   routineBox: {
     backgroundColor: "#F8F9FB",
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   routineItem: {
     flexDirection: "row",
@@ -1779,8 +1711,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    paddingBottom: 100,
+    marginBottom: -100,
   },
-
   modalContent: {
     padding: 20,
     paddingBottom: 32,
@@ -1988,16 +1921,42 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
   },
-  dragHandle: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    padding: 4,
-    zIndex: 1,
+
+  headerArea: { marginBottom: 10, paddingHorizontal: 25, paddingTop: 25 },
+  screenTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#2A3C6B",
+    marginBottom: 6,
   },
-  dragHandleText: {
+  screenSubTitle: { fontSize: 13, color: "#A0B0D0", fontWeight: "500" },
+  addCategoryButton: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#F8F9FB",
+    alignItems: "center",
+    backgroundColor: "#F8F9FB",
+  },
+  addCategoryButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#405886",
+  },
+
+  emptyRoutineAddButton: {
+    width: 28,
+    height: 28,
+
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyRoutineAddButtonText: {
     fontSize: 18,
-    color: "#C4C6D0",
-    letterSpacing: 1,
+    fontWeight: "700",
+    color: "#405886",
+    lineHeight: 20,
   },
 });
