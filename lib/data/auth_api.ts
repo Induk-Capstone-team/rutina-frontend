@@ -85,4 +85,18 @@ export const authApi = {
     });
     return data;
   },
+
+  /// 닉네임 수정 요청
+  updateNickname: async (nickname: string) => {
+    const { data } = await apiClient.patch("/api/v1/users/me/nickname", {
+      nickname,
+    });
+    return data;
+  },
+
+  /// 회원 탈퇴 요청
+  deleteAccount: async () => {
+    const { data } = await apiClient.delete("/api/v1/users/me");
+    return data;
+  },
 };

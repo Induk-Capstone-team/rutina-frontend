@@ -1,7 +1,7 @@
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import React, { useState, useEffect } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
