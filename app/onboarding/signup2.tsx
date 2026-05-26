@@ -69,7 +69,7 @@ export default function SignupStep2Screen() {
     isSocial?: string;
   }>();
 
-  const { signup, updateProfile, isLoading, error } = useAuthViewModel();
+  const {updateProfile, isLoading, error } = useAuthViewModel();
 
   const [age, setAge] = useState("");
   const [job, setJob] = useState("");
@@ -170,6 +170,10 @@ useEffect(() => {
             <Text style={styles.headerTitle}>추가 정보 입력</Text>
             <Text style={styles.headerSubtitle}>
               더 나은 맞춤형 서비스를 위해 정보를 입력해주세요.
+            </Text>
+            {/* 일주일 이내 재가입 제한 안내 */}
+            <Text style={styles.rejoinNotice}>
+              계정 삭제 후 7일 이내에는 재가입이 불가능합니다.
             </Text>
           </View>
 
@@ -338,6 +342,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   headerSubtitle: { fontSize: 15, color: "#8A8C9A", fontWeight: "500" },
+  rejoinNotice: { fontSize: 14, color: "#FF3B30", marginTop: 6, fontWeight: "600" },
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 28,
