@@ -171,10 +171,6 @@ useEffect(() => {
             <Text style={styles.headerSubtitle}>
               더 나은 맞춤형 서비스를 위해 정보를 입력해주세요.
             </Text>
-            {/* 일주일 이내 재가입 제한 안내 */}
-            <Text style={styles.rejoinNotice}>
-              계정 삭제 후 7일 이내에는 재가입이 불가능합니다.
-            </Text>
           </View>
 
           <View style={styles.card}>

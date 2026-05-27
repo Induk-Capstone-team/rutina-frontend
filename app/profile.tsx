@@ -712,4 +712,5 @@ const styles = StyleSheet.create({
     fontFamily: "PretendardSemiBold",
     textDecorationLine: "underline",
   },
+  rejoinNotice: { fontSize: 14, color: "#FF3B30", marginTop: 6, fontWeight: "600" },
 });
