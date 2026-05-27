@@ -426,17 +426,42 @@ export default function DataScreen() {
     }, [loadHeatmap]),
   );
   const groupedRoutines = useMemo(() => {
+    // 현재 뷰모드에 따라 선택된 기간의 시작/끝 날짜 계산
+    let periodStart: Date;
+    let periodEnd: Date;
+
+    if (viewMode === "YEAR") {
+      periodStart = new Date(selectedYear, 0, 1);
+      periodEnd = new Date(selectedYear, 11, 31);
+    } else if (viewMode === "MONTH") {
+      periodStart = new Date(selectedYear, selectedMonth, 1);
+      periodEnd = new Date(selectedYear, selectedMonth + 1, 0);
+    } else {
+      periodStart = getWeekStart(selectedWeekDate);
+      periodEnd = getWeekEnd(selectedWeekDate);
+    }
+
+    // startAt~endAt이 현재 선택된 기간과 겹치는 루틴만 필터링
+    const filtered = heatmapData.filter((routine) => {
+      const routineStart = new Date(routine.startAt);
+      const routineEnd = routine.endAt
+        ? new Date(routine.endAt)
+        : new Date(9999, 11, 31);
+      // 기간 겹침 조건: routineStart <= periodEnd && routineEnd >= periodStart
+      return routineStart <= periodEnd && routineEnd >= periodStart;
+    });
+
     const groupedMap = new Map<string, HeatmapRoutine[]>();
-    heatmapData.forEach((routine) => {
+    filtered.forEach((routine) => {
       const categoryName = routine.category.name;
       const prev = groupedMap.get(categoryName) ?? [];
       groupedMap.set(categoryName, [...prev, routine]);
     });
+
     return Array.from(groupedMap.entries())
       .map(([categoryName, routines]) => ({ categoryName, routines }))
       .sort((a, b) => a.categoryName.localeCompare(b.categoryName, "ko"));
-  }, [heatmapData]);
-
+  }, [heatmapData, viewMode, selectedYear, selectedMonth, selectedWeekDate]);
   // 새로 생긴 카테고리는 기본적으로 펼쳐진 상태로 설정
   React.useEffect(() => {
     setExpandedCategories((prev) => {

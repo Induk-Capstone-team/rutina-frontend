@@ -60,13 +60,16 @@ function getRepeatText(item: ScheduleRoutine) {
 }
 
 function getDateRangeText(item: ScheduleRoutine) {
-  if (item.startDate === item.endDate) {
+  if (!item.endDate || item.endDate === "" || item.endDate === item.startDate) {
+    // endDate가 없으면 무한 반복
+    if (!item.endDate || item.endDate === "") {
+      return `${item.startDate} ~ 무한 반복`;
+    }
     return item.startDate;
   }
 
   return `${item.startDate} ~ ${item.endDate}`;
 }
-
 // "HH:mm" 문자열을 시간 숫자로 바꾸는 함수
 function parseTimeString(time?: string | null) {
   if (!time) {
@@ -93,7 +96,15 @@ function isCompletedOnDate(item: ScheduleRoutine, targetDateString: string) {
   return item.completedDates?.includes(targetDateString) ?? false;
 }
 
-export default function ScheduleContent() {
+interface ScheduleContentProps {
+  onToggleComplete?: (reload: () => Promise<void>) => void;
+  onRoutineUpdated?: () => Promise<void>;
+}
+
+export default function ScheduleContent({
+  onToggleComplete,
+  onRoutineUpdated,
+}: ScheduleContentProps) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [noTimeRoutines, setNoTimeRoutines] = useState<ScheduleRoutine[]>([]);
@@ -185,8 +196,8 @@ export default function ScheduleContent() {
   }, [selectedDateString]);
   // 날짜가 바뀔 때마다 루틴 새로 불러오기
   useEffect(() => {
-    loadRoutines();
-  }, [loadRoutines]);
+    onToggleComplete?.(loadRoutines);
+  }, [loadRoutines, onToggleComplete]);
 
   // 다른 화면 갔다 돌아올 때 최신 데이터 불러오기
   useFocusEffect(
@@ -198,6 +209,7 @@ export default function ScheduleContent() {
     try {
       await RoutineService.toggleComplete(id, selectedDateString);
       await loadRoutines();
+      await onRoutineUpdated?.();
     } catch (error) {
       console.error("완료 상태 변경 실패", error);
     }
@@ -253,19 +265,15 @@ export default function ScheduleContent() {
             >
               {item.title}
             </Text>
-
             {isTimed && parsedStartTime && (
-              <>
-                <Text style={styles.itemTime}>
-                  {parsedEndTime
-                    ? `${String(parsedStartTime.hour).padStart(2, "0")}:${String(parsedStartTime.minute).padStart(2, "0")} ~ ${String(parsedEndTime.hour).padStart(2, "0")}:${String(parsedEndTime.minute).padStart(2, "0")}`
-                    : `${String(parsedStartTime.hour).padStart(2, "0")}:${String(parsedStartTime.minute).padStart(2, "0")}`}
-                </Text>
-
-                <Text style={styles.itemSubInfo}>{getDateRangeText(item)}</Text>
-              </>
+              <Text style={styles.itemTime}>
+                {parsedEndTime
+                  ? `${String(parsedStartTime.hour).padStart(2, "0")}:${String(parsedStartTime.minute).padStart(2, "0")} ~ ${String(parsedEndTime.hour).padStart(2, "0")}:${String(parsedEndTime.minute).padStart(2, "0")}`
+                  : `${String(parsedStartTime.hour).padStart(2, "0")}:${String(parsedStartTime.minute).padStart(2, "0")}`}
+              </Text>
             )}
 
+            <Text style={styles.itemSubInfo}>{getDateRangeText(item)}</Text>
             <Text style={styles.itemSubInfo}>{getRepeatText(item)}</Text>
           </View>
 

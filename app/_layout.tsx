@@ -16,6 +16,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SplashScreen from "expo-splash-screen";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { NotificationService } from "@/services/notification_service";
+import { RoutineService } from "@/services/routine_service";
 import { authStore } from "@/store/authStore";
 import { useFonts } from "expo-font";
 import { useEffect, useState } from "react";
@@ -40,11 +42,17 @@ export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(authStore.isLoggedIn);
   const [isNavigationReady, setIsNavigationReady] = useState(false);
+  const [hasRestoredNotifications, setHasRestoredNotifications] =
+    useState(false);
   const navigationState = useRootNavigationState();
   const inAuthGroup = segments[0] === "onboarding";
   useEffect(() => {
     return authStore.subscribe(() => {
       setIsLoggedIn(authStore.isLoggedIn);
+
+      if (!authStore.isLoggedIn) {
+        setHasRestoredNotifications(false);
+      }
     });
   }, []);
 
@@ -65,7 +73,28 @@ export default function RootLayout() {
 
     checkLoginStatus();
   }, []);
+  // 로그인 상태가 복구된 후 서버 루틴 기준으로 로컬 알림 재예약
+  useEffect(() => {
+    const restoreRoutineNotifications = async () => {
+      if (!isLoggedIn || hasRestoredNotifications) return;
 
+      try {
+        const routines = await RoutineService.getAll();
+
+        for (const routine of routines) {
+          if (routine.alarm && routine.startTime) {
+            await NotificationService.syncRoutineNotification(routine);
+          }
+        }
+
+        setHasRestoredNotifications(true);
+      } catch (error) {
+        console.warn("루틴 알림 복구 실패", error);
+      }
+    };
+
+    restoreRoutineNotifications();
+  }, [isLoggedIn, hasRestoredNotifications]);
   useEffect(() => {
     // 2. 엔진이 준비되지 않았거나 아직 데이터가 로드되지 않았다면 중단
     if (!navigationState?.key || !loaded || !isReady) return;

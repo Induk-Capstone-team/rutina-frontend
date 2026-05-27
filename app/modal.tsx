@@ -7,12 +7,14 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRoutineForm } from "@/hooks/use_routine_form";
 import { type CustomCategory } from "@/lib/category";
 import { CategoryService } from "@/services/category_service";
+import { RoutineService } from "@/services/routine_service";
 import type {
   NotifyOption,
   RepeatType,
   RepeatUnit,
   RepeatWeekday,
   SaveRoutineOptions,
+  ScheduleRoutine,
 } from "@/types/routine";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -270,10 +272,19 @@ export default function ModalScreen() {
   const [activeDateField, setActiveDateField] = useState<"start" | "end">(
     "start",
   );
+  const [existingRoutines, setExistingRoutines] = useState<ScheduleRoutine[]>(
+    [],
+  );
+  const [previewDateField, setPreviewDateField] = useState<"start" | "end">(
+    "start",
+  );
+  const [showExistingRoutines, setShowExistingRoutines] = useState(false);
+
   //바텀시트 드래그 애니메이션
   const translateY = useRef(new Animated.Value(0)).current;
   const closeThreshold = 120;
-
+  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
   const {
     title,
     setTitle,
@@ -282,6 +293,7 @@ export default function ModalScreen() {
     selectedColor,
     setSelectedColor,
     selectedDate,
+
     setSelectedDate,
     isTimed,
     setIsTimed,
@@ -299,6 +311,7 @@ export default function ModalScreen() {
   } = useRoutineForm(() => router.dismiss());
   const [startDate, setStartDate] = useState(selectedDate);
   const [endDate, setEndDate] = useState(selectedDate);
+  const previewDate = previewDateField === "start" ? startDate : endDate;
 
   // AI 추천 데이터 연동
   useEffect(() => {
@@ -344,6 +357,8 @@ export default function ModalScreen() {
         if (draft.startMinute) setStartMinute(draft.startMinute);
         if (draft.endHour) setEndHour(draft.endHour);
         if (draft.endMinute) setEndMinute(draft.endMinute);
+        if (typeof draft.hasEndDate === "boolean")
+          setHasEndDate(draft.hasEndDate);
       } catch (error) {
         console.error("draft 복원 실패", error);
       }
@@ -368,7 +383,7 @@ export default function ModalScreen() {
   const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>("DAY");
   // 주 단위 사용자 반복에서 선택한 요일 저장
   const [repeatDays, setRepeatDays] = useState<RepeatWeekday[]>([]);
-
+  const [hasEndDate, setHasEndDate] = useState(true);
   //커스텀 카테고리 이름 -> 색상 맵
   const customCategoryColorMap = useMemo(() => {
     return customCategories.reduce<Record<string, string>>((acc, item) => {
@@ -413,10 +428,8 @@ export default function ModalScreen() {
   }, [repeatType, repeatInterval, repeatUnit, repeatDays]);
 
   const isInvalidDateRange = useMemo(() => {
-    // 종료일이 시작일보다 빠른지 미리 검사
-    return endDate < startDate;
-  }, [startDate, endDate]);
-
+    return hasEndDate && endDate < startDate;
+  }, [startDate, endDate, hasEndDate]);
   //날짜 선택
   const handleDayPress = (day: DateData) => {
     if (activeDateField === "start") {
@@ -444,7 +457,18 @@ export default function ModalScreen() {
         setCustomCategories([]);
       });
   }, []);
+  // 날짜 바뀔 때마다 해당 날짜 루틴 불러오기
+  useEffect(() => {
+    RoutineService.getAll(previewDate)
+      .then(setExistingRoutines)
+      .catch(() => setExistingRoutines([]));
+  }, [previewDate]);
 
+  // 겹치는 루틴 있으면 자동으로 펼치기
+  useEffect(() => {
+    const hasConflict = existingRoutines.some((r) => isTimeConflict(r));
+    if (hasConflict) setShowExistingRoutines(true);
+  }, [existingRoutines, startHour, startMinute, endHour, endMinute, isTimed]);
   const saveDraftRef = useRef<() => Promise<void>>(async () => {});
 
   saveDraftRef.current = async () => {
@@ -462,6 +486,7 @@ export default function ModalScreen() {
       startMinute,
       endHour,
       endMinute,
+      hasEndDate,
     };
     await AsyncStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
   };
@@ -490,7 +515,12 @@ export default function ModalScreen() {
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
+        const isScrolledToTop = scrollOffsetRef.current <= 0;
+        const isDraggingDown = gestureState.dy > 0;
+
         return (
+          isScrolledToTop &&
+          isDraggingDown &&
           Math.abs(gestureState.dy) > 8 &&
           Math.abs(gestureState.dy) > Math.abs(gestureState.dx)
         );
@@ -594,6 +624,7 @@ export default function ModalScreen() {
   };
 
   const validateDateRange = () => {
+    if (!hasEndDate) return true;
     if (endDate < startDate) {
       Alert.alert(
         "날짜 설정 확인",
@@ -601,7 +632,6 @@ export default function ModalScreen() {
       );
       return false;
     }
-
     return true;
   };
   //저장 전 최종 검증
@@ -650,7 +680,7 @@ export default function ModalScreen() {
       repeatDays:
         repeatType === "CUSTOM" && repeatUnit === "WEEK" ? repeatDays : null,
       startDate,
-      endDate,
+      endDate: hasEndDate ? endDate : null,
     } as SaveRoutineOptions;
 
     try {
@@ -665,6 +695,21 @@ export default function ModalScreen() {
         Alert.alert("저장 실패", "루틴을 저장하지 못했어요.");
       }
     }
+  };
+  // 겹침 감지 함수
+  const isTimeConflict = (routine: ScheduleRoutine): boolean => {
+    if (!isTimed || !routine.startTime || !routine.endTime) return false;
+
+    const toMin = (h: string, m: string) => Number(h) * 60 + Number(m);
+    const [rSH, rSM] = routine.startTime.split(":");
+    const [rEH, rEM] = routine.endTime.split(":");
+
+    const newStart = toMin(startHour, startMinute);
+    const newEnd = toMin(endHour, endMinute);
+    const rStart = toMin(rSH, rSM);
+    const rEnd = toMin(rEH, rEM);
+
+    return newStart < rEnd && newEnd > rStart;
   };
   //시간 모달에서 값 적용
   const handleApplyTime = (time: {
@@ -720,8 +765,13 @@ export default function ModalScreen() {
           </View>
 
           <ScrollView
+            ref={scrollViewRef}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            onScroll={(e) => {
+              scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
             contentContainerStyle={[
               styles.scrollContent,
               {
@@ -774,9 +824,13 @@ export default function ModalScreen() {
                 <TouchableOpacity
                   style={[
                     styles.selectorButton,
-                    activeDateField === "end" && styles.dateSelectorActive,
+                    activeDateField === "end" &&
+                      hasEndDate &&
+                      styles.dateSelectorActive,
+                    !hasEndDate && { opacity: 0.5 },
                   ]}
                   onPress={() => {
+                    if (!hasEndDate) return;
                     setActiveDateField("end");
                     setShowDatePicker((prev) =>
                       activeDateField === "end" ? !prev : true,
@@ -786,19 +840,29 @@ export default function ModalScreen() {
                   <View style={styles.selectorLeft}>
                     <IconSymbol name="calendar" size={18} color="#9FA2D6" />
                     <ThemedText style={styles.selectorText}>
-                      종료 날짜 · {formatDateLabel(endDate)}
+                      종료 날짜 ·{" "}
+                      {hasEndDate
+                        ? formatDateLabel(endDate)
+                        : "없음 (무한반복)"}
                     </ThemedText>
                   </View>
-
-                  <IconSymbol
-                    name={
-                      showDatePicker && activeDateField === "end"
-                        ? "chevron.up"
-                        : "chevron.down"
-                    }
-                    size={16}
-                    color="#A0B0D0"
-                  />
+                  <TouchableOpacity
+                    onPress={() => {
+                      setHasEndDate((prev) => !prev);
+                      setShowDatePicker(false);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <ThemedText
+                      style={{
+                        fontSize: 12,
+                        color: "#9FA2D6",
+                        fontWeight: "700",
+                      }}
+                    >
+                      {hasEndDate ? "종료일 해제" : "종료일 설정"}
+                    </ThemedText>
+                  </TouchableOpacity>
                 </TouchableOpacity>
               </View>
 
@@ -827,11 +891,174 @@ export default function ModalScreen() {
                 </View>
               )}
             </View>
+            {/* 이 날의 루틴 확인 */}
+            <View style={[styles.existingRoutineSection, { marginBottom: 25 }]}>
+              <TouchableOpacity
+                style={styles.existingRoutineHeader}
+                onPress={() => setShowExistingRoutines((prev) => !prev)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.iconLabel}>
+                  <IconSymbol name="calendar" size={15} color="#7A87A6" />
+                  <ThemedText style={styles.existingRoutineTitle}>
+                    이 날의 루틴 확인
+                  </ThemedText>
+                </View>
+
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  {/* 접혀있을 때 겹침 뱃지 표시 */}
+                  {!showExistingRoutines &&
+                    existingRoutines.some(isTimeConflict) && (
+                      <View style={styles.conflictBadge}>
+                        <ThemedText style={styles.conflictBadgeText}>
+                          겹침
+                        </ThemedText>
+                      </View>
+                    )}
+                  <ThemedText style={styles.previewDateLabel}>
+                    {formatDateLabel(previewDate)}
+                  </ThemedText>
+                  <IconSymbol
+                    name={showExistingRoutines ? "chevron.up" : "chevron.down"}
+                    size={14}
+                    color="#A0B0D0"
+                  />
+                </View>
+              </TouchableOpacity>
+
+              {showExistingRoutines && (
+                <>
+                  {/* 시작일 / 종료일 탭 */}
+                  <View style={styles.previewTabRow}>
+                    {(
+                      ["start", ...(hasEndDate ? ["end"] : [])] as (
+                        | "start"
+                        | "end"
+                      )[]
+                    ).map((field) => (
+                      <TouchableOpacity
+                        key={field}
+                        style={[
+                          styles.previewTab,
+                          previewDateField === field && styles.previewTabActive,
+                        ]}
+                        onPress={() => setPreviewDateField(field)}
+                      >
+                        <ThemedText
+                          style={[
+                            styles.previewTabText,
+                            previewDateField === field &&
+                              styles.previewTabTextActive,
+                          ]}
+                        >
+                          {field === "start" ? "시작일" : "종료일"}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {existingRoutines.length === 0 ? (
+                    <View style={styles.existingEmpty}>
+                      <ThemedText style={styles.existingEmptyText}>
+                        이 날 등록된 루틴이 없어요
+                      </ThemedText>
+                    </View>
+                  ) : (
+                    <>
+                      {existingRoutines.map((routine) => {
+                        const conflict = isTimeConflict(routine);
+                        return (
+                          <View
+                            key={routine.id}
+                            style={[
+                              styles.existingItem,
+                              conflict && styles.existingItemConflict,
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.existingColorBar,
+                                { backgroundColor: routine.color ?? "#405886" },
+                              ]}
+                            />
+                            <View style={styles.existingInfo}>
+                              <ThemedText
+                                style={[
+                                  styles.existingName,
+                                  // 겹침이 아닐 때만 카테고리 색 적용
+                                  !conflict && {
+                                    color: routine.color ?? "#405886",
+                                  },
+                                  conflict && styles.existingNameConflict,
+                                ]}
+                              >
+                                {routine.title}
+                              </ThemedText>
+                              {routine.startTime && routine.endTime && (
+                                <ThemedText
+                                  style={[
+                                    styles.existingTime,
+                                    conflict && styles.existingTimeConflict,
+                                  ]}
+                                >
+                                  {routine.startTime.slice(0, 5)} ~{" "}
+                                  {routine.endTime.slice(0, 5)}
+                                </ThemedText>
+                              )}
+                            </View>
+                            {/* 카테고리 색상 뱃지 */}
+                            {!conflict && routine.categoryName && (
+                              <View
+                                style={[
+                                  styles.categoryChip,
+                                  {
+                                    backgroundColor:
+                                      (routine.color ?? "#405886") + "22",
+                                  },
+                                ]}
+                              >
+                                <ThemedText
+                                  style={[
+                                    styles.categoryChipText,
+                                    { color: routine.color ?? "#405886" },
+                                  ]}
+                                >
+                                  {routine.categoryName}
+                                </ThemedText>
+                              </View>
+                            )}
+                            {conflict && (
+                              <View style={styles.conflictBadge}>
+                                <ThemedText style={styles.conflictBadgeText}>
+                                  시간 겹침
+                                </ThemedText>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                      {existingRoutines.some(isTimeConflict) && (
+                        <ThemedText style={styles.conflictWarning}>
+                          ⚠ 시간이 겹치는 루틴이 있어요. 시간을 조정해 보세요.
+                        </ThemedText>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </View>
+
             {/* 카테고리 선택 */}
             {categoryList.length > 0 && (
               <View style={styles.section}>
                 <ThemedText style={styles.label}>카테고리</ThemedText>
-                <View style={styles.categoryGrid}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 6, paddingVertical: 2 }}
+                >
                   {categoryList.map((cat) => {
                     const resolvedColor =
                       customCategoryColorMap[cat] ?? "#405886";
@@ -872,7 +1099,7 @@ export default function ModalScreen() {
                       </TouchableOpacity>
                     );
                   })}
-                </View>
+                </ScrollView>
               </View>
             )}
             {/* 시간 / 알림 / 반복 설정 카드 */}
@@ -1842,5 +2069,130 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#6D7690",
+  },
+  existingRoutineSection: {
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: "#F8F9FB",
+  },
+  existingRoutineHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    paddingHorizontal: 14,
+  },
+  existingRoutineTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#7A87A6",
+  },
+  previewTabRow: {
+    flexDirection: "row",
+    gap: 6,
+    padding: 10,
+    paddingHorizontal: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#EEF1F5",
+  },
+  previewTab: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E4E7EE",
+    backgroundColor: "#FAFBFD",
+  },
+  previewTabActive: {
+    backgroundColor: "#EEF2FF",
+    borderColor: "#405886",
+  },
+  previewTabText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6D7690",
+  },
+  previewTabTextActive: {
+    color: "#405886",
+  },
+  previewDateLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#7A87A6",
+  },
+  existingEmpty: {
+    padding: 16,
+    alignItems: "center",
+  },
+  existingEmptyText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#A0B0D0",
+  },
+  existingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    paddingHorizontal: 14,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#EEF1F5",
+  },
+  existingItemConflict: {
+    backgroundColor: "#FFF3F2",
+  },
+  existingColorBar: {
+    width: 3,
+    height: 32,
+    borderRadius: 2,
+  },
+  existingInfo: {
+    flex: 1,
+  },
+  existingName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2A3C6B",
+  },
+  existingNameConflict: {
+    color: "#C0392B",
+  },
+  existingTime: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#A0B0D0",
+    marginTop: 1,
+  },
+  existingTimeConflict: {
+    color: "#E07068",
+  },
+  conflictBadge: {
+    backgroundColor: "#FFE8E7",
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  conflictBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#C0392B",
+  },
+  conflictWarning: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#E07068",
+    padding: 10,
+    paddingHorizontal: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#EEF1F5",
+  },
+  categoryChip: {
+    borderRadius: 15,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  categoryChipText: {
+    fontSize: 10,
+    fontWeight: "800",
   },
 });

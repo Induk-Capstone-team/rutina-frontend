@@ -2,6 +2,7 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { getCategoryChipStyle, getCategoryStyle } from "@/lib/category";
 import { CategoryService } from "@/services/category_service";
+import { NotificationService } from "@/services/notification_service";
 import { RoutineService } from "@/services/routine_service";
 import type {
   RepeatType,
@@ -162,11 +163,13 @@ function formatDate(dateString: string) {
   return `${year}. ${month}. ${day}`;
 }
 
-function formatDateRange(startDate: string, endDate: string) {
+function formatDateRange(startDate: string, endDate: string | null) {
+  if (!endDate) {
+    return `${formatDate(startDate)} ~ 무한반복`;
+  }
   if (startDate === endDate) {
     return formatDate(startDate);
   }
-
   return `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
 }
 
@@ -370,7 +373,7 @@ export function ScheduleDetailModal({
   const [showCustomRepeatPanel, setShowCustomRepeatPanel] = useState(false);
   const [isTimed, setIsTimed] = useState(false);
   const [isNotify, setIsNotify] = useState(false);
-
+  const [hasEndDate, setHasEndDate] = useState(true);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>(
     [],
   );
@@ -378,6 +381,9 @@ export function ScheduleDetailModal({
     const startDateParts = parseDateParts(targetRoutine.startDate);
     const endDateParts = parseDateParts(
       targetRoutine.endDate ?? targetRoutine.startDate,
+    );
+    setHasEndDate(
+      targetRoutine.endDate !== null && targetRoutine.endDate !== undefined,
     );
     const start = splitTime(targetRoutine.startTime);
     const end = splitTime(targetRoutine.endTime);
@@ -452,7 +458,7 @@ export function ScheduleDetailModal({
       categoryName,
       color: selectedColor,
       startDate: nextStartDate,
-      endDate: nextEndDate,
+      endDate: hasEndDate ? nextEndDate : null,
       startTime: isTimed ? makeTime(startHour, startMinute) : null,
       endTime: isTimed ? makeTime(endHour, endMinute) : null,
       alarm: isNotify,
@@ -487,6 +493,7 @@ export function ScheduleDetailModal({
     repeatInterval,
     repeatUnit,
     repeatDays,
+    hasEndDate,
   ]);
 
   if (!routine || !previewRoutine) return null;
@@ -538,6 +545,13 @@ export function ScheduleDetailModal({
             }
 
             await RoutineService.deleteById(routine.id);
+
+            try {
+              await NotificationService.cancelRoutineNotification(routine.id);
+            } catch (notificationError) {
+              console.warn("알림 취소 실패", notificationError);
+            }
+
             await onUpdated();
             onClose();
           } catch (error) {
@@ -631,17 +645,19 @@ export function ScheduleDetailModal({
       padNumber(safeStartMonth),
       padNumber(safeStartDay),
     );
-    const nextEndDate = makeDate(
-      String(safeEndYear),
-      padNumber(safeEndMonth),
-      padNumber(safeEndDay),
-    );
+    const nextEndDate = hasEndDate
+      ? makeDate(
+          String(safeEndYear),
+          padNumber(safeEndMonth),
+          padNumber(safeEndDay),
+        )
+      : null;
 
     if (isTimed && endTotal <= startTotal) {
       Alert.alert("안내", "종료 시간은 시작 시간보다 늦어야 해요.");
       return;
     }
-    if (nextEndDate < nextStartDate) {
+    if (hasEndDate && nextEndDate && nextEndDate < nextStartDate) {
       Alert.alert("안내", "종료 날짜는 시작 날짜보다 빠를 수 없어요.");
       return;
     }
@@ -666,8 +682,8 @@ export function ScheduleDetailModal({
         padNumber(safeEndHour),
         padNumber(safeEndMinute),
       );
-
-      await RoutineService.updateById(routine.id, {
+      const updatedRoutine: ScheduleRoutine = {
+        ...routine,
         categoryId: resolvedCategoryId,
         title: trimmedTitle,
         categoryName,
@@ -676,7 +692,7 @@ export function ScheduleDetailModal({
         endDate: nextEndDate,
         startTime: isTimed ? newStartTime : null,
         endTime: isTimed ? newEndTime : null,
-        alarm: isNotify,
+        alarm: isTimed && isNotify,
         repeatType,
         repeatInterval:
           repeatType === "CUSTOM"
@@ -688,7 +704,11 @@ export function ScheduleDetailModal({
           (repeatType === "CUSTOM" && repeatUnit === "WEEK")
             ? repeatDays
             : [],
-      });
+      };
+
+      await RoutineService.updateById(routine.id, updatedRoutine);
+
+      await NotificationService.syncRoutineNotification(updatedRoutine);
 
       setIsEditMode(false);
       onClose();
@@ -878,7 +898,15 @@ export function ScheduleDetailModal({
 
                 <View style={styles.inputBlock}>
                   <Text style={styles.editSectionLabel}>카테고리</Text>
-                  <View style={styles.categoryGrid}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{
+                      gap: 6,
+                      paddingVertical: 2,
+                      marginTop: 12,
+                    }}
+                  >
                     {categoryList.map((cat) => {
                       const chipStyle = getCategoryChipStyle(
                         cat,
@@ -915,7 +943,7 @@ export function ScheduleDetailModal({
                         </TouchableOpacity>
                       );
                     })}
-                  </View>
+                  </ScrollView>
                 </View>
 
                 <View style={styles.inputBlock}>
@@ -949,8 +977,12 @@ export function ScheduleDetailModal({
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.dateSelectButton}
+                      style={[
+                        styles.dateSelectButton,
+                        !hasEndDate && { opacity: 0.5 },
+                      ]}
                       onPress={() => {
+                        if (!hasEndDate) return;
                         setCalendarTarget("end");
                         setShowCalendar((prev) =>
                           calendarTarget === "end" ? !prev : true,
@@ -960,19 +992,29 @@ export function ScheduleDetailModal({
                       <View style={styles.dateSelectLeft}>
                         <IconSymbol name="calendar" size={18} color="#405886" />
                         <Text style={styles.dateSelectText}>
-                          종료일 · {formatDate(selectedEndDateString)}
+                          종료일 ·{" "}
+                          {hasEndDate
+                            ? formatDate(selectedEndDateString)
+                            : "없음 (무한반복)"}
                         </Text>
                       </View>
-
-                      <IconSymbol
-                        name={
-                          showCalendar && calendarTarget === "end"
-                            ? "chevron.up"
-                            : "chevron.down"
-                        }
-                        size={16}
-                        color="#A0B0D0"
-                      />
+                      <TouchableOpacity
+                        onPress={() => {
+                          setHasEndDate((prev) => !prev);
+                          setShowCalendar(false);
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: "#9FA2D6",
+                            fontWeight: "700",
+                          }}
+                        >
+                          {hasEndDate ? "종료일 해제" : "종료일 설정"}
+                        </Text>
+                      </TouchableOpacity>
                     </TouchableOpacity>
                   </View>
 
@@ -1082,28 +1124,29 @@ export function ScheduleDetailModal({
                     </>
                   )}
                 </View>
+                {isTimed && (
+                  <View style={styles.inputBlock}>
+                    <View style={styles.notifyRow}>
+                      <View style={styles.notifyLabelWrap}>
+                        <IconSymbol name="bell" size={18} color="#405886" />
+                        <Text style={styles.editSectionLabelInline}>알림</Text>
+                      </View>
 
-                <View style={styles.inputBlock}>
-                  <View style={styles.notifyRow}>
-                    <View style={styles.notifyLabelWrap}>
-                      <IconSymbol name="bell" size={18} color="#405886" />
-                      <Text style={styles.editSectionLabelInline}>알림</Text>
-                    </View>
-
-                    <View style={styles.notifySwitchRow}>
-                      <Text style={styles.notifyStateText}>
-                        {isNotify ? "켜짐" : "꺼짐"}
-                      </Text>
-                      <Switch
-                        value={isNotify}
-                        onValueChange={(value) => {
-                          setIsNotify(value);
-                        }}
-                        trackColor={{ false: "#D8DEE8", true: "#9FA2D6" }}
-                      />
+                      <View style={styles.notifySwitchRow}>
+                        <Text style={styles.notifyStateText}>
+                          {isNotify ? "켜짐" : "꺼짐"}
+                        </Text>
+                        <Switch
+                          value={isNotify}
+                          onValueChange={(value) => {
+                            setIsNotify(value);
+                          }}
+                          trackColor={{ false: "#D8DEE8", true: "#9FA2D6" }}
+                        />
+                      </View>
                     </View>
                   </View>
-                </View>
+                )}
                 <View style={styles.inputBlock}>
                   <View
                     style={{

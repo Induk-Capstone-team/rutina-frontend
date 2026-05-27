@@ -1,16 +1,22 @@
 // hook/use_routine_form.ts
 import { CategoryService } from "@/services/category_service";
+import { NotificationService } from "@/services/notification_service";
 import { RoutineService } from "@/services/routine_service";
+
 import type { SaveRoutineOptions, ScheduleRoutine } from "@/types/routine";
 import { useState } from "react";
-
 export const useRoutineForm = (onSuccess: () => void) => {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("기타");
   const [selectedColor, setSelectedColor] = useState("#405886");
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
   const [isTimed, setIsTimed] = useState(false);
   const [startHour, setStartHour] = useState("09");
   const [startMinute, setStartMinute] = useState("00");
@@ -22,8 +28,7 @@ export const useRoutineForm = (onSuccess: () => void) => {
     if (!title.trim()) return;
 
     const resolvedStartDate = options.startDate || selectedDate;
-    const resolvedEndDate = options.endDate || selectedDate;
-
+    const resolvedEndDate = options.endDate ?? null;
     // 서버에서 최신 카테고리 목록 조회 후 이름으로 찾기
     const serverCategories = await CategoryService.getAll();
     const matched = serverCategories.find(
@@ -60,7 +65,7 @@ export const useRoutineForm = (onSuccess: () => void) => {
       completedDates: [],
       startDate: resolvedStartDate,
       endDate: resolvedEndDate,
-      alarm: options.notifyOption !== "NONE",
+      alarm: isTimed && options.notifyOption !== "NONE",
       state: true,
       repeatType: options.repeatType,
       repeatInterval:
@@ -77,7 +82,15 @@ export const useRoutineForm = (onSuccess: () => void) => {
       }),
     };
 
-    await RoutineService.save(newRoutine);
+    const savedRoutine = await RoutineService.save(newRoutine);
+
+    if (newRoutine.alarm && newRoutine.startTime) {
+      await NotificationService.scheduleRoutineNotification({
+        ...newRoutine,
+        id: savedRoutine.id,
+      });
+    }
+
     onSuccess();
   };
 
