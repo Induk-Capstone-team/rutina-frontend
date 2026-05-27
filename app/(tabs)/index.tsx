@@ -1,7 +1,6 @@
 import ScheduleContent from "@/components/schedule_content";
 import { Header } from "@/components/ui/_header";
 import AppCalendar from "@/components/ui/app_calendar";
-
 import { RoutineService } from "@/services/routine_service";
 import { authStore } from "@/store/authStore";
 import type { MarkedDates } from "@/types/calendar";
@@ -17,6 +16,7 @@ import React, {
   useState,
 } from "react";
 import {
+  Alert,
   Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -31,7 +31,7 @@ import {
 import "react-native-gesture-handler";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-// 시간표에 표시할 일정 타입
+
 type TimetableEvent = {
   id: string;
   title: string;
@@ -40,25 +40,19 @@ type TimetableEvent = {
   type: string;
   color?: string;
 };
-// HEX 색상에 투명도 값 추가
+
 function addAlphaToHex(hexColor: string, alpha = "22") {
   if (!hexColor.startsWith("#")) return "#F1F1FB";
   if (hexColor.length === 7) return `${hexColor}${alpha}`;
   return hexColor;
 }
-// 시간을 분 단위로 변환
-function parseTimeToMinutes(time?: string | null) {
-  // "09:30", "09:30:00" 둘 다 대응
-  if (!time) return null;
 
+function parseTimeToMinutes(time?: string | null) {
+  if (!time) return null;
   const parts = time.split(":");
   const hour = Number(parts[0]);
   const minute = Number(parts[1]);
-
-  if (Number.isNaN(hour) || Number.isNaN(minute)) {
-    return null;
-  }
-
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
   return hour * 60 + minute;
 }
 
@@ -66,12 +60,10 @@ function buildTimetableEvents(routines: ScheduleRoutine[]): TimetableEvent[] {
   const events: TimetableEvent[] = [];
   routines.forEach((routine) => {
     if (!routine.startTime || !routine.endTime) return;
-
     const startMinute = parseTimeToMinutes(routine.startTime);
     const endMinute = parseTimeToMinutes(routine.endTime);
     if (startMinute === null || endMinute === null) return;
     if (endMinute <= startMinute) return;
-
     events.push({
       id: String(routine.id),
       title: routine.title,
@@ -83,9 +75,9 @@ function buildTimetableEvents(routines: ScheduleRoutine[]): TimetableEvent[] {
   });
   return events.sort((a, b) => a.startMinute - b.startMinute);
 }
+
 function getEventStyle(type: string, color?: string) {
   const fallbackColor = color || "#9FA2D6";
-
   return {
     bg: addAlphaToHex(fallbackColor),
     dot: fallbackColor,
@@ -104,41 +96,32 @@ export default function HomeScreen() {
   const [currentTime, setCurrentTime] = useState(new Date());
   // 저장소에서 불러온 전체 루틴
   const [storedRoutines, setStoredRoutines] = useState<ScheduleRoutine[]>([]);
+  const scheduleReloadRef = useRef<(() => Promise<void>) | null>(null);
 
   const startHour = 0;
   const endHour = 24;
   const hourHeight = 60;
-
   const hours = Array.from(
     { length: endHour - startHour },
     (_, i) => startHour + i,
   );
   const columns = [0, 1, 2, 3, 4, 5];
-  // 시간표 스크롤 위치 제어용 ref
   const timetableScrollRef = useRef<ScrollView>(null);
 
   const currentDateString = format(currentDate, "yyyy-MM-dd");
-  // 현재 선택된 날짜가 포함된 주 계산
   const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 0 });
   const weekDays = Array.from({ length: 7 }).map((_, i) =>
     addDays(startOfCurrentWeek, i),
   );
 
-  //  수직 이동이 수평 이동보다 클 때만 반응
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return (
-          Math.abs(gestureState.dy) > 10 &&
-          Math.abs(gestureState.dy) > Math.abs(gestureState.dx)
-        );
-      },
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dy) > 10 &&
+        Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 40) {
-          setIsCalendarVisible(true);
-        } else if (gestureState.dy < -40) {
-          setIsCalendarVisible(false);
-        }
+        if (gestureState.dy > 40) setIsCalendarVisible(true);
+        else if (gestureState.dy < -40) setIsCalendarVisible(false);
       },
     }),
   ).current;
@@ -156,17 +139,16 @@ export default function HomeScreen() {
       setStoredRoutines([]);
     }
   }, [currentDateString]);
-  // 다른 화면 갔다가 돌아올 때 최신 루틴 다시 불러오기
+
   useFocusEffect(
     useCallback(() => {
       loadStoredRoutines();
     }, [loadStoredRoutines]),
   );
-  // 현재 시간 기준으로 시간표 위치 이동 + 1분마다 현재 시간 갱신
-  useEffect(() => {
-    const currentHour = currentTime.getHours();
-    const yOffset = Math.max(0, (currentHour - startHour - 1) * hourHeight);
 
+  useEffect(() => {
+    const currentHour = new Date().getHours();
+    const yOffset = Math.max(0, (currentHour - startHour - 1) * hourHeight);
     const timeout = setTimeout(() => {
       timetableScrollRef.current?.scrollTo({ y: yOffset, animated: true });
     }, 100);
@@ -179,53 +161,79 @@ export default function HomeScreen() {
       clearTimeout(timeout);
       clearInterval(interval);
     };
-  }, [currentTime, startHour, hourHeight]);
-
-  // 가로 스와이프가 끝났을 때 현재 페이지 상태 변경
+  }, []); //  마운트 시 1번만 실행
   const handleHorizontalScrollEnd = (
     event: NativeSyntheticEvent<NativeScrollEvent>,
   ) => {
     const pageWidth = SCREEN_WIDTH - 32;
     const offsetX = event.nativeEvent.contentOffset.x;
     const currentPage = Math.round(offsetX / pageWidth);
-
     setActivePage(currentPage === 0 ? "left" : "right");
   };
-  // 현재 선택 날짜에 시간표로 보여줄 일정 목록
-  const timetableEvents = useMemo(() => {
-    return buildTimetableEvents(storedRoutines);
-  }, [storedRoutines]);
+
+  const timetableEvents = useMemo(
+    () => buildTimetableEvents(storedRoutines),
+    [storedRoutines],
+  );
 
   const calendarMarkedDates = useMemo(() => {
     const marked: MarkedDates = {
       [currentDateString]: { selected: true, selectedColor: "#F1F1FB" },
     };
-
     return marked;
   }, [currentDateString]);
 
   const legendItems = useMemo(() => {
     const uniqueMap = new Map<string, { label: string; dot: string }>();
-
     timetableEvents.forEach((event) => {
       const style = getEventStyle(event.type, event.color);
       if (!uniqueMap.has(event.type)) {
-        uniqueMap.set(event.type, {
-          label: event.type,
-          dot: style.dot,
-        });
+        uniqueMap.set(event.type, { label: event.type, dot: style.dot });
       }
     });
-
     return Array.from(uniqueMap.values());
   }, [timetableEvents]);
+
+  const handleEventPress = useCallback(
+    async (event: TimetableEvent) => {
+      const routine = storedRoutines.find((r) => String(r.id) === event.id);
+      const isCompleted =
+        routine?.completedDates?.includes(currentDateString) ?? false;
+
+      Alert.alert(
+        isCompleted ? "완료 취소" : "루틴 완료",
+        isCompleted
+          ? `'${event.title}' 루틴의 완료를 취소할까요?`
+          : `'${event.title}' 루틴을 완료 처리할까요?`,
+        [
+          { text: "취소", style: "cancel" },
+          {
+            text: isCompleted ? "취소하기" : "완료",
+            style: isCompleted ? "destructive" : "default",
+            onPress: async () => {
+              try {
+                await RoutineService.toggleComplete(
+                  Number(event.id),
+                  currentDateString,
+                );
+                await loadStoredRoutines();
+                await scheduleReloadRef.current?.();
+              } catch (error) {
+                console.error("루틴 완료 처리 실패", error);
+                Alert.alert("오류", "처리에 실패했습니다.");
+              }
+            },
+          },
+        ],
+      );
+    },
+    [currentDateString, loadStoredRoutines, storedRoutines],
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* 현재 페이지에 따라 헤더의 토글 표시 변경 */}
         <Header activeTab={activePage} />
-        {/* 타임테이블과 일정 화면을 가로 스와이프로 전환 */}
         <ScrollView
           horizontal
           pagingEnabled
@@ -237,8 +245,9 @@ export default function HomeScreen() {
           {/* 타임테이블 */}
           <View style={styles.page}>
             <View style={styles.mainCard}>
+              {/* 상단 패널: 주간 날짜 + 핸들 + 월간 캘린더 */}
               <View style={styles.topPanel} {...panResponder.panHandlers}>
-                {/* 주간 날짜 선택 영역 */}
+                {/* 주간 날짜 선택 */}
                 <View style={styles.daySelector}>
                   {weekDays.map((date) => {
                     const isSelected = isSameDay(date, currentDate);
@@ -258,7 +267,6 @@ export default function HomeScreen() {
                         >
                           {dayStr}
                         </Text>
-
                         <View
                           style={[
                             styles.dateCircle,
@@ -278,7 +286,8 @@ export default function HomeScreen() {
                     );
                   })}
                 </View>
-                {/* 캘린더 열기/닫기 핸들 영역 */}
+
+                {/* 스와이프 핸들 + 오늘 버튼 */}
                 <View style={styles.handleRow}>
                   <TouchableOpacity
                     style={styles.swipeHandleContainer}
@@ -287,7 +296,6 @@ export default function HomeScreen() {
                   >
                     <View style={styles.swipeHandle} />
                   </TouchableOpacity>
-                  {/* 오늘이 아닌 날짜를 보고 있을 때만 오늘 버튼 표시 */}
                   {!isSameDay(currentDate, new Date()) && (
                     <TouchableOpacity
                       style={styles.todayButton}
@@ -300,6 +308,7 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   )}
                 </View>
+
                 {/* 월간 캘린더 */}
                 {isCalendarVisible && (
                   <View style={styles.calendarWrapper}>
@@ -314,29 +323,48 @@ export default function HomeScreen() {
                   </View>
                 )}
               </View>
-              {/* 시간표 영역 */}
+              {/* ── topPanel 끝 ── */}
+
+              {/* 시간표 스크롤 영역 */}
               <ScrollView
                 ref={timetableScrollRef}
                 style={styles.timetableContainer}
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.timetableInner}>
-                  {/* 왼쪽 시간 축 */}
+                  {/* 시간 축 */}
                   <View style={styles.timeAxis}>
-                    {hours.map((hour) => (
-                      <View
-                        key={hour}
-                        style={[
-                          styles.timeLabelContainer,
-                          { height: hourHeight },
-                        ]}
-                      >
-                        <Text style={styles.timeLabel}>{hour}</Text>
-                      </View>
-                    ))}
+                    {hours.map((hour) => {
+                      const isCurrentHour =
+                        isSameDay(currentDate, new Date()) &&
+                        hour === currentTime.getHours();
+                      const label = isCurrentHour
+                        ? `${String(currentTime.getHours()).padStart(2, "0")}:${String(currentTime.getMinutes()).padStart(2, "0")}`
+                        : String(hour);
+                      return (
+                        <View
+                          key={hour}
+                          style={[
+                            styles.timeLabelContainer,
+                            { height: hourHeight },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.timeLabel,
+                              isCurrentHour && styles.timeLabelCurrent,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
-                  {/* 시간표 그리드 영역 */}
+
+                  {/* 그리드 영역 */}
                   <View style={styles.gridArea}>
+                    {/* hour 행 */}
                     {hours.map((hour) => (
                       <View
                         key={hour}
@@ -351,31 +379,26 @@ export default function HomeScreen() {
                             ]}
                           />
                         ))}
-                        {/* 해당 시간 줄에 걸치는 일정 블록 표시 */}
+
+                        {/* 이벤트 블록 */}
                         {timetableEvents.map((event) => {
                           const hourStart = hour * 60;
                           const hourEnd = hourStart + 60;
-
-                          // 현재 hour 줄에 걸치는 일정만 표시
                           if (
                             event.startMinute >= hourEnd ||
                             event.endMinute <= hourStart
-                          ) {
+                          )
                             return null;
-                          }
 
                           const overlapStart = Math.max(
                             event.startMinute,
                             hourStart,
                           );
                           const overlapEnd = Math.min(event.endMinute, hourEnd);
-
-                          const startOffsetMin = overlapStart - hourStart;
-                          const durationInHour = overlapEnd - overlapStart;
-
-                          const leftPercent = (startOffsetMin / 60) * 100;
-                          const widthPercent = (durationInHour / 60) * 100;
-
+                          const leftPercent =
+                            ((overlapStart - hourStart) / 60) * 100;
+                          const widthPercent =
+                            ((overlapEnd - overlapStart) / 60) * 100;
                           const typeStyles = getEventStyle(
                             event.type,
                             event.color,
@@ -384,8 +407,10 @@ export default function HomeScreen() {
                             overlapStart === event.startMinute;
 
                           return (
-                            <View
+                            <TouchableOpacity
                               key={`${event.id}-${hour}`}
+                              activeOpacity={0.75}
+                              onPress={() => handleEventPress(event)}
                               style={[
                                 styles.eventBlock,
                                 {
@@ -406,27 +431,41 @@ export default function HomeScreen() {
                                   {event.title}
                                 </Text>
                               )}
-                            </View>
+                            </TouchableOpacity>
                           );
                         })}
-                        {/* 오늘 날짜일 때 현재 시간 위치 표시 */}
-                        {isSameDay(currentDate, new Date()) &&
-                          hour === currentTime.getHours() && (
-                            <View
-                              style={[
-                                styles.currentTimeIndicator,
-                                {
-                                  left: `${(currentTime.getMinutes() / 60) * 100}%`,
-                                },
-                              ]}
-                            />
-                          )}
                       </View>
                     ))}
+
+                    {/* 현재 시간 인디케이터 — gridArea 기준 절대 위치 */}
+                    {/* 현재 시간 인디케이터 */}
+                    {isSameDay(currentDate, new Date()) &&
+                      (() => {
+                        const currentHour = currentTime.getHours();
+                        const currentMinute = currentTime.getMinutes();
+                        const leftPercent = (currentMinute / 60) * 100;
+
+                        return (
+                          <View
+                            pointerEvents="none"
+                            style={[
+                              styles.currentTimeIndicator,
+                              {
+                                left: `${leftPercent}%`,
+                                top: (currentHour - startHour) * hourHeight,
+                                height: hourHeight,
+                              },
+                            ]}
+                          />
+                        );
+                      })()}
                   </View>
+                  {/* ── gridArea 끝 ── */}
                 </View>
               </ScrollView>
-              {/* 카테고리 범례 */}
+              {/* ── 시간표 ScrollView 끝 ── */}
+
+              {/* 범례 */}
               <View style={styles.legendContainer}>
                 {legendItems.map((item) => (
                   <View key={item.label} style={styles.legendItem}>
@@ -439,10 +478,16 @@ export default function HomeScreen() {
               </View>
             </View>
           </View>
+          {/* ── 타임테이블 페이지 끝 ── */}
 
-          {/* 일정 */}
+          {/* ── 일정 페이지 ── */}
           <View style={styles.page}>
-            <ScheduleContent />
+            <ScheduleContent
+              onToggleComplete={(reload) => {
+                scheduleReloadRef.current = reload;
+              }}
+              onRoutineUpdated={loadStoredRoutines}
+            />
           </View>
         </ScrollView>
       </View>
@@ -451,23 +496,15 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F3F4F8",
-  },
+  safeArea: { flex: 1, backgroundColor: "#F3F4F8" },
   container: {
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 10,
     backgroundColor: "#F3F4F8",
   },
-  horizontalContent: {
-    flexGrow: 1,
-  },
-  page: {
-    width: SCREEN_WIDTH - 32,
-    flex: 1,
-  },
+  horizontalContent: { flexGrow: 1 },
+  page: { width: SCREEN_WIDTH - 32, flex: 1 },
   mainCard: {
     flex: 1,
     backgroundColor: "#FFFFFF",
@@ -491,11 +528,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     zIndex: 20,
   },
-  todayButtonText: {
-    fontSize: 12,
-    color: "#2A3C6B",
-    fontWeight: "700",
-  },
+  todayButtonText: { fontSize: 12, color: "#2A3C6B", fontWeight: "700" },
   daySelector: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -510,26 +543,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 16,
   },
-  dateCircleSelected: {
-    backgroundColor: "#A0B0D0",
-  },
+  dateCircleSelected: { backgroundColor: "#A0B0D0" },
   dayText: {
     fontSize: 13,
     color: "#A0A7B4",
     fontWeight: "600",
     marginBottom: 4,
   },
-  dateText: {
-    fontSize: 16,
-    color: "#405886",
-    fontWeight: "700",
-  },
-  dayTextSelected: {
-    color: "#405886",
-  },
-  dateTextSelected: {
-    color: "#FFFFFF",
-  },
+  dateText: { fontSize: 16, color: "#405886", fontWeight: "700" },
+  dayTextSelected: { color: "#405886" },
+  dateTextSelected: { color: "#FFFFFF" },
   dateCircle: {
     width: 30,
     height: 30,
@@ -538,7 +561,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 6,
   },
-
   handleRow: {
     position: "relative",
     justifyContent: "center",
@@ -546,9 +568,7 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 14,
   },
-  swipeHandleContainer: {
-    padding: 10,
-  },
+  swipeHandleContainer: { padding: 10 },
   swipeHandle: {
     width: 40,
     height: 4,
@@ -563,32 +583,20 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     marginHorizontal: 16,
   },
-  timetableContainer: {
-    paddingTop: 15,
-    flex: 1,
-  },
-  timetableInner: {
-    flexDirection: "row",
-    paddingHorizontal: 10,
-  },
-  timeAxis: {
-    width: 40,
-    paddingRight: 10,
-  },
-  timeLabelContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  timeLabel: {
-    fontSize: 14,
-    color: "#A0B0D0",
-  },
+  timetableContainer: { paddingTop: 15, flex: 1 },
+  timetableInner: { flexDirection: "row", paddingHorizontal: 10 },
+  timeAxis: { width: 52, paddingRight: 4 },
+  timeLabelContainer: { justifyContent: "center", alignItems: "center" },
+  timeLabel: { fontSize: 14, color: "#A0B0D0" },
+  timeLabelCurrent: { color: "#6C7FD8", fontWeight: "700", fontSize: 11 },
   gridArea: {
     flex: 1,
     borderLeftWidth: 1,
     borderTopWidth: 1,
     borderRightWidth: 1,
     borderColor: "#EDEEF1",
+    position: "relative",
+    overflow: "visible",
   },
   hourRow: {
     flexDirection: "row",
@@ -609,18 +617,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 10,
   },
-  eventTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
+  eventTitle: { fontSize: 13, fontWeight: "600" },
   currentTimeIndicator: {
     position: "absolute",
-    top: 0,
-    bottom: 0,
     width: 2,
-    backgroundColor: "#c5e4af",
+    backgroundColor: "#6C7FD8",
     zIndex: 10,
+    borderRadius: 1,
   },
+
   legendContainer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -629,19 +634,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 20,
   },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendText: {
-    fontSize: 13,
-    color: "#8A8C9A",
-    fontWeight: "500",
-  },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontSize: 13, color: "#8A8C9A", fontWeight: "500" },
 });

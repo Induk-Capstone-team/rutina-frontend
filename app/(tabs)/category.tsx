@@ -8,7 +8,6 @@ import {
   uniqueColors,
   type CustomCategory,
 } from "@/lib/category";
-import { getRoutineOccurrenceDates } from "@/lib/storage";
 import type { Category } from "@/services/category_service";
 import { CategoryService } from "@/services/category_service";
 import { RoutineService } from "@/services/routine_service";
@@ -105,46 +104,9 @@ const normalizeDate = (date?: string | null) => {
 
 // 루틴이 완료 상태인지 판단
 const isRoutineCompleted = (routine: ScheduleRoutine): boolean => {
-  const startDate = normalizeDate(routine.startDate);
   const endDate = normalizeDate(routine.endDate);
-
-  // 1. 기간이 끝난 루틴은 완료 처리
-  if (isPastEndDate(endDate)) return true;
-
-  const completedDates = routine.completedDates ?? [];
-  const normalizedCompletedDates = completedDates.map(normalizeDate);
-
-  // 2. 오늘 시작해서 오늘 끝나는 단일 날짜 루틴
-  if (startDate === endDate) {
-    return (
-      normalizedCompletedDates.includes(startDate) || routine.state === true
-    );
-  }
-
-  const today = getTodayString();
-  const effectiveEnd = endDate || today;
-
-  const allDates = getRoutineOccurrenceDates(
-    {
-      ...routine,
-      startDate,
-      endDate,
-    },
-    startDate,
-    effectiveEnd,
-  );
-
-  // 3. 반복 날짜가 없으면 state 기준으로라도 완료 판단
-  if (allDates.length === 0) {
-    return routine.state === true;
-  }
-
-  // 4. 기간 안의 모든 반복 날짜가 완료됐으면 완료 처리
-  return allDates.every((date) =>
-    normalizedCompletedDates.includes(normalizeDate(date)),
-  );
+  return isPastEndDate(endDate); // endDate가 오늘 이전이면 완료
 };
-
 const loadRoutines = async () => {
   return RoutineService.getAll();
 };
@@ -1148,7 +1110,6 @@ export default function CategoryScreen() {
           )}
         </View>
 
-        {/* 카테고리 추가/수정 바텀시트 모달 */}
         {/* 카테고리 추가/수정 바텀시트 모달 */}
         <Modal
           visible={isCategoryModalVisible}

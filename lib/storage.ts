@@ -100,11 +100,14 @@ const parseTimeToMinutes = (time: string) => {
 // 날짜 범위 겹침 여부 확인
 const isDateRangeOverlapping = (
   startA: string,
-  endA: string,
+  endA: string | null,
   startB: string,
-  endB: string,
+  endB: string | null,
 ) => {
-  return !(endA < startB || startA > endB);
+  const safeEndA = endA ?? startA;
+  const safeEndB = endB ?? startB;
+
+  return !(safeEndA < startB || startA > safeEndB);
 };
 
 // 시간 범위 겹침 여부 확인
@@ -169,7 +172,9 @@ export const shouldShowRoutineOnDate = (
   item: ScheduleRoutine,
   targetDate: string,
 ): boolean => {
-  if (targetDate < item.startDate || targetDate > item.endDate) return false;
+  const endDate = item.endDate ?? item.startDate;
+
+  if (targetDate < item.startDate || targetDate > endDate) return false;
   if (!item.repeatType || item.repeatType === "NONE") return true;
   if (item.repeatType === "DAILY") return true;
 
