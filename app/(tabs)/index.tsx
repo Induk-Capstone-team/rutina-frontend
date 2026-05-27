@@ -61,8 +61,9 @@ function buildTimetableEvents(routines: ScheduleRoutine[]): TimetableEvent[] {
   routines.forEach((routine) => {
     if (!routine.startTime || !routine.endTime) return;
     const startMinute = parseTimeToMinutes(routine.startTime);
-    const endMinute = parseTimeToMinutes(routine.endTime);
+    let endMinute = parseTimeToMinutes(routine.endTime);
     if (startMinute === null || endMinute === null) return;
+    if (endMinute < startMinute) endMinute += 1440;
     if (endMinute <= startMinute) return;
     events.push({
       id: String(routine.id),
@@ -98,8 +99,8 @@ export default function HomeScreen() {
   const [storedRoutines, setStoredRoutines] = useState<ScheduleRoutine[]>([]);
   const scheduleReloadRef = useRef<(() => Promise<void>) | null>(null);
 
-  const startHour = 0;
-  const endHour = 24;
+  const startHour = 4;
+  const endHour = 28;
   const hourHeight = 60;
   const hours = Array.from(
     { length: endHour - startHour },
@@ -148,7 +149,9 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const currentHour = new Date().getHours();
-    const yOffset = Math.max(0, (currentHour - startHour - 1) * hourHeight);
+    const adjustedHour =
+      currentHour < startHour ? currentHour + 24 : currentHour;
+    const yOffset = Math.max(0, (adjustedHour - startHour - 1) * hourHeight);
     const timeout = setTimeout(() => {
       timetableScrollRef.current?.scrollTo({ y: yOffset, animated: true });
     }, 100);
@@ -335,12 +338,17 @@ export default function HomeScreen() {
                   {/* 시간 축 */}
                   <View style={styles.timeAxis}>
                     {hours.map((hour) => {
+                      const displayHour = hour % 24;
+                      const adjustedCurrentHour =
+                        currentTime.getHours() < startHour
+                          ? currentTime.getHours() + 24
+                          : currentTime.getHours();
                       const isCurrentHour =
                         isSameDay(currentDate, new Date()) &&
-                        hour === currentTime.getHours();
+                        hour === adjustedCurrentHour;
                       const label = isCurrentHour
                         ? `${String(currentTime.getHours()).padStart(2, "0")}:${String(currentTime.getMinutes()).padStart(2, "0")}`
-                        : String(hour);
+                        : String(displayHour);
                       return (
                         <View
                           key={hour}
@@ -442,6 +450,10 @@ export default function HomeScreen() {
                     {isSameDay(currentDate, new Date()) &&
                       (() => {
                         const currentHour = currentTime.getHours();
+                        const adjustedHour =
+                          currentHour < startHour
+                            ? currentHour + 24
+                            : currentHour;
                         const currentMinute = currentTime.getMinutes();
                         const leftPercent = (currentMinute / 60) * 100;
 
@@ -452,7 +464,7 @@ export default function HomeScreen() {
                               styles.currentTimeIndicator,
                               {
                                 left: `${leftPercent}%`,
-                                top: (currentHour - startHour) * hourHeight,
+                                top: (adjustedHour - startHour) * hourHeight,
                                 height: hourHeight,
                               },
                             ]}
