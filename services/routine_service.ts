@@ -42,11 +42,10 @@ export const RoutineService = {
   },
 
   // 루틴 생성
-  save: async (routine: ScheduleRoutine): Promise<void> => {
-    const body = toApiRoutineRequest(routine);
-    await api("/routines", {
+  save: async (routine: ScheduleRoutine) => {
+    return api("/routines", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify(toApiRoutineRequest(routine)),
     });
   },
 

@@ -18,6 +18,7 @@ type TimePickerModalProps = {
   startMinute: string;
   endHour: string;
   endMinute: string;
+
   onClose: () => void;
   onApply: (time: {
     startHour: string;

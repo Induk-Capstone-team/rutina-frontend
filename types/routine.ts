@@ -22,7 +22,7 @@ export interface ScheduleRoutine {
   categoryName?: string;
   color?: string;
   startDate: string;
-  endDate: string;
+  endDate: string | null;
   startTime?: string | null;
   endTime?: string | null;
   alarm: boolean;
@@ -55,7 +55,7 @@ export interface SaveRoutineOptions {
   repeatDays: RepeatWeekday[] | null;
 
   startDate: string;
-  endDate: string;
+  endDate: string | null;
 }
 
 // 시간 선택 모달에서 사용하는 시간 범위 타입
@@ -95,8 +95,8 @@ export interface ApiRoutineRequest {
   repeatDays: RepeatWeekday[] | null;
   startTime: string | null;
   endTime: string | null;
-  startAt: string; // 로컬의 startDate
-  endAt: string; // 로컬의 endDate
+  startAt: string;
+  endAt: string | null;
 }
 export interface RoutineCategory {
   id: number;
@@ -113,6 +113,9 @@ export interface CategoryRequest {
 export interface HeatmapRoutine {
   routineId: number;
   title: string;
+  startAt: string;
+  endAt: string | null;
+
   category: {
     id: number;
     name: string;

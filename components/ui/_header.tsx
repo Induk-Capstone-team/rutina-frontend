@@ -6,17 +6,14 @@ import { Image, Pressable, StyleSheet, View } from "react-native";
 interface HeaderProps {
   activeTab?: "left" | "right";
 }
+const LOGO = require("@/assets/images/logo_icon.png");
 export function Header({ activeTab = "left" }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const isIndex = pathname === "/" || pathname === "/index";
   return (
     <View style={styles.header}>
-      <Image
-        source={require("@/assets/images/logo_icon.png")}
-        style={styles.logoImage}
-        resizeMode="contain"
-      />
+      <Image source={LOGO} style={styles.logoImage} resizeMode="contain" />
       <View style={styles.headerRight}>
         {isIndex && (
           <>

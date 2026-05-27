@@ -32,14 +32,14 @@ export const toScheduleRoutine = (
 export const toApiRoutineRequest = (
   routine: ScheduleRoutine,
 ): ApiRoutineRequest => {
-  if (!routine.startDate || !routine.endDate) {
-    throw new Error("startDate / endDate는 필수입니다");
+  if (!routine.startDate) {
+    throw new Error("startDate는 필수입니다");
   }
 
   return {
     categoryId: routine.categoryId ?? null,
     title: routine.title,
-    alarm: routine.alarm ?? false,
+    alarm: routine.startTime ? routine.alarm : false,
     repeatType: routine.repeatType ?? "NONE",
     repeatInterval:
       routine.repeatType === "CUSTOM" ? (routine.repeatInterval ?? 1) : null,
@@ -53,6 +53,6 @@ export const toApiRoutineRequest = (
     startTime: routine.startTime ?? null,
     endTime: routine.endTime ?? null,
     startAt: routine.startDate,
-    endAt: routine.endDate,
+    endAt: routine.endDate ?? null,
   };
 };
