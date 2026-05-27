@@ -19,6 +19,7 @@ const PUBLIC_ENDPOINTS = [
   "/api/v1/auth/check-email",
   "/api/v1/auth/email/verification-code",
   "/api/v1/auth/email/verification-code/verify",
+  "/api/v1/auth/apple",
 ];
 apiClient.interceptors.request.use(async (config) => {
   // 공개 엔드포인트는 토큰 체크 건너뜀

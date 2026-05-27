@@ -67,6 +67,16 @@ export const authApi = {
     return data;
   },
 
+  /// Apple 소셜 로그인 요청
+  appleLogin: async (identityToken: string, email?: string | null, nickname?: string | null) => {
+    const { data } = await apiClient.post("/api/v1/auth/apple", {
+      identityToken,
+      email,
+      nickname,
+    });
+    return data;
+  },
+
   ///로그인 요청
   login: async (email: string, password: string) => {
     const { data } = await apiClient.post("/api/v1/auth/login", {

@@ -1,10 +1,12 @@
+import { authApi } from "@/lib/data/auth_api";
 import { authStore } from "@/store/authStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -75,10 +77,96 @@ export const useSocialAuth = () => {
     }
   };
 
+  // Apple 로그인 핸들러 (네이티브 SDK 사용)
+  const handleAppleLogin = async () => {
+    if (Platform.OS !== "ios") {
+      Alert.alert("알림", "Apple 로그인은 iOS에서만 사용할 수 있습니다.");
+      return;
+    }
+
+    setIsSocialLoading(true);
+    try {
+      // 1. Apple 네이티브 인증 요청
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      const identityToken = credential.identityToken;
+      if (!identityToken) {
+        throw new Error("Apple로부터 인증 토큰을 받지 못했습니다.");
+      }
+
+      // 2. 최초 로그인 시에만 email, fullName이 제공됨
+      const email = credential.email || null;
+      const nickname = credential.fullName
+        ? [credential.fullName.familyName, credential.fullName.givenName]
+            .filter(Boolean)
+            .join("")
+        : null;
+
+      // 3. 백엔드에 identityToken + email/nickname 전송
+      const data = await authApi.appleLogin(identityToken, email, nickname);
+
+      const accessToken =
+        data?.data?.accessToken || data?.accessToken || data?.token;
+      const refreshToken = data?.data?.refreshToken || data?.refreshToken;
+      const isNewUser =
+        data?.data?.isNewUser ?? data?.isNewUser ?? false;
+      const responseEmail =
+        data?.data?.email || data?.email || email || "";
+      const responseNickname =
+        data?.data?.nickname || data?.nickname || nickname || "";
+
+      if (accessToken) {
+        // 토큰 저장
+        await AsyncStorage.setItem("userToken", accessToken);
+        if (refreshToken) {
+          await AsyncStorage.setItem("refreshToken", refreshToken);
+        }
+
+        if (isNewUser === true || isNewUser === "true") {
+          // 최초 회원가입 -> 추가 정보 입력 화면으로 이동
+          router.replace({
+            pathname: "/onboarding/signup2",
+            params: {
+              email: responseEmail,
+              nickname: responseNickname,
+              isSocial: "true",
+            },
+          });
+        } else {
+          // 기존 회원 -> 메인 화면으로 이동
+          authStore.setLoggedIn(true);
+          router.replace("/(tabs)");
+        }
+      } else {
+        throw new Error("백엔드로부터 토큰을 받지 못했습니다.");
+      }
+    } catch (error: any) {
+      // 사용자가 Apple 로그인을 취소한 경우
+      if (error.code === "ERR_REQUEST_CANCELED") {
+        console.log("Apple 로그인 취소됨");
+        return;
+      }
+      console.log("Apple Login Error:", error);
+      Alert.alert(
+        "Apple 로그인 오류",
+        error.message || "로그인 중 문제가 발생했습니다.",
+      );
+    } finally {
+      setIsSocialLoading(false);
+    }
+  };
+
   return {
     handleKakaoLogin: () => handleSocialLogin("kakao"),
     handleNaverLogin: () => handleSocialLogin("naver"),
     handleGoogleLogin: () => handleSocialLogin("google"),
+    handleAppleLogin,
     isSocialLoading,
   };
 };
+
