@@ -22,7 +22,7 @@ export default function LoginScreen() {
 
   // ViewModel에서 필요한 기능만 쏙 빼오기
   const { login, isLoading, error } = useAuthViewModel();
-  const { handleKakaoLogin, handleNaverLogin, handleGoogleLogin, isSocialLoading } = useSocialAuth();
+  const { handleKakaoLogin, handleNaverLogin, handleGoogleLogin, handleAppleLogin, isSocialLoading } = useSocialAuth();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -113,8 +113,9 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.socialButton, { backgroundColor: "#000000" }]}
-                onPress={() => {}}
+                style={[styles.socialButton, { backgroundColor: "#000000", opacity: isSocialLoading ? 0.7 : 1 }]}
+                onPress={handleAppleLogin}
+                disabled={isSocialLoading}
               >
                 <Image
                   source={require("../../assets/images/apple_icon.png")}

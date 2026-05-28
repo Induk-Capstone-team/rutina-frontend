@@ -3,7 +3,7 @@ import { CategoryApi } from "@/lib/data/category_api";
 import { authStore } from "@/store/authStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -74,10 +74,35 @@ export default function SignupStep2Screen() {
   const [age, setAge] = useState("");
   const [job, setJob] = useState("");
   const [gender, setGender] = useState("");
+const [ageError, setAgeError] = useState("");
+
+const ageDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+useEffect(() => {
+  if (ageDebounceRef.current) clearTimeout(ageDebounceRef.current);
+  ageDebounceRef.current = setTimeout(() => {
+    if (age && Number(age) < 13) {
+      setAgeError("13세 미만은 입력할 수 없습니다.");
+    } else {
+      setAgeError("");
+    }
+  }, 500);
+  return () => {
+    if (ageDebounceRef.current) {
+      clearTimeout(ageDebounceRef.current);
+    }
+  };
+}, [age]);
 
   const isFormValid = age && job && gender;
 
   const handleComplete = async () => {
+    //13세 이하는 아예 선택이 불가능하게 설정
+    if (Number(age) < 14) {
+      Alert.alert("알림", "죄송합니다. 14세 이상만 회원가입이 가능합니다.");
+      return;
+    }
+
     // 성별 값을 백엔드 형식(0 = 남성, 1 = 여성)으로 변환
     let mappedGender: number | null = null;
     if (gender === "남성") mappedGender = 0;
@@ -111,6 +136,19 @@ export default function SignupStep2Screen() {
     }
   };
 
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [agreeProfile, setAgreeProfile] = useState(false);
+  const [agreePush, setAgreePush] = useState(false);
+
+  const allAgreed = agreePrivacy && agreeProfile && agreePush;
+
+  const handleAllAgree = () => {
+    const nextState = !allAgreed;
+    setAgreePrivacy(nextState);
+    setAgreeProfile(nextState);
+    setAgreePush(nextState);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -133,10 +171,6 @@ export default function SignupStep2Screen() {
             <Text style={styles.headerSubtitle}>
               더 나은 맞춤형 서비스를 위해 정보를 입력해주세요.
             </Text>
-            {/* 일주일 이내 재가입 제한 안내 */}
-            <Text style={styles.rejoinNotice}>
-              계정 삭제 후 7일 이내에는 재가입이 불가능합니다.
-            </Text>
           </View>
 
           <View style={styles.card}>
@@ -150,6 +184,7 @@ export default function SignupStep2Screen() {
                 keyboardType="number-pad"
                 placeholderTextColor="#A0B0D0"
               />
+              {ageError ? <Text style={styles.errorText}>{ageError}</Text> : null}
             </View>
 
             <View style={styles.inputWrapper}>
@@ -209,6 +244,62 @@ export default function SignupStep2Screen() {
                   </TouchableOpacity>
                 ))}
               </View>
+            </View>
+
+            {/* 약관 동의 섹션 */}
+            <View style={styles.agreementSection}>
+              <TouchableOpacity
+                style={styles.allAgreeRow}
+                onPress={handleAllAgree}
+              >
+                <Ionicons
+                  name={allAgreed ? "checkbox" : "square-outline"}
+                  size={24}
+                  color={allAgreed ? "#2A3C6B" : "#A0B0D0"}
+                />
+                <Text style={styles.allAgreeText}>약관에 모두 동의합니다</Text>
+              </TouchableOpacity>
+
+              <View style={styles.divider} />
+
+              {[
+                {
+                  label: "[필수] 개인정보 수집 및 이용",
+                  state: agreePrivacy,
+                  setState: setAgreePrivacy,
+                  link: "/privacy",
+                },
+                {
+                  label: "[선택] 프로필 정보 이용",
+                  state: agreeProfile,
+                  setState: setAgreeProfile,
+                  link: "/profile",
+                },
+                {
+                  label: "[선택] 마케팅 푸시 알림",
+                  state: agreePush,
+                  setState: setAgreePush,
+                  link: "/push",
+                },
+              ].map((item, index) => (
+                <View key={index} style={styles.agreeRow}>
+                  <TouchableOpacity onPress={() => item.setState(!item.state)}>
+                    <Ionicons
+                      name={item.state ? "checkmark-circle" : "ellipse-outline"}
+                      size={22}
+                      color={item.state ? "#2A3C6B" : "#D1D9E6"}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.agreeTextBtn}>
+                    <Text style={styles.agreeText}>{item.label}</Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={14}
+                      color="#A0B0D0"
+                    />
+                  </TouchableOpacity>
+                </View>
+              ))}
             </View>
 
             <TouchableOpacity
@@ -338,4 +429,36 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   submitButtonText: { color: "#FFF", fontSize: 18, fontWeight: "800" },
+
+  agreementSection: {
+    marginTop: 10,
+    padding: 16,
+    backgroundColor: "#F8F9FB",
+    borderRadius: 16,
+  },
+  allAgreeRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  allAgreeText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#2A3C6B",
+    marginLeft: 10,
+  },
+  agreeRow: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
+  agreeTextBtn: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginLeft: 10,
+  },
+  agreeText: { fontSize: 14, color: "#5C6E91" },
+  mainErrorText: {
+    color: "#FF5252",
+    textAlign: "center",
+    marginTop: 15,
+    fontWeight: "600",
+  },
+  divider: { height: 1, backgroundColor: "#E0E5ED", marginBottom: 12 },
+
+  errorText: { color: '#FF5252', marginTop: 4, fontSize: 12 },
 });

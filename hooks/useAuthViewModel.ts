@@ -42,6 +42,7 @@ export const useAuthViewModel = () => {
 
       authStore.setLoggedIn(true);
       router.replace("/(tabs)"); // 메인 화면으로 이동
+      console.log("로그인 성공, 토큰 저장 완료!!!!");
     } catch (err: any) {
       console.log("로그인 에러:", err);
       // 서버에서 보내는 에러 메시지가 있다면 사용하고, 없다면 기본 메시지 출력

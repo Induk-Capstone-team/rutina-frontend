@@ -13,12 +13,21 @@ export class NoTokenError extends Error {
   }
 }
 
+const publicClient = axios.create({
+  baseURL: "https://rutina.co.kr", // 프로젝트의 기본 백엔드 도메인 주소
+  timeout: 10000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
 const PUBLIC_ENDPOINTS = [
   "/api/v1/auth/login",
   "/api/v1/auth/signup",
   "/api/v1/auth/check-email",
   "/api/v1/auth/email/verification-code",
   "/api/v1/auth/email/verification-code/verify",
+  "/api/v1/auth/apple",
 ];
 apiClient.interceptors.request.use(async (config) => {
   // 공개 엔드포인트는 토큰 체크 건너뜀
@@ -61,3 +70,4 @@ apiClient.interceptors.response.use(
   },
 );
 export default apiClient;
+export { publicClient };

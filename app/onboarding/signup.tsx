@@ -18,7 +18,7 @@ import {
 export default function SignupScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string; nickname?: string }>();
-  
+
   const {
     signup,
     sendVerificationCode,
@@ -46,18 +46,7 @@ export default function SignupScreen() {
     }
   }, [params.email, params.nickname]);
 
-  const [agreePrivacy, setAgreePrivacy] = useState(false);
-  const [agreeProfile, setAgreeProfile] = useState(false);
-  const [agreePush, setAgreePush] = useState(false);
 
-  const allAgreed = agreePrivacy && agreeProfile && agreePush;
-
-  const handleAllAgree = () => {
-    const nextState = !allAgreed;
-    setAgreePrivacy(nextState);
-    setAgreeProfile(nextState);
-    setAgreePush(nextState);
-  };
 
   const handleSendCode = async () => {
     if (!email || !email.includes("@")) {
@@ -69,7 +58,7 @@ export default function SignupScreen() {
       setIsCodeSent(true);
       Alert.alert("알림", "인증 코드가 이메일로 발송되었습니다.");
     } else if (data === null && error) {
-       Alert.alert("오류", error);
+      Alert.alert("오류", error);
     }
   };
 
@@ -80,7 +69,7 @@ export default function SignupScreen() {
       setIsVerified(true);
       Alert.alert("알림", "이메일 인증이 완료되었습니다.");
     } else if (data === null && error) {
-       Alert.alert("오류", error);
+      Alert.alert("오류", error);
     }
   };
 
@@ -91,10 +80,6 @@ export default function SignupScreen() {
     }
     if (password !== passwordConfirm) {
       setError("비밀번호가 서로 다릅니다.");
-      return;
-    }
-    if (!agreePrivacy) {
-      setError("필수 약관에 동의해주세요.");
       return;
     }
 
@@ -109,7 +94,7 @@ export default function SignupScreen() {
   };
 
   const isFormValid =
-    nickname && isVerified && password && passwordConfirm && agreePrivacy;
+    nickname && isVerified && password && passwordConfirm;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -232,61 +217,7 @@ export default function SignupScreen() {
               />
             </View>
 
-            {/* 약관 동의 섹션 */}
-            <View style={styles.agreementSection}>
-              <TouchableOpacity
-                style={styles.allAgreeRow}
-                onPress={handleAllAgree}
-              >
-                <Ionicons
-                  name={allAgreed ? "checkbox" : "square-outline"}
-                  size={24}
-                  color={allAgreed ? "#2A3C6B" : "#A0B0D0"}
-                />
-                <Text style={styles.allAgreeText}>약관에 모두 동의합니다</Text>
-              </TouchableOpacity>
 
-              <View style={styles.divider} />
-
-              {[
-                {
-                  label: "[필수] 개인정보 수집 및 이용",
-                  state: agreePrivacy,
-                  setState: setAgreePrivacy,
-                  link: "/privacy",
-                },
-                {
-                  label: "[선택] 프로필 정보 이용",
-                  state: agreeProfile,
-                  setState: setAgreeProfile,
-                  link: "/profile",
-                },
-                {
-                  label: "[선택] 마케팅 푸시 알림",
-                  state: agreePush,
-                  setState: setAgreePush,
-                  link: "/push",
-                },
-              ].map((item, index) => (
-                <View key={index} style={styles.agreeRow}>
-                  <TouchableOpacity onPress={() => item.setState(!item.state)}>
-                    <Ionicons
-                      name={item.state ? "checkmark-circle" : "ellipse-outline"}
-                      size={22}
-                      color={item.state ? "#2A3C6B" : "#D1D9E6"}
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.agreeTextBtn}>
-                    <Text style={styles.agreeText}>{item.label}</Text>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={14}
-                      color="#A0B0D0"
-                    />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
 
             {error && <Text style={styles.mainErrorText}>{error}</Text>}
 
@@ -372,29 +303,8 @@ const styles = StyleSheet.create({
   disabledInlineButton: { backgroundColor: "#D1D9E6" },
   inlineButtonText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
   errorText: { color: "#FF5252", fontSize: 12, marginTop: 6, marginLeft: 4 },
-  agreementSection: {
-    marginTop: 10,
-    padding: 16,
-    backgroundColor: "#F8F9FB",
-    borderRadius: 16,
-  },
-  allAgreeRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  allAgreeText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#2A3C6B",
-    marginLeft: 10,
-  },
+
   divider: { height: 1, backgroundColor: "#E0E5ED", marginBottom: 12 },
-  agreeRow: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
-  agreeTextBtn: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginLeft: 10,
-  },
-  agreeText: { fontSize: 14, color: "#5C6E91" },
   mainErrorText: {
     color: "#FF5252",
     textAlign: "center",
