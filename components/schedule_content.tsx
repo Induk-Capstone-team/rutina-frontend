@@ -301,104 +301,108 @@ export default function ScheduleContent({
   const progressPercentage =
     totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
   return (
-    <View style={styles.root}>
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={styles.card}>
-          <View style={styles.dateControlRow}>
-            <View style={styles.dateInfoContainer}>
-              <TouchableOpacity onPress={() => changeDate(-1)}>
-                <Ionicons name="chevron-back" size={22} color="#A0B0D0" />
-              </TouchableOpacity>
+    <>
+      <View style={styles.root}>
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View style={styles.card}>
+            <View style={styles.dateControlRow}>
+              <View style={styles.dateInfoContainer}>
+                <TouchableOpacity onPress={() => changeDate(-1)}>
+                  <Ionicons name="chevron-back" size={22} color="#A0B0D0" />
+                </TouchableOpacity>
 
-              <View style={styles.dateRow}>
-                <Text style={styles.dayNum}>{day}</Text>
-                <View>
-                  <Text style={styles.monthYear}>
-                    {month} {year}
-                  </Text>
-                  <Text style={styles.subInfo}>{dayOfWeek}</Text>
+                <View style={styles.dateRow}>
+                  <Text style={styles.dayNum}>{day}</Text>
+                  <View>
+                    <Text style={styles.monthYear}>
+                      {month} {year}
+                    </Text>
+                    <Text style={styles.subInfo}>{dayOfWeek}</Text>
+                  </View>
                 </View>
+
+                <TouchableOpacity onPress={() => changeDate(1)}>
+                  <Ionicons name="chevron-forward" size={22} color="#A0B0D0" />
+                </TouchableOpacity>
               </View>
 
-              <TouchableOpacity onPress={() => changeDate(1)}>
-                <Ionicons name="chevron-forward" size={22} color="#A0B0D0" />
-              </TouchableOpacity>
-            </View>
+              <View style={styles.headerActionRow}>
+                {!isSameDay(selectedDate, new Date()) && (
+                  <TouchableOpacity
+                    style={styles.todayButton}
+                    onPress={goToday}
+                  >
+                    <Text style={styles.todayButtonText}>오늘</Text>
+                  </TouchableOpacity>
+                )}
 
-            <View style={styles.headerActionRow}>
-              {!isSameDay(selectedDate, new Date()) && (
-                <TouchableOpacity style={styles.todayButton} onPress={goToday}>
-                  <Text style={styles.todayButtonText}>오늘</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.calendarBtn,
+                    showDatePicker && styles.calendarBtnActive,
+                  ]}
+                  onPress={() => setShowDatePicker(!showDatePicker)}
+                >
+                  <Ionicons name="calendar-outline" size={18} color="#A0B0D0" />
                 </TouchableOpacity>
-              )}
-
-              <TouchableOpacity
-                style={[
-                  styles.calendarBtn,
-                  showDatePicker && styles.calendarBtnActive,
-                ]}
-                onPress={() => setShowDatePicker(!showDatePicker)}
-              >
-                <Ionicons name="calendar-outline" size={18} color="#A0B0D0" />
-              </TouchableOpacity>
+              </View>
             </View>
+
+            {showDatePicker && (
+              <View style={styles.pickerContainer}>
+                <AppCalendar
+                  current={selectedDateString}
+                  markedDates={{
+                    [selectedDateString]: {
+                      selected: true,
+                      selectedColor: "#F1F1FB",
+                    },
+                  }}
+                  onDayPress={onDayPress}
+                />
+              </View>
+            )}
+
+            <View style={styles.progressArea}>
+              <View style={styles.progressBar}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${progressPercentage}%` },
+                  ]}
+                />
+              </View>
+              <Text style={styles.progressPercent}>
+                {completedCount} / {totalCount}
+              </Text>
+            </View>
+
+            <Text style={styles.sectionTitle}>시간 없는 루틴</Text>
+            {noTimeRoutines.length === 0 ? (
+              <Text style={styles.emptyText}>시간 없는 루틴이 없어요.</Text>
+            ) : (
+              noTimeRoutines.map((item) => (
+                <RenderItem key={item.id} item={item} isTimed={false} />
+              ))
+            )}
+
+            <View style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>시간 있는 루틴</Text>
+            {timedRoutines.length === 0 ? (
+              <Text style={styles.emptyText}>시간 있는 루틴이 없어요.</Text>
+            ) : (
+              timedRoutines.map((item) => (
+                <RenderItem key={item.id} item={item} isTimed={true} />
+              ))
+            )}
           </View>
-
-          {showDatePicker && (
-            <View style={styles.pickerContainer}>
-              <AppCalendar
-                current={selectedDateString}
-                markedDates={{
-                  [selectedDateString]: {
-                    selected: true,
-                    selectedColor: "#F1F1FB",
-                  },
-                }}
-                onDayPress={onDayPress}
-              />
-            </View>
-          )}
-
-          <View style={styles.progressArea}>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${progressPercentage}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressPercent}>
-              {completedCount} / {totalCount}
-            </Text>
-          </View>
-
-          <Text style={styles.sectionTitle}>시간 없는 루틴</Text>
-          {noTimeRoutines.length === 0 ? (
-            <Text style={styles.emptyText}>시간 없는 루틴이 없어요.</Text>
-          ) : (
-            noTimeRoutines.map((item) => (
-              <RenderItem key={item.id} item={item} isTimed={false} />
-            ))
-          )}
-
-          <View style={styles.divider} />
-
-          <Text style={styles.sectionTitle}>시간 있는 루틴</Text>
-          {timedRoutines.length === 0 ? (
-            <Text style={styles.emptyText}>시간 있는 루틴이 없어요.</Text>
-          ) : (
-            timedRoutines.map((item) => (
-              <RenderItem key={item.id} item={item} isTimed={true} />
-            ))
-          )}
-        </View>
-      </ScrollView>
-
+        </ScrollView>
+      </View>
       <ScheduleDetailModal
         visible={showDetailModal}
         routine={selectedRoutine}
@@ -410,10 +414,9 @@ export default function ScheduleContent({
           await loadRoutines();
         }}
       />
-    </View>
+    </>
   );
 }
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,

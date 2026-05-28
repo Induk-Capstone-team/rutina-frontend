@@ -58,25 +58,52 @@ function parseTimeToMinutes(time?: string | null) {
 
 function buildTimetableEvents(routines: ScheduleRoutine[]): TimetableEvent[] {
   const events: TimetableEvent[] = [];
+
+  const timetableStartMinute = 4 * 60; // 04:00
+  const timetableEndMinute = 28 * 60; // 다음날 04:00
+
   routines.forEach((routine) => {
     if (!routine.startTime || !routine.endTime) return;
-    const startMinute = parseTimeToMinutes(routine.startTime);
-    let endMinute = parseTimeToMinutes(routine.endTime);
-    if (startMinute === null || endMinute === null) return;
-    if (endMinute < startMinute) endMinute += 1440;
-    if (endMinute <= startMinute) return;
+
+    const parsedStartMinute = parseTimeToMinutes(routine.startTime);
+    let parsedEndMinute = parseTimeToMinutes(routine.endTime);
+
+    if (parsedStartMinute === null || parsedEndMinute === null) return;
+
+    let startMinute = parsedStartMinute;
+    let endMinute = parsedEndMinute;
+
+    // 23:00 ~ 04:00처럼 자정을 넘기는 루틴 처리
+    if (endMinute <= startMinute) {
+      endMinute += 1440;
+    }
+
+    // 타임테이블 범위 밖이면 표시하지 않음
+    if (
+      endMinute <= timetableStartMinute ||
+      startMinute >= timetableEndMinute
+    ) {
+      return;
+    }
+
+    // 04:00 이전에 시작한 루틴은 04:00부터 보이도록 자름
+    const visibleStartMinute = Math.max(startMinute, timetableStartMinute);
+    const visibleEndMinute = Math.min(endMinute, timetableEndMinute);
+
+    if (visibleEndMinute <= visibleStartMinute) return;
+
     events.push({
       id: String(routine.id),
       title: routine.title,
-      startMinute,
-      endMinute,
+      startMinute: visibleStartMinute,
+      endMinute: visibleEndMinute,
       type: routine.categoryName || routine.title,
       color: routine.color,
     });
   });
+
   return events.sort((a, b) => a.startMinute - b.startMinute);
 }
-
 function getEventStyle(type: string, color?: string) {
   const fallbackColor = color || "#9FA2D6";
   return {
@@ -598,8 +625,15 @@ const styles = StyleSheet.create({
   timetableContainer: { paddingTop: 15, flex: 1 },
   timetableInner: { flexDirection: "row", paddingHorizontal: 10 },
   timeAxis: { width: 52, paddingRight: 4 },
-  timeLabelContainer: { justifyContent: "center", alignItems: "center" },
-  timeLabel: { fontSize: 14, color: "#A0B0D0" },
+  timeLabelContainer: {
+    justifyContent: "flex-start",
+    alignItems: "center",
+  },
+  timeLabel: {
+    fontSize: 14,
+    color: "#A0B0D0",
+    transform: [{ translateY: -7 }],
+  },
   timeLabelCurrent: { color: "#6C7FD8", fontWeight: "700", fontSize: 11 },
   gridArea: {
     flex: 1,
