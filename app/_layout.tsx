@@ -61,46 +61,47 @@ export default function RootLayout() {
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {
-        // 1. 기기에서 토큰 가져오기
         const token = await AsyncStorage.getItem("userToken");
+        console.log("📱 앱 시작 - 토큰 확인 결과:", token);
 
         if (token) {
           try {
-            // 2. 백엔드에 신규 유저 여부 확인 요청 (토큰 유효성 검사 겸용)
-            const response = await authApi.checkIsNewUser();
-            const isNewUser = response?.data?.isNewUser ?? response?.isNewUser ?? false;
+            // 2. 백엔드에 토큰 유효성 및 신규 유저 여부 검증 요청
+            const response = await authApi.checkNewUser();
 
-            if (isNewUser === true || isNewUser === "true") {
-              authStore.setLoggedIn(false);
+            // 백엔드 데이터 구조 가공 (true/false)
+            const isNewUser = response?.isNewUser ?? response?.data?.isNewUser ?? false;
+            console.log("📱 백엔드 검증 결과 - 신규 유저 여부:", isNewUser);
 
-              // 타이밍 이슈 방지를 위해 딜레이 후 이동
+            if (isNewUser == true) {
+              // [케이스 A] 신규 회원 -> 추가 정보 입력창으로 이동
+              authStore.setLoggedIn(false); // 아직 완벽한 로그인이 아니므로 false 유지
+
+              // 타이밍 이슈 방지를 위해 스플래시가 걷힌 후 살짝 딜레이를 주고 이동
               setTimeout(() => {
                 router.replace({
                   pathname: "/onboarding/signup2",
-                  params: { isSocial: "true", email: response?.data?.email || "" }
+                  params: { isSocial: "true" }
                 });
-              }, 100);
+              }, 1000);
 
             } else {
-              // [케이스 B] 기존 유저: 정상 로그인 처리 -> 메인 (tabs) 진입
               authStore.setLoggedIn(true);
             }
 
           } catch (apiError) {
-            // [케이스 C] 토큰이 만료되었거나 에러가 난 경우 -> 토큰 삭제 후 로그인창으로
-            console.warn("유효하지 않은 토큰입니다. 로그아웃 처리합니다.");
+            console.warn("만료되었거나 서버 인증에 실패한 토큰입니다.");
             await AsyncStorage.removeItem("userToken");
             await AsyncStorage.removeItem("refreshToken");
             authStore.setLoggedIn(false);
           }
         } else {
-          // 토큰 자체가 없는 유저
           authStore.setLoggedIn(false);
         }
       } catch (e) {
         console.error("Token load error", e);
       } finally {
-        setIsReady(true); // 스플래시 화면 숨김 허용
+        setIsReady(true);
       }
     };
 
