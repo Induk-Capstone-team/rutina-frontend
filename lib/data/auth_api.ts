@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import apiClient from "./api_client";
+import apiClient, { publicClient } from "./api_client";
+
+
 
 export const authApi = {
   ///회원가입 요청 (이메일 로그인 사용자)
@@ -20,6 +22,32 @@ export const authApi = {
       gender,
     });
     return data; // 서버에서 토큰(JWT) 등을 보내준다고 가정
+  },
+
+  // ★ 2. 여기에 새 메서드를 추가하고 publicClient로 호출합니다.
+  exchangeSocialToken: async (
+    code: string, 
+    provider: string, 
+    identityToken?: string | null, 
+    email?: string | null, 
+    nickname?: string | null
+  ) => {
+    // 인터셉터가 없는 순수 publicClient를 사용하므로 토큰 충돌이 나지 않습니다.
+    const response = await publicClient.post("/api/v1/auth/oauth2/token", {
+      code,
+      provider,
+      identityToken,
+      email,
+      nickname
+    });
+    return response.data;
+  },
+
+  checkIsNewUser: async () => {
+    const { data } = await publicClient.get(
+      "/api/v1/users/me/new-status",
+    );
+    return data.isNewUser;
   },
 
   /// 프로필 업데이트 요청 (나이, 직업, 성별 추가 정보 입력용)

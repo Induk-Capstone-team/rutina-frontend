@@ -16,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SplashScreen from "expo-splash-screen";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { authApi } from "@/lib/data/auth_api";
 import { NotificationService } from "@/services/notification_service";
 import { RoutineService } from "@/services/routine_service";
 import { authStore } from "@/store/authStore";
@@ -60,14 +61,46 @@ export default function RootLayout() {
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {
+        // 1. 기기에서 토큰 가져오기
         const token = await AsyncStorage.getItem("userToken");
+
         if (token) {
-          authStore.setLoggedIn(true);
+          try {
+            // 2. 백엔드에 신규 유저 여부 확인 요청 (토큰 유효성 검사 겸용)
+            const response = await authApi.checkIsNewUser();
+            const isNewUser = response?.data?.isNewUser ?? response?.isNewUser ?? false;
+
+            if (isNewUser === true || isNewUser === "true") {
+              authStore.setLoggedIn(false);
+
+              // 타이밍 이슈 방지를 위해 딜레이 후 이동
+              setTimeout(() => {
+                router.replace({
+                  pathname: "/onboarding/signup2",
+                  params: { isSocial: "true", email: response?.data?.email || "" }
+                });
+              }, 100);
+
+            } else {
+              // [케이스 B] 기존 유저: 정상 로그인 처리 -> 메인 (tabs) 진입
+              authStore.setLoggedIn(true);
+            }
+
+          } catch (apiError) {
+            // [케이스 C] 토큰이 만료되었거나 에러가 난 경우 -> 토큰 삭제 후 로그인창으로
+            console.warn("유효하지 않은 토큰입니다. 로그아웃 처리합니다.");
+            await AsyncStorage.removeItem("userToken");
+            await AsyncStorage.removeItem("refreshToken");
+            authStore.setLoggedIn(false);
+          }
+        } else {
+          // 토큰 자체가 없는 유저
+          authStore.setLoggedIn(false);
         }
       } catch (e) {
         console.error("Token load error", e);
       } finally {
-        setIsReady(true);
+        setIsReady(true); // 스플래시 화면 숨김 허용
       }
     };
 

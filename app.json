@@ -17,7 +17,8 @@
           "NSAllowsArbitraryLoads": true
         },
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "appleTeamId": "2SGC4QVNR8"
     },
     "android": {
       "usesCleartextTraffic": true,
