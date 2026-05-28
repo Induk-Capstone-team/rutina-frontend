@@ -11,11 +11,20 @@ import type {
   ScheduleRoutine,
 } from "@/types/routine";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
+  Animated,
+  Dimensions,
   Keyboard,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -26,8 +35,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppCalendar from "./ui/app_calendar";
-
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 type CustomCategory = {
   name: string;
   color: string;
@@ -52,9 +62,6 @@ const WEEKDAY_OPTIONS: { label: string; value: RepeatWeekday }[] = [
 ];
 
 const WEEK_REPEAT_EVERY_OPTIONS = ["1", "2"];
-const REPEAT_EVERY_OPTIONS = Array.from({ length: 30 }, (_, i) =>
-  String(i + 1),
-);
 
 function getWeekdayValueFromDate(dateString: string): RepeatWeekday {
   const weekdayValues: RepeatWeekday[] = [
@@ -249,12 +256,14 @@ function TimeStepperControl({
   onIncrease,
   onDecrease,
   onChange,
+  onInputFocus,
 }: {
   label: string;
   value: string;
   onIncrease: () => void;
   onDecrease: () => void;
   onChange?: (value: string) => void;
+  onInputFocus?: () => void;
 }) {
   const [inputValue, setInputValue] = useState(value);
   const [isFocused, setIsFocused] = useState(false);
@@ -314,6 +323,7 @@ function TimeStepperControl({
             onFocus={() => {
               setIsFocused(true);
               setInputValue("");
+              onInputFocus?.();
             }}
             onBlur={handleBlur}
             keyboardType="number-pad"
@@ -344,8 +354,91 @@ export function ScheduleDetailModal({
   onUpdated,
   readOnly = false,
 }: ScheduleDetailModalProps) {
+  const insets = useSafeAreaInsets();
+  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const dragY = useRef(new Animated.Value(0)).current;
+
+  const closeWithAnimation = useCallback(() => {
+    Keyboard.dismiss();
+
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => {
+      dragY.setValue(0);
+      onClose();
+    });
+  }, [dragY, onClose, slideAnim]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        const isDraggingDown =
+          gestureState.dy > 2 &&
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+
+        if (isDraggingDown && isKeyboardVisible) {
+          Keyboard.dismiss();
+        }
+
+        return isDraggingDown;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          dragY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 120 || gestureState.vy > 1.2) {
+          closeWithAnimation();
+        } else {
+          Animated.spring(dragY, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    }),
+  ).current;
+  useEffect(() => {
+    if (visible) {
+      dragY.setValue(0);
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: SCREEN_HEIGHT,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", (event) => {
+      setIsKeyboardVisible(true);
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const editScrollRef = useRef<ScrollView>(null);
   const [title, setTitle] = useState("");
   const [categoryName, setCategoryName] = useState("");
   const [selectedColor, setSelectedColor] = useState("#C4C6D0");
@@ -553,7 +646,7 @@ export function ScheduleDetailModal({
             }
 
             await onUpdated();
-            onClose();
+            closeWithAnimation();
           } catch (error) {
             console.error("루틴 삭제 실패", error);
             Alert.alert("오류", "루틴 삭제 중 문제가 발생했어요.");
@@ -579,6 +672,7 @@ export function ScheduleDetailModal({
     if (option === "CUSTOM") {
       setShowRepeatPanel(false);
       setShowCustomRepeatPanel(true);
+      scrollToRepeatInput();
       return;
     }
     setRepeatType(option);
@@ -601,7 +695,16 @@ export function ScheduleDetailModal({
         : [...prev, weekday],
     );
   };
+  const scrollToRepeatInput = () => {
+    const delay = Platform.OS === "ios" ? 500 : 300;
 
+    setTimeout(() => {
+      editScrollRef.current?.scrollTo({
+        y: Platform.OS === "ios" ? 740 : 760,
+        animated: true,
+      });
+    }, delay);
+  };
   const handleSaveCustomRepeat = () => {
     if (repeatUnit === "WEEK" && repeatDays.length === 0) {
       Alert.alert(
@@ -711,7 +814,7 @@ export function ScheduleDetailModal({
       await NotificationService.syncRoutineNotification(updatedRoutine);
 
       setIsEditMode(false);
-      onClose();
+      closeWithAnimation();
       await onUpdated();
     } catch (error: any) {
       const status = error?.response?.status;
@@ -727,20 +830,36 @@ export function ScheduleDetailModal({
     }
   };
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="none">
       <View style={styles.modalRoot}>
-        <Pressable style={styles.detailOverlay} onPress={onClose} />
+        <Pressable style={styles.detailOverlay} onPress={closeWithAnimation} />
 
-        <View style={styles.keyboardAvoidingArea} pointerEvents="box-none">
-          <Pressable
-            style={styles.detailCard}
-            onPress={(e) => e.stopPropagation()}
+        <Animated.View
+          style={{
+            transform: [
+              {
+                translateY: Animated.add(slideAnim, dragY),
+              },
+            ],
+          }}
+        >
+          <View
+            style={[
+              styles.detailCard,
+              {
+                paddingBottom: 100,
+                marginBottom: -100,
+              },
+            ]}
           >
+            <View style={styles.dragHandleArea} {...panResponder.panHandlers}>
+              <View style={styles.dragHandle} />
+            </View>
+
             <View style={styles.detailHeader}>
               <Text style={styles.detailTitle}>
                 {isEditMode ? "루틴 수정" : "상세 정보"}
               </Text>
-
               <View style={styles.headerActions}>
                 {!isEditMode ? (
                   <>
@@ -771,7 +890,7 @@ export function ScheduleDetailModal({
                       </>
                     )}
 
-                    <TouchableOpacity onPress={onClose}>
+                    <TouchableOpacity onPress={closeWithAnimation}>
                       <IconSymbol name="xmark" size={20} color="#B4B6C0" />
                     </TouchableOpacity>
                   </>
@@ -866,18 +985,10 @@ export function ScheduleDetailModal({
                     </View>
                   </View>
                 </View>
-
-                <View style={styles.detailFooter}>
-                  <TouchableOpacity
-                    style={styles.detailCloseButton}
-                    onPress={onClose}
-                  >
-                    <Text style={styles.detailCloseButtonText}>확인</Text>
-                  </TouchableOpacity>
-                </View>
               </>
             ) : (
               <ScrollView
+                ref={editScrollRef}
                 style={styles.editScroll}
                 contentContainerStyle={styles.editScrollContent}
                 showsVerticalScrollIndicator={false}
@@ -1084,6 +1195,14 @@ export function ScheduleDetailModal({
                             setStartHour(getPrevHour(startHour))
                           }
                           onChange={setStartHour}
+                          onInputFocus={() => {
+                            setTimeout(() => {
+                              editScrollRef.current?.scrollTo({
+                                y: 360,
+                                animated: true,
+                              });
+                            }, 250);
+                          }}
                         />
                         <TimeStepperControl
                           label="분"
@@ -1109,6 +1228,14 @@ export function ScheduleDetailModal({
                           onIncrease={() => setEndHour(getNextHour(endHour))}
                           onDecrease={() => setEndHour(getPrevHour(endHour))}
                           onChange={setEndHour}
+                          onInputFocus={() => {
+                            setTimeout(() => {
+                              editScrollRef.current?.scrollTo({
+                                y: 460,
+                                animated: true,
+                              });
+                            }, 250);
+                          }}
                         />
                         <TimeStepperControl
                           label="분"
@@ -1219,7 +1346,10 @@ export function ScheduleDetailModal({
                           })`,
                           value: "QUICK_BIWEEKLY",
                         },
-                        { label: "사용자 설정", value: "CUSTOM" as RepeatType },
+                        {
+                          label: "사용자 설정",
+                          value: "CUSTOM" as RepeatType,
+                        },
                       ].map((item) => {
                         const isSelected =
                           (repeatType === "DAILY" && item.value === "DAILY") ||
@@ -1354,6 +1484,7 @@ export function ScheduleDetailModal({
                               <TextInput
                                 style={styles.repeatIntervalInput}
                                 value={repeatInterval}
+                                onFocus={scrollToRepeatInput}
                                 onChangeText={(text) => {
                                   const onlyNumber = text.replace(
                                     /[^0-9]/g,
@@ -1460,8 +1591,8 @@ export function ScheduleDetailModal({
                 </View>
               </ScrollView>
             )}
-          </Pressable>
-        </View>
+          </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -1470,31 +1601,29 @@ export function ScheduleDetailModal({
 const styles = StyleSheet.create({
   modalRoot: {
     flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "transparent",
   },
+
   detailOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFillObject, // ← 다시 absolute로
     backgroundColor: "rgba(0, 0, 0, 0.4)",
   },
-  keyboardAvoidingArea: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 28,
-  },
+
   detailCard: {
     width: "100%",
-    maxWidth: 320,
-    maxHeight: "84%",
+    maxHeight: SCREEN_HEIGHT * 0.82,
     backgroundColor: "#FFFFFF",
-    borderRadius: 28,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingTop: 20,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.1,
-    shadowRadius: 30,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
     elevation: 8,
-    flexShrink: 0,
+    overflow: "hidden",
   },
   detailHeader: {
     flexDirection: "row",
@@ -1511,11 +1640,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  editText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#405886",
-  },
+
   cancelText: {
     fontSize: 14,
     fontWeight: "700",
@@ -1590,26 +1715,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#405886",
   },
-  detailFooter: {
-    marginTop: 4,
-  },
 
-  detailCloseButton: {
-    backgroundColor: "#405886",
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  detailCloseButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
   editScroll: {
-    flexGrow: 1,
+    flexGrow: 0,
   },
   editScrollContent: {
-    paddingBottom: 20,
+    paddingBottom: Platform.OS === "ios" ? 340 : 180,
   },
   inputBlock: {
     marginBottom: 16,
@@ -1648,12 +1759,6 @@ const styles = StyleSheet.create({
   categoryChipText: {
     fontSize: 12,
     fontWeight: "700",
-  },
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 12,
-    gap: 6,
   },
 
   dateRangeBlock: {
@@ -1936,5 +2041,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#6D7690",
+  },
+
+  dragHandleArea: {
+    width: "100%",
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: -10,
+    marginBottom: 2,
+  },
+
+  dragHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: "#D8DCE6",
   },
 });
