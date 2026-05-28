@@ -138,6 +138,7 @@ export default function AiAnalysisScreen() {
     categories,
     recommendedRoutines,
     startConversation,
+    selectRecommendFlow,
     submitCategory,
     submitPurpose,
     submitTime,
@@ -245,14 +246,7 @@ export default function AiAnalysisScreen() {
                     selected={false}
                     onPress={() => {
                       if (o.key === "start") {
-                        // 바로 다음 질문(카테고리 선택) 단계로 메시지 처리 연계
-                        if (categories.length > 0) {
-                          // 유저 응답을 가상화하여 플로우 진행
-                          submitCategory(categories[0]); 
-                        } else {
-                          // 카테고리가 안 불러와졌을 경우 예외 처리 대응
-                          submitPurpose("새 루틴 매니징");
-                        }
+                        selectRecommendFlow();
                       } else if (o.key === "records") {
                         viewTodayRecords();
                       }

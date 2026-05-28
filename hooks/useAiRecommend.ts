@@ -223,6 +223,16 @@ export const useAiRecommend = () => {
     setStep("start"); // 💡 첫 진입 단계를 'start' 분기점으로 설정
   }, [addMessage]);
 
+  // 훅 내부 하단에 추가
+const selectRecommendFlow = useCallback(() => {
+  addMessage({
+    role: "ai",
+    text: "좋습니다! 맞춤 루틴 추천을 시작합니다. 먼저 추천을 원하시는 루틴 카테고리를 선택해 주세요. 🎯",
+  });
+  setStep("goal"); // 💡 다음 단계인 카테고리 선택(goal)으로 명확히 전환
+}, [addMessage]);
+
+
   // ── 카테고리 선택 완료 ──
   const submitCategory = useCallback(
     (category: RoutineCategory) => {
@@ -380,6 +390,7 @@ export const useAiRecommend = () => {
     recommendedRoutines,
     checkedRoutineIds,
     startConversation,
+    selectRecommendFlow,
     submitCategory,
     submitPurpose,
     submitTime,

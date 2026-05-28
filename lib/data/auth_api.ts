@@ -1,8 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient, { publicClient } from "./api_client";
 
-
-
 export const authApi = {
   ///회원가입 요청 (이메일 로그인 사용자)
   signup: async (
@@ -24,30 +22,35 @@ export const authApi = {
     return data; // 서버에서 토큰(JWT) 등을 보내준다고 가정
   },
 
-  // ★ 2. 여기에 새 메서드를 추가하고 publicClient로 호출합니다.
+  // 💡 [추가] 백엔드 주도로 code를 전달해 최종 토큰과 회원 정보를 받아오는 API
   exchangeSocialToken: async (
-    code: string, 
-    provider: string, 
-    identityToken?: string | null, 
-    email?: string | null, 
+    code: string,
+    provider: string,
+    identityToken?: string | null,
+    email?: string | null,
     nickname?: string | null
   ) => {
-    // 인터셉터가 없는 순수 publicClient를 사용하므로 토큰 충돌이 나지 않습니다.
     const response = await publicClient.post("/api/v1/auth/oauth2/token", {
       code,
       provider,
-      identityToken,
-      email,
-      nickname
+      identityToken, // 애플 로그인 대응용
+      email,         // 애플 최초 가입 대응용
+      nickname,      // 애플 최초 가입 대응용
     });
+
+    // Axios response 객체의 알맹이(data)만 깔끔하게 반환하여 훅에서 파싱하기 좋게 만듭니다.
     return response.data;
   },
 
-  checkIsNewUser: async () => {
-    const { data } = await publicClient.get(
-      "/api/v1/users/me/new-status",
-    );
-    return data.isNewUser;
+  // 앱 구동 시 토큰 유효성 및 신규 회원 검증 API
+  checkNewUser: async () => {
+    const response = await apiClient.get("/api/v1/users/me/new-status"); // 백엔드 엔드포인트에 맞춤
+    return response.data;
+  },
+
+  getProfile: async () => {
+    const response = await apiClient.get("/api/v1/users/me");
+    return response.data;
   },
 
   /// 프로필 업데이트 요청 (나이, 직업, 성별 추가 정보 입력용)
@@ -61,12 +64,6 @@ export const authApi = {
       job,
       gender,
     });
-    return data;
-  },
-
-  /// 프로필 조회 요청
-  getProfile: async () => {
-    const { data } = await apiClient.get("/api/v1/users/me");
     return data;
   },
 
