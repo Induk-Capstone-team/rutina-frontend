@@ -347,7 +347,7 @@ export default function HomeScreen() {
                       markedDates={calendarMarkedDates}
                       onDayPress={(day) => {
                         setCurrentDate(new Date(day.timestamp));
-                        setIsCalendarVisible(false);
+                        // setIsCalendarVisible(false);
                       }}
                     />
                   </View>
@@ -459,7 +459,7 @@ export default function HomeScreen() {
                                 <Text
                                   style={[
                                     styles.eventTitle,
-                                    { color: typeStyles.text },
+                                    { color: "#233255" },
                                   ]}
                                   numberOfLines={1}
                                 >

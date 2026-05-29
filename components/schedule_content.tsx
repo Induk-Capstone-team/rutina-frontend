@@ -236,24 +236,35 @@ export default function ScheduleContent({
     return (
       <TouchableOpacity
         activeOpacity={0.8}
-        onPress={() => {
-          handlePressRoutine(item);
-        }}
+        onPress={() => handlePressRoutine(item)}
       >
         <View style={styles.itemRow}>
           <View
-            style={[
-              styles.tagBadge,
-              {
-                backgroundColor: typeStyle.bg,
-                borderColor: typeStyle.dot,
-                marginRight: 14,
-              },
-            ]}
+            style={{
+              width: 80,
+              marginRight: 10,
+              flexShrink: 0,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
           >
-            <Text style={[styles.tagText, { color: typeStyle.text }]}>
-              {typeLabel}
-            </Text>
+            <View
+              style={[
+                styles.tagBadge,
+                {
+                  backgroundColor: typeStyle.bg,
+                  borderColor: typeStyle.dot,
+                  alignSelf: "stretch",
+                },
+              ]}
+            >
+              <Text
+                style={[styles.tagText, { color: "#233255" }]}
+                numberOfLines={1}
+              >
+                {typeLabel}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.itemContent}>
@@ -531,7 +542,7 @@ const styles = StyleSheet.create({
   },
   itemContent: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 0,
   },
   itemTitle: {
     fontSize: 16,
@@ -553,13 +564,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   tagBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: 8,
   },
   tagText: {
     fontSize: 12,
     fontWeight: "700",
+    textAlign: "center",
   },
   divider: {
     height: 1,
