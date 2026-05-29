@@ -78,11 +78,10 @@ export default function RootLayout() {
               authStore.setLoggedIn(false); // 아직 완벽한 로그인이 아니므로 false 유지
 
               // 타이밍 이슈 방지를 위해 스플래시가 걷힌 후 살짝 딜레이를 주고 이동
-              setTimeout(() => {
-                router.replace({
-                  pathname: "/onboarding/signup2",
-                  params: { isSocial: "true" }
-                });
+              setTimeout(async () => {
+                await AsyncStorage.removeItem("userToken");
+                await AsyncStorage.removeItem("refreshToken");
+                authStore.setLoggedIn(false);
               }, 1000);
 
             } else {

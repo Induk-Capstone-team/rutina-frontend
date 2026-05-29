@@ -26,16 +26,10 @@ export const authApi = {
   exchangeSocialToken: async (
     code: string,
     provider: string,
-    identityToken?: string | null,
-    email?: string | null,
-    nickname?: string | null
   ) => {
     const response = await publicClient.post("/api/v1/auth/oauth2/token", {
       code,
       provider,
-      identityToken, // 애플 로그인 대응용
-      email,         // 애플 최초 가입 대응용
-      nickname,      // 애플 최초 가입 대응용
     });
 
     // Axios response 객체의 알맹이(data)만 깔끔하게 반환하여 훅에서 파싱하기 좋게 만듭니다.
@@ -43,8 +37,11 @@ export const authApi = {
   },
 
   // 앱 구동 시 토큰 유효성 및 신규 회원 검증 API
-  checkNewUser: async () => {
-    const response = await apiClient.get("/api/v1/users/me/new-status"); // 백엔드 엔드포인트에 맞춤
+  checkNewUser: async (token?: string) => {
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get("/api/v1/users/me/new-status", {
+      headers,
+    }); // 백엔드 엔드포인트에 맞춤
     return response.data;
   },
 
@@ -94,13 +91,13 @@ export const authApi = {
 
   /// Apple 소셜 로그인 요청
   appleLogin: async (identityToken: string, email?: string | null, nickname?: string | null) => {
-    const { data } = await apiClient.post("/api/v1/auth/apple", {
-      identityToken,
-      email,
-      nickname,
-    });
-    return data;
-  },
+  const { data } = await publicClient.post("/api/v1/auth/apple", { // 👈 publicClient로 변경!
+    identityToken,
+    email,
+    nickname,
+  });
+  return data;
+},
 
   ///로그인 요청
   login: async (email: string, password: string) => {
