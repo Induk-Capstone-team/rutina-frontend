@@ -1,5 +1,6 @@
 //category.tsx
 import { DraggableCategoryList } from "@/components/DraggableCategoryList";
+import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { Header } from "@/components/ui/_header";
 import {
   getCategoryBadgeStyle,
@@ -16,7 +17,6 @@ import type { ScheduleRoutine } from "@/types/routine";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-
 import {
   ActivityIndicator,
   Alert,
@@ -240,7 +240,9 @@ export default function CategoryScreen() {
   const [serverCategoryIdMap, setServerCategoryIdMap] = useState<
     Record<string, number>
   >({});
-
+  const [selectedRoutine, setSelectedRoutine] =
+    useState<ScheduleRoutine | null>(null);
+  const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
   const categoryModalTranslateY = useRef(new Animated.Value(0)).current;
   const CATEGORY_MODAL_CLOSE_THRESHOLD = 120;
 
@@ -854,13 +856,18 @@ export default function CategoryScreen() {
     const completed = isRoutineCompleted(routine);
 
     return (
-      <View key={routine.id} style={styles.routineItem}>
+      <Pressable
+        key={routine.id}
+        style={styles.routineItem}
+        onPress={() => {
+          setSelectedRoutine(routine);
+          setIsDetailModalVisible(true);
+        }}
+      >
         <View
           style={[
             styles.routineDot,
-            completed && {
-              backgroundColor: routine.color ?? DEFAULT_COLOR,
-            },
+            completed && { backgroundColor: routine.color ?? DEFAULT_COLOR },
           ]}
         />
         <View style={styles.routineTextWrapper}>
@@ -876,7 +883,7 @@ export default function CategoryScreen() {
             {routine.startDate} ~ {routine.endDate}
           </Text>
         </View>
-      </View>
+      </Pressable>
     );
   };
   // 카테고리 카드 한 개를 렌더링
@@ -911,7 +918,7 @@ export default function CategoryScreen() {
           <View style={styles.routineBox}>
             <View style={styles.routineContentBox}>
               {item.routines.length > 0 ? (
-                item.routines.slice(0, 3).map(renderRoutineItem)
+                item.routines.map(renderRoutineItem)
               ) : (
                 <Text style={styles.emptyRoutineText}>
                   {selectedTab === "ACTIVE"
@@ -1196,7 +1203,7 @@ export default function CategoryScreen() {
                             <Text
                               style={[
                                 styles.categoryBadgeText,
-                                { color: badgeStyle.textColor },
+                                { color: "#233255" },
                               ]}
                             >
                               {item.name}
@@ -1289,9 +1296,20 @@ export default function CategoryScreen() {
                           { backgroundColor: pickerColor },
                         ]}
                       />
-                      <Text style={styles.selectedColorHexText}>
-                        {pickerColor.toUpperCase()}
-                      </Text>
+                      <TextInput
+                        style={styles.selectedColorHexInput}
+                        value={pickerColor.toUpperCase()}
+                        onChangeText={(text) => {
+                          const cleaned = text.startsWith("#")
+                            ? text
+                            : `#${text}`;
+                          setPickerColor(cleaned);
+                        }}
+                        maxLength={7}
+                        autoCapitalize="characters"
+                        placeholder="#000000"
+                        placeholderTextColor="#9CA3AF"
+                      />
                     </View>
                   </View>
                 )}
@@ -1324,6 +1342,15 @@ export default function CategoryScreen() {
           </KeyboardAvoidingView>
         </Modal>
       </View>
+      <ScheduleDetailModal
+        visible={isDetailModalVisible}
+        routine={selectedRoutine}
+        onClose={() => {
+          setIsDetailModalVisible(false);
+          setSelectedRoutine(null);
+        }}
+        onUpdated={refreshData}
+      />
     </SafeAreaView>
   );
 }
@@ -1919,5 +1946,15 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#405886",
     lineHeight: 20,
+  },
+  selectedColorHexInput: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#405886",
+    borderBottomWidth: 1,
+    borderBottomColor: "#D7DEEA",
+    paddingVertical: 2,
+    minWidth: 80,
+    textAlign: "center",
   },
 });

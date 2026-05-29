@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -120,16 +121,19 @@ function HourStepperPicker({
     const cleaned = text.replace(/[^0-9]/g, "").slice(0, 2);
     setInputValue(cleaned);
 
-    if (Platform.OS === "android" && cleaned.length === 2) {
+    // 숫자가 입력될 때마다 바로 반영
+    if (cleaned.length > 0) {
       const num = parseInt(cleaned, 10);
-      const clamped = Math.min(23, Math.max(0, num));
-      const padded = padTwo(clamped);
-      setInputValue(padded);
-      onChange(padded);
+      if (!isNaN(num)) {
+        const clamped = Math.min(23, Math.max(0, num));
+        onChange(padTwo(clamped));
+      }
+    }
+
+    if (Platform.OS === "android" && cleaned.length === 2) {
       Keyboard.dismiss();
     }
   };
-
   const handleBlur = () => {
     setIsFocused(false);
     const num = parseInt(inputValue, 10);
@@ -185,7 +189,26 @@ const TimePickerModal = ({
   const [tempStartMinute, setTempStartMinute] = useState(startMinute);
   const [tempEndHour, setTempEndHour] = useState(endHour);
   const [tempEndMinute, setTempEndMinute] = useState(endMinute);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
   useEffect(() => {
     if (visible) {
       setTempStartHour(startHour);
@@ -216,75 +239,89 @@ const TimePickerModal = ({
           style={styles.modalCard}
           onPress={(e) => e.stopPropagation()}
         >
-          <View style={styles.header}>
-            <ThemedText style={styles.title}>시간 설정</ThemedText>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 24 : 24 },
+            ]}
+          >
+            <View style={styles.header}>
+              <ThemedText style={styles.title}>시간 설정</ThemedText>
 
-            <TouchableOpacity onPress={onClose}>
-              <ThemedText style={styles.closeText}>닫기</ThemedText>
+              <TouchableOpacity onPress={onClose}>
+                <ThemedText style={styles.closeText}>닫기</ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.previewBox}>
+              <ThemedText style={styles.previewLabel}>선택된 시간</ThemedText>
+              <ThemedText style={styles.previewValue}>
+                {formatRangeLabel(
+                  tempStartHour,
+                  tempStartMinute,
+                  tempEndHour,
+                  tempEndMinute,
+                )}
+              </ThemedText>
+            </View>
+
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>시작 시간</ThemedText>
+              <View style={styles.pickerRow}>
+                <HourStepperPicker
+                  label="시"
+                  value={tempStartHour}
+                  onIncrease={() =>
+                    setTempStartHour(getNextHour(tempStartHour))
+                  }
+                  onDecrease={() =>
+                    setTempStartHour(getPrevHour(tempStartHour))
+                  }
+                  onChange={setTempStartHour}
+                />
+                <StepperPicker
+                  label="분"
+                  value={tempStartMinute}
+                  onIncrease={() =>
+                    setTempStartMinute(getNextMinute(tempStartMinute))
+                  }
+                  onDecrease={() =>
+                    setTempStartMinute(getPrevMinute(tempStartMinute))
+                  }
+                />
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>종료 시간</ThemedText>
+              <View style={styles.pickerRow}>
+                <HourStepperPicker
+                  label="시"
+                  value={tempEndHour}
+                  onIncrease={() => setTempEndHour(getNextHour(tempEndHour))}
+                  onDecrease={() => setTempEndHour(getPrevHour(tempEndHour))}
+                  onChange={setTempEndHour}
+                />
+                <StepperPicker
+                  label="분"
+                  value={tempEndMinute}
+                  onIncrease={() =>
+                    setTempEndMinute(getNextMinute(tempEndMinute))
+                  }
+                  onDecrease={() =>
+                    setTempEndMinute(getPrevMinute(tempEndMinute))
+                  }
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
+              <ThemedText style={styles.applyButtonText}>적용</ThemedText>
             </TouchableOpacity>
-          </View>
-
-          <View style={styles.previewBox}>
-            <ThemedText style={styles.previewLabel}>선택된 시간</ThemedText>
-            <ThemedText style={styles.previewValue}>
-              {formatRangeLabel(
-                tempStartHour,
-                tempStartMinute,
-                tempEndHour,
-                tempEndMinute,
-              )}
-            </ThemedText>
-          </View>
-
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>시작 시간</ThemedText>
-            <View style={styles.pickerRow}>
-              <HourStepperPicker
-                label="시"
-                value={tempStartHour}
-                onIncrease={() => setTempStartHour(getNextHour(tempStartHour))}
-                onDecrease={() => setTempStartHour(getPrevHour(tempStartHour))}
-                onChange={setTempStartHour}
-              />
-              <StepperPicker
-                label="분"
-                value={tempStartMinute}
-                onIncrease={() =>
-                  setTempStartMinute(getNextMinute(tempStartMinute))
-                }
-                onDecrease={() =>
-                  setTempStartMinute(getPrevMinute(tempStartMinute))
-                }
-              />
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>종료 시간</ThemedText>
-            <View style={styles.pickerRow}>
-              <HourStepperPicker
-                label="시"
-                value={tempEndHour}
-                onIncrease={() => setTempEndHour(getNextHour(tempEndHour))}
-                onDecrease={() => setTempEndHour(getPrevHour(tempEndHour))}
-                onChange={setTempEndHour}
-              />
-              <StepperPicker
-                label="분"
-                value={tempEndMinute}
-                onIncrease={() =>
-                  setTempEndMinute(getNextMinute(tempEndMinute))
-                }
-                onDecrease={() =>
-                  setTempEndMinute(getPrevMinute(tempEndMinute))
-                }
-              />
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
-            <ThemedText style={styles.applyButtonText}>적용</ThemedText>
-          </TouchableOpacity>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -304,12 +341,13 @@ const styles = StyleSheet.create({
 
   modalCard: {
     width: "100%",
-    maxWidth: 340,
     backgroundColor: "#FFFFFF",
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
+    maxWidth: 340,
+    maxHeight: "80%",
   },
 
   header: {
@@ -450,5 +488,9 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#2A3C6B",
     textAlign: "center",
+  },
+
+  scrollContent: {
+    flexGrow: 1,
   },
 });

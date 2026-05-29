@@ -52,12 +52,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 12,
     paddingHorizontal: 8,
   },
   logoImage: {
-    width: 120,
-    height: 50,
+    width: 110,
+    height: 40,
     maxWidth: "50%",
   },
   logoText: {
@@ -70,9 +70,9 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
 
   settingButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 35,
+    height: 35,
+    borderRadius: 17,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 6,
