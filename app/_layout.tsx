@@ -22,6 +22,7 @@ import { RoutineService } from "@/services/routine_service";
 import { authStore } from "@/store/authStore";
 import { useFonts } from "expo-font";
 import { useEffect, useState } from "react";
+import { DeviceEventEmitter } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 // 스플래시 화면이 자동으로 숨겨지는 것을 방지
 SplashScreen.preventAutoHideAsync();
@@ -45,6 +46,8 @@ export default function RootLayout() {
   const [isNavigationReady, setIsNavigationReady] = useState(false);
   const [hasRestoredNotifications, setHasRestoredNotifications] =
     useState(false);
+  const [tutorialCompleted, setTutorialCompleted] = useState(false);
+  const [isTutorialReady, setIsTutorialReady] = useState(false);
   const navigationState = useRootNavigationState();
   const inAuthGroup = segments[0] === "onboarding";
   useEffect(() => {
@@ -128,35 +131,73 @@ export default function RootLayout() {
 
     restoreRoutineNotifications();
   }, [isLoggedIn, hasRestoredNotifications]);
+
   useEffect(() => {
-    // 2. 엔진이 준비되지 않았거나 아직 데이터가 로드되지 않았다면 중단
-    if (!navigationState?.key || !loaded || !isReady) return;
-    // 3. 비동기 타이밍 문제를 방지하기 위해 딜레이를 줍니다.
+    // 1. 모든 데이터가 로드되었는지 확인
+    if (!navigationState?.key || !loaded || !isReady || !isTutorialReady) return;
+
     const timeout = setTimeout(() => {
+      // 2. 로그인 안 된 경우
       if (!isLoggedIn && !inAuthGroup) {
         router.replace("/onboarding/login");
         return;
       }
 
-      if (isLoggedIn && inAuthGroup) {
-        router.replace("/(tabs)");
-        return;
+      // 3. 로그인 된 경우
+      if (isLoggedIn) {
+        if (!tutorialCompleted) {
+          // 튜토리얼 미완료 시 튜토리얼로
+          if (segments[1] !== "tutorial") {
+            router.replace("/onboarding/tutorial");
+          }
+        } else {
+          // 튜토리얼 완료 시 탭으로
+          if (inAuthGroup) {
+            router.replace("/(tabs)");
+          }
+        }
       }
 
+      // 💡 핵심: 어떤 경우든 라우팅 체크가 끝났음을 알려야 화면이 그려집니다!
       setIsNavigationReady(true);
     }, 0);
 
     return () => clearTimeout(timeout);
-  }, [isLoggedIn, inAuthGroup, navigationState?.key, loaded, isReady]);
-
+  }, [isLoggedIn, inAuthGroup, navigationState?.key, loaded, isReady, isTutorialReady, tutorialCompleted, segments]);
   useEffect(() => {
     if (loaded && isReady) {
       SplashScreen.hideAsync();
     }
   }, [loaded, isReady]);
 
+  //Tutorial 읽음 상태 확인
+  useEffect(() => {
+    const checkTutorialStatus = async () => {
+      try {
+        const completed = await AsyncStorage.getItem("tutorialCompleted");
+        setTutorialCompleted(completed === "true");
+      } catch (e) {
+        console.error("Failed to load tutorial status", e);
+      } finally {
+        setIsTutorialReady(true); // 💡 로딩 완료 표시
+      }
+    };
+
+    checkTutorialStatus();
+
+    // 💡 튜토리얼 완료 신호를 들으면 상태를 true로 즉시 업데이트!
+    const subscription = DeviceEventEmitter.addListener('TutorialCompletedEvent', () => {
+      setTutorialCompleted(true);
+    });
+
+    // 컴포넌트가 언마운트될 때 리스너 정리
+    return () => {
+      subscription.remove();
+    };
+  }, []); // 💡 의존성 배열을 빈 배열로 변경
+
   // 4. 리소스가 완전히 로드될 때까지 렌더링을 지연시킵니다.
-  if (!navigationState?.key || !loaded || !isReady || !isNavigationReady) {
+  if (!navigationState?.key || !loaded || !isReady || !isNavigationReady || !isTutorialReady) {
     return null;
   }
 
@@ -165,8 +206,8 @@ export default function RootLayout() {
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="settings" options={{ headerShown: false }} />
-          <Stack.Screen name="profile" options={{ headerShown: false }} />
+          <Stack.Screen name="settings/settings" options={{ headerShown: false }} />
+          <Stack.Screen name="settings/profile" options={{ headerShown: false }} />
           <Stack.Screen
             name="onboarding/login"
             options={{ headerShown: false }}
@@ -184,6 +225,10 @@ export default function RootLayout() {
             options={{ headerShown: false }}
           />
           <Stack.Screen
+            name="onboarding/password_reset"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
             name="modal"
             options={{
               presentation: "transparentModal",
@@ -191,6 +236,10 @@ export default function RootLayout() {
               gestureEnabled: true,
               animation: "slide_from_bottom",
             }}
+          />
+          <Stack.Screen
+            name="onboarding/tutorial"
+            options={{ headerShown: false }}
           />
         </Stack>
 

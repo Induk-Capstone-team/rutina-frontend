@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -29,27 +30,27 @@ const getEmailDisplay = (emailStr: string) => {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { updateProfile, updateNickname, deleteAccount, isLoading: isViewModelLoading, error } = useAuthViewModel();
+  const { updateProfile, updateNickname, deleteAccount, localPasswordChange, isLoading: isViewModelLoading, error } = useAuthViewModel();
 
-  // Mode state: false = View Mode (조회), true = Edit Mode (수정)
   const [isEditing, setIsEditing] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Original Profile States (Loaded from Server)
   const [email, setEmail] = useState("");
   const [nickname, setNickname] = useState("");
   const [age, setAge] = useState("");
   const [job, setJob] = useState("");
   const [gender, setGender] = useState("");
 
-  // Edit Mode Form States
   const [editNickname, setEditNickname] = useState("");
   const [editAge, setEditAge] = useState("");
   const [editJob, setEditJob] = useState("");
   const [editGender, setEditGender] = useState("");
 
-  // Load user profile on mount
+  const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+
   const fetchProfile = async () => {
     try {
       setIsFetching(true);
@@ -82,7 +83,6 @@ export default function ProfileScreen() {
     fetchProfile();
   }, []);
 
-  // Enter Edit Mode
   const handleEnterEditMode = () => {
     setEditNickname(nickname);
     setEditAge(age);
@@ -91,12 +91,10 @@ export default function ProfileScreen() {
     setIsEditing(true);
   };
 
-  // Cancel Editing
   const handleCancelEdit = () => {
     setIsEditing(false);
   };
 
-  // Form Validation
   const isFormValid = 
     editNickname.trim().length > 0 &&
     editAge.trim().length > 0 && 
@@ -105,7 +103,6 @@ export default function ProfileScreen() {
     editJob.trim().length > 0 && 
     editGender.trim().length > 0;
 
-  // Save changes
   const handleSave = async () => {
     if (!isFormValid) {
       Alert.alert("입력 오류", "모든 항목을 올바르게 채워주세요.");
@@ -114,14 +111,12 @@ export default function ProfileScreen() {
 
     try {
       setIsSaving(true);
-
       let nicknameChanged = editNickname.trim() !== nickname;
       let profileChanged = 
         editAge.trim() !== age || 
         editJob !== job || 
         editGender !== gender;
 
-      // 1. Update Nickname if changed
       if (nicknameChanged) {
         const nickSuccess = await updateNickname(editNickname.trim());
         if (!nickSuccess) {
@@ -131,7 +126,6 @@ export default function ProfileScreen() {
         }
       }
 
-      // 2. Update Profile if changed
       if (profileChanged) {
         let mappedGender = 0;
         if (editGender === "남성") mappedGender = 0;
@@ -151,12 +145,11 @@ export default function ProfileScreen() {
             text: "확인",
             onPress: () => {
               setIsEditing(false);
-              fetchProfile(); // Reload updated profile
+              fetchProfile();
             },
           },
         ]);
       } else {
-        // No changes made
         setIsEditing(false);
       }
     } catch (e) {
@@ -167,7 +160,41 @@ export default function ProfileScreen() {
     }
   };
 
-  // Account Deletion
+  // 🔥 [변경 포인트 1] 함수 진입 시 소셜 계정은 한 번 더 하드 차단
+  const handleChangePassword = () => {
+    if (getEmailDisplay(email).isSocial) {
+      Alert.alert("알림", "소셜 로그인 회원은 비밀번호를 변경할 수 없습니다.");
+      return;
+    }
+    setCurrentPassword("");
+    setNewPassword("");
+    setIsPasswordModalVisible(true);
+  };
+
+  const handlePasswordSubmit = async () => {
+    if (!currentPassword.trim() || !newPassword.trim()) {
+      Alert.alert("알림", "현재 비밀번호와 새 비밀번호를 모두 입력해주세요.");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const success = await localPasswordChange(currentPassword, newPassword);
+      
+      if (success) {
+        Alert.alert("성공", "비밀번호가 성공적으로 변경되었습니다.");
+        setIsPasswordModalVisible(false);
+      } else {
+        Alert.alert("실패", "비밀번호 변경에 실패했습니다. 현재 비밀번호를 다시 확인해주세요.");
+      }
+    } catch (err) {
+      console.error("비밀번호 변경 에러:", err);
+      Alert.alert("오류", "비밀번호 변경 중 예상치 못한 에러가 발생했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDeleteAccount = () => {
     Alert.alert(
       "회원 탈퇴 안내",
@@ -238,7 +265,6 @@ export default function ProfileScreen() {
             <View>
               <Text style={styles.sectionTitle}>계정 정보 수정</Text>
               <View style={styles.card}>
-                {/* Email (Read-only even in Edit Mode) */}
                 <View style={styles.infoRow}>
                   <View style={styles.infoLabelContainer}>
                     <Ionicons name="mail-outline" size={18} color="#8A8C9A" style={styles.infoIcon} />
@@ -256,7 +282,6 @@ export default function ProfileScreen() {
                 
                 <View style={styles.divider} />
 
-                {/* Nickname Input */}
                 <View style={styles.inputWrapper}>
                   <Text style={styles.inputLabel}>닉네임</Text>
                   <TextInput
@@ -271,7 +296,6 @@ export default function ProfileScreen() {
 
               <Text style={styles.sectionTitle}>추가 정보 수정</Text>
               <View style={styles.card}>
-                {/* Age Input */}
                 <View style={styles.inputWrapper}>
                   <Text style={styles.inputLabel}>나이</Text>
                   <TextInput
@@ -284,7 +308,6 @@ export default function ProfileScreen() {
                   />
                 </View>
 
-                {/* Gender Selection */}
                 <View style={styles.inputWrapper}>
                   <Text style={styles.inputLabel}>성별</Text>
                   <View style={styles.genderContainer}>
@@ -311,7 +334,6 @@ export default function ProfileScreen() {
                   </View>
                 </View>
 
-                {/* Job Selection */}
                 <View style={styles.inputWrapper}>
                   <Text style={styles.inputLabel}>직업</Text>
                   <View style={styles.jobGrid}>
@@ -348,7 +370,6 @@ export default function ProfileScreen() {
                 </View>
               </View>
 
-              {/* Edit Mode Buttons */}
               <View style={styles.buttonRow}>
                 <TouchableOpacity
                   style={styles.cancelButton}
@@ -442,6 +463,17 @@ export default function ProfileScreen() {
                 <Text style={styles.editModeButtonText}>수정하기</Text>
               </TouchableOpacity>
 
+              {/* 🔥 [변경 포인트 2] 로컬 로그인(!isSocial)인 경우에만 렌더링되도록 수정 */}
+              {!getEmailDisplay(email).isSocial && (
+                <TouchableOpacity
+                  style={styles.changePasswordButton}
+                  onPress={handleChangePassword}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.changePasswordButtonText}>비밀번호 변경</Text>
+                </TouchableOpacity>
+              )}
+
               {/* Delete Account */}
               <TouchableOpacity
                 style={styles.deleteButton}
@@ -454,6 +486,67 @@ export default function ProfileScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* CUSTOM PASSWORD ALERT MODAL */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isPasswordModalVisible}
+        onRequestClose={() => setIsPasswordModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContentCard}>
+            <Text style={styles.modalTitle}>비밀번호 변경</Text>
+            <Text style={styles.modalSubtitle}>현재 비밀번호와 바꿀 새 비밀번호를 정확히 입력해 주세요.</Text>
+
+            <View style={styles.modalInputWrapper}>
+              <Text style={styles.modalInputLabel}>현재 비밀번호</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="현재 비밀번호 입력"
+                placeholderTextColor="#A0B0D0"
+                secureTextEntry
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+              />
+            </View>
+
+            <View style={styles.modalInputWrapper}>
+              <Text style={styles.modalInputLabel}>새 비밀번호</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="새 비밀번호 입력 (8자 이상)"
+                placeholderTextColor="#A0B0D0"
+                secureTextEntry
+                value={newPassword}
+                onChangeText={setNewPassword}
+              />
+            </View>
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setIsPasswordModalVisible(false)}
+                disabled={isSaving}
+              >
+                <Text style={styles.modalCancelButtonText}>취소</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalSubmitButton, isSaving && styles.disabledSaveButton]}
+                onPress={handlePasswordSubmit}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitButtonText}>변경하기</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -702,7 +795,7 @@ const styles = StyleSheet.create({
   deleteButton: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 24,
+    marginTop: 20,
     paddingVertical: 8,
   },
   deleteButtonText: {
@@ -712,5 +805,105 @@ const styles = StyleSheet.create({
     fontFamily: "PretendardSemiBold",
     textDecorationLine: "underline",
   },
-  rejoinNotice: { fontSize: 14, color: "#FF3B30", marginTop: 6, fontWeight: "600" },
+  changePasswordButton: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#2A3C6B",
+    padding: 16,
+    borderRadius: 16,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  changePasswordButtonText: {
+    color: "#2A3C6B",
+    fontSize: 16,
+    fontWeight: "700",
+    fontFamily: "PretendardBold",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  modalContentCard: {
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#2A3C6B",
+    textAlign: "center",
+    marginBottom: 8,
+    fontFamily: "PretendardBold",
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: "#8A8C9A",
+    textAlign: "center",
+    marginBottom: 20,
+    fontFamily: "Pretendard",
+    lineHeight: 18,
+  },
+  modalInputWrapper: {
+    marginBottom: 16,
+  },
+  modalInputLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#5C6E91",
+    marginBottom: 6,
+    marginLeft: 4,
+    fontFamily: "PretendardSemiBold",
+  },
+  modalInput: {
+    backgroundColor: "#F1F4F9",
+    padding: 14,
+    borderRadius: 12,
+    fontSize: 15,
+    color: "#333333",
+    fontFamily: "Pretendard",
+  },
+  modalButtonRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: "#E2E5EC",
+    padding: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginRight: 6,
+  },
+  modalCancelButtonText: {
+    color: "#5C6E91",
+    fontSize: 15,
+    fontWeight: "700",
+    fontFamily: "PretendardSemiBold",
+  },
+  modalSubmitButton: {
+    flex: 1,
+    backgroundColor: "#2A3C6B",
+    padding: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginLeft: 6,
+  },
+  modalSubmitButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+    fontFamily: "PretendardBold",
+  },
 });

@@ -126,9 +126,44 @@ export const authApi = {
     return data;
   },
 
+  /// 비밀번호 변경 요청
+  localPasswordChange: async (currentPassword: string, newPassword: string) => {
+    const { data } = await apiClient.post("/api/v1/users/me/password", {
+      currentPassword,
+      newPassword,
+    });
+    return data;
+  },
+
   /// 회원 탈퇴 요청
   deleteAccount: async () => {
     const { data } = await apiClient.delete("/api/v1/users/me");
+    return data;
+  },
+
+  /// 비밀번호 재설정 1 - 요청 이메일
+  localPasswordReset: async (email: string) => {
+    const { data } = await publicClient.post("/api/v1/auth/email/password-reset-code", {
+      email,
+    });
+    return data;
+  },
+
+  /// 비밀번호 재설정 2 - 인증 코드 확인
+  localPasswordResetVerify: async (email: string, code: string) => {
+    const { data } = await publicClient.post("/api/v1/auth/email/password-reset-code/verify", {
+      email,
+      code,
+    });
+    return data;
+  },
+
+  /// 비밀번호 재설정 3 - 인증 코드 확인 후 비밀번호 변경
+  localPasswordResetConfirm: async (email: string, newPassword: string) => {
+    const { data } = await publicClient.post("/api/v1/users/password-reset", {
+      email,
+      newPassword,
+    });
     return data;
   },
 };

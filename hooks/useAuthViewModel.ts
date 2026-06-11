@@ -162,7 +162,7 @@ export const useAuthViewModel = () => {
     } catch (err: any) {
       console.log("인증 코드 발송 에러:", err);
       setError(err.response?.data?.message || "인증 코드 발송에 실패했습니다.");
-      return null;
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -177,7 +177,7 @@ export const useAuthViewModel = () => {
     } catch (err: any) {
       console.log("인증 코드 확인 에러:", err);
       setError(err.response?.data?.message || "인증 코드 확인에 실패했습니다.");
-      return null;
+      throw err ;
     } finally {
       setIsLoading(false);
     }
@@ -193,7 +193,23 @@ export const useAuthViewModel = () => {
     } catch (err: any) {
       console.log("닉네임 업데이트 에러:", err);
       setError(err.response?.data?.message || err.message || "닉네임 업데이트 실패");
-      return false;
+      throw false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const localPasswordChange = async (currentPassword: string, newPassword: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.localPasswordChange(currentPassword, newPassword);
+      console.log("비밀번호 변경 성공:", data);
+      return true;
+    } catch (err: any) {
+      console.log("비밀번호 변경 에러:", err);
+      setError(err.response?.data?.message || err.message || "비밀번호 변경 실패");
+      throw false;
     } finally {
       setIsLoading(false);
     }
@@ -214,11 +230,59 @@ export const useAuthViewModel = () => {
     } catch (err: any) {
       console.log("회원 탈퇴 에러:", err);
       setError(err.response?.data?.message || err.message || "회원 탈퇴 실패");
-      return false;
+      throw false;
     } finally {
       setIsLoading(false);
     }
   };
+
+  const localPasswordReset = async (email: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.localPasswordReset(email);
+      console.log("비밀번호 재설정 이메일 발송 성공:", data);
+      return true;
+    } catch (err: any) {
+      console.log("비밀번호 재설정 에러:", err);
+      setError(err.response?.data?.message || err.message || "비밀번호 재설정에 실패했습니다.");
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const localPasswordResetVerify = async (email: string, code: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.localPasswordResetVerify(email, code);
+      console.log("비밀번호 재설정 코드 확인 성공:", data);
+      return true;
+    } catch (err: any) {
+      console.log("비밀번호 재설정 코드 확인 에러:", err);
+      setError(err.response?.data?.message || err.message || "인증 코드 확인에 실패했습니다.");
+      throw err ;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const localPasswordResetConfirm = async (email: string, newPassword: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await authApi.localPasswordResetConfirm(email, newPassword);
+      console.log("비밀번호 재설정 성공:", data);
+      return true;
+    } catch (err: any) {
+      console.log("비밀번호 재설정 에러:", err);
+      setError(err.response?.data?.message || err.message || "비밀번호 재설정에 실패했습니다.");
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };  
 
   return {
     login,
@@ -229,7 +293,11 @@ export const useAuthViewModel = () => {
     logout,
     checkEmail,
     sendVerificationCode,
+    localPasswordChange,
     verifyCode,
+    localPasswordReset,
+    localPasswordResetVerify,
+    localPasswordResetConfirm,
     isLoading,
     error,
     setError,

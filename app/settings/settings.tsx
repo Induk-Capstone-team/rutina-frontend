@@ -1,7 +1,8 @@
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
 import { authApi } from "@/lib/data/auth_api";
-import { useRouter, useFocusEffect } from "expo-router";
-import React, { useState, useCallback } from "react";
+import * as Application from 'expo-application';
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   Alert,
   SafeAreaView,
@@ -19,6 +20,7 @@ type SettingItemProps = {
   value?: string | boolean;
   type?: "link" | "switch" | "text";
   onToggle?: (val: boolean) => void;
+  onPress?: () => void;
 };
 
 const SettingItem = ({
@@ -27,11 +29,14 @@ const SettingItem = ({
   value,
   type = "link",
   onToggle = () => {},
+  onPress,
 }: SettingItemProps) => {
   return (
     <TouchableOpacity
       style={styles.settingItem}
       activeOpacity={type === "link" ? 0.7 : 1}
+      onPress={onPress}
+      disabled={!onPress}
     >
       <View style={styles.settingItemLeft}>
         <View style={styles.iconContainer}>
@@ -129,7 +134,7 @@ export default function SettingsScreen() {
         {/* Profile Section */}
         <TouchableOpacity
           style={styles.profileSection}
-          onPress={() => router.push("/profile")}
+          onPress={() => router.push("/settings/profile")}
           activeOpacity={0.7}
         >
           <View style={styles.profileInfo}>
@@ -139,6 +144,7 @@ export default function SettingsScreen() {
           <View style={styles.editProfileBtn}>
             <Text style={styles.editProfileText}>수정</Text>
           </View>
+
         </TouchableOpacity>
 
         {/* General Settings */}
@@ -156,11 +162,11 @@ export default function SettingsScreen() {
         {/* Support & Info empty */}
         <Text style={styles.sectionTitle}>지원 및 정보</Text>
         <View style={styles.card}>
-          <SettingItem icon="💬" title="공지사항" />
+          <SettingItem icon="💬" title="공지사항" onPress={() => router.push("/settings/notice")} />
           <View style={styles.divider} />
-          <SettingItem icon="❓" title="고객센터 / 도움말" />
+          <SettingItem icon="❓" title="고객센터 / 도움말" onPress={() => router.push("/settings/contact")} />
           <View style={styles.divider} />
-          <SettingItem icon="ℹ️" title="앱 버전" type="text" value="1.0.0" />
+          <SettingItem icon="ℹ️" title="앱 버전" type="text" value={`Ver ${Application.nativeApplicationVersion}`} />
         </View>
 
         {/* Account Actions */}
