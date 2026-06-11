@@ -1,7 +1,7 @@
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors } from "@/lib/constants/theme";
+import { useTheme } from "@/lib/constants/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs, useRouter } from "expo-router";
 import React from "react";
@@ -11,6 +11,7 @@ type IconSymbolName = React.ComponentProps<typeof IconSymbol>["name"];
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
 export default function TabLayout() {
+  const { theme } = useTheme();
   const colorScheme = useColorScheme();
   const router = useRouter();
 
@@ -29,12 +30,12 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#2A3C6B",
+        tabBarActiveTintColor: theme.text,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
-          backgroundColor: "#FFFFFF",
-          borderTopColor: "#FFFFFF",
+          backgroundColor: theme.card,
+          borderTopColor: theme.card,
           borderTopWidth: 0,
           elevation: 0,
           shadowColor: "transparent",

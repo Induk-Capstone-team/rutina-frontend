@@ -1,7 +1,9 @@
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
+import { useTheme, type Theme } from "@/lib/constants/ThemeContext";
 import { authApi } from "@/lib/data/auth_api";
-import { useRouter, useFocusEffect } from "expo-router";
-import React, { useState, useCallback } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { Bell, HelpCircle, Info, Megaphone, Moon } from "lucide-react-native";
+import React, { useCallback, useState } from "react";
 import {
   Alert,
   SafeAreaView,
@@ -14,7 +16,7 @@ import {
 } from "react-native";
 
 type SettingItemProps = {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   value?: string | boolean;
   type?: "link" | "switch" | "text";
@@ -28,18 +30,17 @@ const SettingItem = ({
   type = "link",
   onToggle = () => {},
 }: SettingItemProps) => {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   return (
     <TouchableOpacity
       style={styles.settingItem}
       activeOpacity={type === "link" ? 0.7 : 1}
     >
       <View style={styles.settingItemLeft}>
-        <View style={styles.iconContainer}>
-          <Text style={styles.iconText}>{icon}</Text>
-        </View>
+        <View style={styles.iconContainer}>{icon}</View>
         <Text style={styles.settingTitle}>{title}</Text>
       </View>
-
       <View style={styles.settingItemRight}>
         {type === "link" && (
           <>
@@ -52,7 +53,7 @@ const SettingItem = ({
             value={!!value}
             onValueChange={onToggle}
             trackColor={{ false: "#E2E5EC", true: "#405886" }}
-            thumbColor={"#FFFFFF"}
+            thumbColor={theme.card}
           />
         )}
         {type === "text" && <Text style={styles.settingValue}>{value}</Text>}
@@ -71,10 +72,190 @@ const getEmailDisplay = (emailStr: string) => {
   return { isSocial: false, text: emailStr };
 };
 
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: theme.bg,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 24,
+      paddingTop: 16,
+      paddingBottom: 8,
+    },
+
+    backButton: {
+      width: 32,
+      height: 32,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 3,
+    },
+
+    backIcon: {
+      fontSize: 34,
+      color: theme.text,
+      fontWeight: "500",
+      marginTop: -5,
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: "800",
+      color: theme.text,
+    },
+    container: {
+      flex: 1,
+      paddingHorizontal: 16,
+    },
+    profileSection: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.card,
+      padding: 20,
+      borderRadius: 24,
+      marginTop: 10,
+      marginBottom: 24,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
+      elevation: 2,
+    },
+    profileImageContainer: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: "#405886",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    profileImageText: {
+      color: theme.card,
+      fontSize: 24,
+      fontWeight: "700",
+    },
+    profileInfo: {
+      flex: 1,
+      marginLeft: 16,
+    },
+    profileName: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: theme.text,
+      marginBottom: 4,
+    },
+    profileEmail: {
+      fontSize: 14,
+      color: theme.textSecondary,
+    },
+    editProfileBtn: {
+      backgroundColor: theme.bg,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 16,
+    },
+    editProfileText: {
+      color: "#405886",
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.textSecondary,
+      marginLeft: 12,
+      marginBottom: 8,
+    },
+    card: {
+      backgroundColor: theme.card,
+      borderRadius: 24,
+      paddingVertical: 8,
+      marginBottom: 24,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.03,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    settingItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+    },
+    settingItemLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    iconContainer: {
+      width: 32,
+      height: 32,
+      borderRadius: 12,
+      backgroundColor: theme.cardAlt,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    iconText: {
+      fontSize: 16,
+    },
+    settingTitle: {
+      fontSize: 16,
+      color: theme.textBody,
+      fontWeight: "500",
+    },
+    settingItemRight: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    settingValue: {
+      fontSize: 15,
+      color: theme.textSecondary,
+      marginRight: 8,
+    },
+    chevron: {
+      fontSize: 20,
+      color: theme.textFaint,
+      fontWeight: "400",
+      marginTop: -2,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: theme.bg,
+      marginLeft: 64,
+      marginRight: 20,
+    },
+    accountActionsRow: {
+      marginTop: 8,
+      paddingHorizontal: 12,
+    },
+    logoutButton: {
+      alignItems: "center",
+      paddingVertical: 14,
+      backgroundColor: theme.card,
+      borderRadius: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.03,
+      shadowRadius: 4,
+      elevation: 1,
+    },
+    logoutText: {
+      color: theme.warning,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+  });
+
 export default function SettingsScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
+  const { mode, setMode } = useTheme();
   const { logout } = useAuthViewModel();
 
   const [profileName, setProfileName] = useState("홍길동");
@@ -90,12 +271,14 @@ export default function SettingsScreen() {
             if (userData.nickname) setProfileName(userData.nickname);
             if (userData.email) setProfileEmail(userData.email);
           }
-        } catch (error) {
+        } catch (error: any) {
+          const status = error?.response?.status;
+          if (status === 401 || status === 403) return;
           console.error("Failed to load profile in settings:", error);
         }
       };
       loadProfile();
-    }, [])
+    }, []),
   );
 
   const handleLogout = () => {
@@ -134,7 +317,9 @@ export default function SettingsScreen() {
         >
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{profileName}</Text>
-            <Text style={styles.profileEmail}>{getEmailDisplay(profileEmail).text}</Text>
+            <Text style={styles.profileEmail}>
+              {getEmailDisplay(profileEmail).text}
+            </Text>
           </View>
           <View style={styles.editProfileBtn}>
             <Text style={styles.editProfileText}>수정</Text>
@@ -145,22 +330,40 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>일반</Text>
         <View style={styles.card}>
           <SettingItem
-            icon="🔔"
+            icon={<Bell size={18} color="#405886" />}
             title="알림 설정"
             type="switch"
             value={notifications}
             onToggle={setNotifications}
+          />
+          <SettingItem
+            icon={<Moon size={18} color="#405886" />}
+            title="다크모드"
+            type="switch"
+            value={mode === "dark"}
+            onToggle={(val) => setMode(val ? "dark" : "light")}
           />
         </View>
 
         {/* Support & Info empty */}
         <Text style={styles.sectionTitle}>지원 및 정보</Text>
         <View style={styles.card}>
-          <SettingItem icon="💬" title="공지사항" />
+          <SettingItem
+            icon={<Megaphone size={18} color="#405886" />}
+            title="공지사항"
+          />
           <View style={styles.divider} />
-          <SettingItem icon="❓" title="고객센터 / 도움말" />
+          <SettingItem
+            icon={<HelpCircle size={18} color="#405886" />}
+            title="고객센터 / 도움말"
+          />
           <View style={styles.divider} />
-          <SettingItem icon="ℹ️" title="앱 버전" type="text" value="1.0.0" />
+          <SettingItem
+            icon={<Info size={18} color="#405886" />}
+            title="앱 버전"
+            type="text"
+            value="1.0.0"
+          />
         </View>
 
         {/* Account Actions */}
@@ -175,180 +378,3 @@ export default function SettingsScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F3F4F8",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-
-  backButton: {
-    width: 32,
-    height: 32,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 3,
-  },
-
-  backIcon: {
-    fontSize: 34,
-    color: "#2A3C6B",
-    fontWeight: "500",
-    marginTop: -5,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#2A3C6B",
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  profileSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    padding: 20,
-    borderRadius: 24,
-    marginTop: 10,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  profileImageContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#405886",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  profileImageText: {
-    color: "#FFFFFF",
-    fontSize: 24,
-    fontWeight: "700",
-  },
-  profileInfo: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  profileName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2A3C6B",
-    marginBottom: 4,
-  },
-  profileEmail: {
-    fontSize: 14,
-    color: "#8A8C9A",
-  },
-  editProfileBtn: {
-    backgroundColor: "#F3F4F8",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-  },
-  editProfileText: {
-    color: "#405886",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#8A8C9A",
-    marginLeft: 12,
-    marginBottom: 8,
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    paddingVertical: 8,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  settingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  settingItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
-    backgroundColor: "#F8F9FB",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  iconText: {
-    fontSize: 16,
-  },
-  settingTitle: {
-    fontSize: 16,
-    color: "#333333",
-    fontWeight: "500",
-  },
-  settingItemRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  settingValue: {
-    fontSize: 15,
-    color: "#8A8C9A",
-    marginRight: 8,
-  },
-  chevron: {
-    fontSize: 20,
-    color: "#C4C6D0",
-    fontWeight: "400",
-    marginTop: -2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#F3F4F8",
-    marginLeft: 64,
-    marginRight: 20,
-  },
-  accountActionsRow: {
-    marginTop: 8,
-    paddingHorizontal: 12,
-  },
-  logoutButton: {
-    alignItems: "center",
-    paddingVertical: 14,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  logoutText: {
-    color: "#E79A95",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});

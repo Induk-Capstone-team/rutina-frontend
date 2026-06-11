@@ -1,5 +1,6 @@
 //components/time_picker_modal.tsx
 import { ThemedText } from "@/components/themed-text";
+import { useTheme } from "@/lib/constants/ThemeContext";
 import React, { useEffect, useState } from "react";
 import {
   Keyboard,
@@ -64,7 +65,6 @@ function getPrevMinute(minute: string) {
     (currentIndex - 1 + MINUTE_OPTIONS.length) % MINUTE_OPTIONS.length;
   return MINUTE_OPTIONS[prevIndex];
 }
-
 function StepperPicker({
   label,
   value,
@@ -76,20 +76,105 @@ function StepperPicker({
   onIncrease: () => void;
   onDecrease: () => void;
 }) {
+  const { theme } = useTheme();
   return (
-    <View style={styles.stepperBox}>
-      <ThemedText style={styles.stepperLabel}>{label}</ThemedText>
-      <View style={styles.stepperRow}>
-        <TouchableOpacity style={styles.stepperButton} onPress={onDecrease}>
-          <ThemedText style={styles.stepperButtonText}>-</ThemedText>
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 14,
+        paddingVertical: 6,
+        paddingHorizontal: 6,
+        alignItems: "center",
+      }}
+    >
+      <ThemedText
+        style={{
+          fontSize: 12,
+          fontWeight: "700",
+          color: theme.textMuted,
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </ThemedText>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 6,
+        }}
+      >
+        <TouchableOpacity
+          style={{
+            width: 30,
+            height: 34,
+            borderRadius: 8,
+            backgroundColor: theme.cardAlt,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onPress={onDecrease}
+        >
+          <ThemedText
+            style={{
+              fontSize: 18,
+              fontWeight: "800",
+              color: theme.main,
+              textAlign: "center",
+              includeFontPadding: false,
+              lineHeight: 18,
+            }}
+          >
+            -
+          </ThemedText>
         </TouchableOpacity>
-
-        <View style={styles.stepperValueBox}>
-          <ThemedText style={styles.stepperValueText}>{value}</ThemedText>
+        <View
+          style={{
+            flex: 2,
+            height: 40,
+            borderRadius: 12,
+            alignItems: "center",
+            justifyContent: "center",
+            marginVertical: 6,
+          }}
+        >
+          <ThemedText
+            style={{
+              fontSize: 18,
+              fontWeight: "800",
+              color: theme.text,
+              textAlign: "center",
+              includeFontPadding: false,
+              lineHeight: 20,
+            }}
+          >
+            {value}
+          </ThemedText>
         </View>
-
-        <TouchableOpacity style={styles.stepperButton} onPress={onIncrease}>
-          <ThemedText style={styles.stepperButtonText}>+</ThemedText>
+        <TouchableOpacity
+          style={{
+            width: 30,
+            height: 34,
+            borderRadius: 8,
+            backgroundColor: theme.cardAlt,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onPress={onIncrease}
+        >
+          <ThemedText
+            style={{
+              fontSize: 18,
+              fontWeight: "800",
+              color: theme.main,
+              textAlign: "center",
+              includeFontPadding: false,
+              lineHeight: 18,
+            }}
+          >
+            +
+          </ThemedText>
         </TouchableOpacity>
       </View>
     </View>
@@ -108,6 +193,7 @@ function HourStepperPicker({
   onDecrease: () => void;
   onChange: (v: string) => void;
 }) {
+  const { theme } = useTheme();
   const [inputValue, setInputValue] = useState(value);
   const [isFocused, setIsFocused] = useState(false);
 
@@ -146,17 +232,71 @@ function HourStepperPicker({
     setInputValue(padded);
     onChange(padded);
   };
-
   return (
-    <View style={styles.stepperBox}>
-      <ThemedText style={styles.stepperLabel}>{label}</ThemedText>
-      <View style={styles.stepperRow}>
-        <TouchableOpacity style={styles.stepperButton} onPress={onDecrease}>
-          <ThemedText style={styles.stepperButtonText}>-</ThemedText>
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 14,
+        paddingVertical: 6,
+        paddingHorizontal: 6,
+        alignItems: "center",
+      }}
+    >
+      <ThemedText
+        style={{
+          fontSize: 12,
+          fontWeight: "700",
+          color: theme.textMuted,
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </ThemedText>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 6,
+        }}
+      >
+        <TouchableOpacity
+          style={{
+            width: 30,
+            height: 34,
+            borderRadius: 8,
+            backgroundColor: theme.cardAlt,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onPress={onDecrease}
+        >
+          <ThemedText
+            style={{
+              fontSize: 18,
+              fontWeight: "800",
+              color: theme.main,
+              textAlign: "center",
+              includeFontPadding: false,
+              lineHeight: 18,
+            }}
+          >
+            -
+          </ThemedText>
         </TouchableOpacity>
-
         <TextInput
-          style={styles.stepperValueInput}
+          style={{
+            flex: 2,
+            height: 40,
+            borderRadius: 12,
+            alignItems: "center",
+            justifyContent: "center",
+            marginVertical: 6,
+            fontSize: 18,
+            fontWeight: "800",
+            color: theme.text,
+            textAlign: "center",
+          }}
           value={inputValue}
           onChangeText={handleChangeText}
           onFocus={() => {
@@ -168,9 +308,29 @@ function HourStepperPicker({
           maxLength={2}
           returnKeyType="done"
         />
-
-        <TouchableOpacity style={styles.stepperButton} onPress={onIncrease}>
-          <ThemedText style={styles.stepperButtonText}>+</ThemedText>
+        <TouchableOpacity
+          style={{
+            width: 30,
+            height: 34,
+            borderRadius: 8,
+            backgroundColor: theme.cardAlt,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onPress={onIncrease}
+        >
+          <ThemedText
+            style={{
+              fontSize: 18,
+              fontWeight: "800",
+              color: theme.main,
+              textAlign: "center",
+              includeFontPadding: false,
+              lineHeight: 18,
+            }}
+          >
+            +
+          </ThemedText>
         </TouchableOpacity>
       </View>
     </View>
@@ -185,6 +345,103 @@ const TimePickerModal = ({
   onClose,
   onApply,
 }: TimePickerModalProps) => {
+  const { theme } = useTheme();
+
+  const styles = StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.18)",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 20,
+    },
+
+    modalCard: {
+      width: "100%",
+      backgroundColor: theme.card,
+      borderRadius: 22,
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 16,
+      maxWidth: 340,
+      maxHeight: "80%",
+    },
+
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+
+    title: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: theme.text,
+    },
+
+    closeText: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: theme.main,
+    },
+
+    previewBox: {
+      backgroundColor: theme.cardAlt,
+      borderRadius: 14,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      marginBottom: 14,
+    },
+
+    previewLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.textMuted,
+      marginBottom: 4,
+    },
+
+    previewValue: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: theme.text,
+    },
+
+    section: {
+      marginBottom: 8,
+    },
+
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: theme.main,
+      marginBottom: 8,
+    },
+
+    pickerRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+
+    applyButton: {
+      marginTop: 4,
+      backgroundColor: theme.main,
+      borderRadius: 14,
+      paddingVertical: 13,
+      alignItems: "center",
+    },
+
+    applyButtonText: {
+      color: theme.card,
+      fontSize: 14,
+      fontWeight: "800",
+    },
+
+    scrollContent: {
+      flexGrow: 1,
+    },
+  });
+
   const [tempStartHour, setTempStartHour] = useState(startHour);
   const [tempStartMinute, setTempStartMinute] = useState(startMinute);
   const [tempEndHour, setTempEndHour] = useState(endHour);
@@ -329,168 +586,3 @@ const TimePickerModal = ({
 };
 
 export default TimePickerModal;
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.18)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-
-  modalCard: {
-    width: "100%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 16,
-    maxWidth: 340,
-    maxHeight: "80%",
-  },
-
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  title: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#2A3C6B",
-  },
-
-  closeText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#405886",
-  },
-
-  previewBox: {
-    backgroundColor: "#F8F9FB",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 14,
-  },
-
-  previewLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#A0B0D0",
-    marginBottom: 4,
-  },
-
-  previewValue: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#2A3C6B",
-  },
-
-  section: {
-    marginBottom: 8,
-  },
-
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#405886",
-    marginBottom: 8,
-  },
-
-  pickerRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-
-  stepperRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 6,
-  },
-
-  stepperBox: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-    alignItems: "center",
-  },
-
-  stepperLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#A0B0D0",
-    marginBottom: 8,
-  },
-
-  stepperButton: {
-    width: 30,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: "#F8F9FB",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  stepperButtonText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#405886",
-    textAlign: "center",
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-
-  stepperValueBox: {
-    flex: 2,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginVertical: 6,
-  },
-
-  stepperValueText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#2A3C6B",
-    textAlign: "center",
-    includeFontPadding: false,
-    lineHeight: 20,
-  },
-
-  applyButton: {
-    marginTop: 4,
-    backgroundColor: "#405886",
-    borderRadius: 14,
-    paddingVertical: 13,
-    alignItems: "center",
-  },
-
-  applyButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  stepperValueInput: {
-    flex: 2,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginVertical: 6,
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#2A3C6B",
-    textAlign: "center",
-  },
-
-  scrollContent: {
-    flexGrow: 1,
-  },
-});
