@@ -1,3 +1,4 @@
+import { useTheme } from "@/lib/constants/ThemeContext";
 import type { CalendarTheme, MarkedDates } from "@/types/calendar";
 import React from "react";
 import type { StyleProp, ViewStyle } from "react-native";
@@ -53,22 +54,6 @@ interface AppCalendarProps {
   theme?: CalendarTheme;
   style?: StyleProp<ViewStyle>;
 }
-
-const DEFAULT_CALENDAR_THEME = {
-  backgroundColor: "#F8F9FB",
-  calendarBackground: "#F8F9FB",
-  textSectionTitleColor: "#B4B6C0",
-  selectedDayTextColor: "#2A3C6B",
-  todayTextColor: "#405886",
-  dayTextColor: "#2A3C6B",
-  textDisabledColor: "#D9E1E8",
-  arrowColor: "#A0B0D0",
-  monthTextColor: "#2A3C6B",
-  textDayFontWeight: "600" as const,
-  textMonthFontWeight: "bold" as const,
-  textDayHeaderFontWeight: "600" as const,
-};
-
 export default function AppCalendar({
   current,
   markedDates,
@@ -77,6 +62,21 @@ export default function AppCalendar({
   theme,
   style,
 }: AppCalendarProps) {
+  const { theme: appTheme } = useTheme();
+  const DEFAULT_CALENDAR_THEME = {
+    backgroundColor: appTheme.cardAlt,
+    calendarBackground: appTheme.cardAlt,
+    textSectionTitleColor: appTheme.textFaint,
+    selectedDayTextColor: appTheme.text,
+    todayTextColor: appTheme.main,
+    dayTextColor: appTheme.text,
+    textDisabledColor: appTheme.divider,
+    arrowColor: appTheme.textMuted,
+    monthTextColor: appTheme.text,
+    textDayFontWeight: "600" as const,
+    textMonthFontWeight: "bold" as const,
+    textDayHeaderFontWeight: "600" as const,
+  };
   return (
     <Calendar
       current={current}

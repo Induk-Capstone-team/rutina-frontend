@@ -1,6 +1,7 @@
 import ScheduleContent from "@/components/schedule_content";
 import { Header } from "@/components/ui/_header";
 import AppCalendar from "@/components/ui/app_calendar";
+import { useTheme, type Theme } from "@/lib/constants/ThemeContext";
 import { RoutineService } from "@/services/routine_service";
 import { authStore } from "@/store/authStore";
 import type { MarkedDates } from "@/types/calendar";
@@ -104,16 +105,22 @@ function buildTimetableEvents(routines: ScheduleRoutine[]): TimetableEvent[] {
 
   return events.sort((a, b) => a.startMinute - b.startMinute);
 }
-function getEventStyle(type: string, color?: string) {
-  const fallbackColor = color || "#9FA2D6";
-  return {
-    bg: addAlphaToHex(fallbackColor),
-    dot: fallbackColor,
-    text: fallbackColor,
-  };
-}
 
 export default function HomeScreen() {
+  const { theme, mode } = useTheme();
+  const styles = makeStyles(theme);
+  const getEventStyle = useCallback(
+    (type: string, color?: string) => {
+      const fallbackColor = color || "#9FA2D6";
+      const alpha = mode === "dark" ? "40" : "55";
+      return {
+        bg: addAlphaToHex(fallbackColor, alpha),
+        dot: fallbackColor,
+        text: fallbackColor,
+      };
+    },
+    [mode],
+  );
   // 현재 선택된 날짜
   const [currentDate, setCurrentDate] = useState(new Date());
   // 월간 캘린더 표시 여부
@@ -208,7 +215,10 @@ export default function HomeScreen() {
 
   const calendarMarkedDates = useMemo(() => {
     const marked: MarkedDates = {
-      [currentDateString]: { selected: true, selectedColor: "#F1F1FB" },
+      [currentDateString]: {
+        selected: true,
+        selectedColor: mode === "dark" ? theme.borderStrong : "#F1F1FB",
+      },
     };
     return marked;
   }, [currentDateString]);
@@ -459,7 +469,7 @@ export default function HomeScreen() {
                                 <Text
                                   style={[
                                     styles.eventTitle,
-                                    { color: "#233255" },
+                                    { color: theme.textStrong },
                                   ]}
                                   numberOfLines={1}
                                 >
@@ -534,153 +544,158 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F3F4F8" },
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    backgroundColor: "#F3F4F8",
-  },
-  horizontalContent: { flexGrow: 1 },
-  page: { width: SCREEN_WIDTH - 32, flex: 1 },
-  mainCard: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 30,
-    paddingBottom: 24,
-    marginBottom: 20,
-  },
-  topPanel: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    zIndex: 5,
-  },
-  todayButton: {
-    position: "absolute",
-    top: 10,
-    right: 20,
-    backgroundColor: "#F3F4F8",
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    zIndex: 20,
-  },
-  todayButtonText: { fontSize: 12, color: "#2A3C6B", fontWeight: "700" },
-  daySelector: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingTop: 20,
-    paddingBottom: 1,
-  },
-  dayButtonContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    width: 42,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  dateCircleSelected: { backgroundColor: "#A0B0D0" },
-  dayText: {
-    fontSize: 13,
-    color: "#A0A7B4",
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  dateText: { fontSize: 16, color: "#405886", fontWeight: "700" },
-  dayTextSelected: { color: "#405886" },
-  dateTextSelected: { color: "#FFFFFF" },
-  dateCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  handleRow: {
-    position: "relative",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingTop: 6,
-    paddingBottom: 14,
-  },
-  swipeHandleContainer: { padding: 10 },
-  swipeHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: "#E2E5EC",
-    borderRadius: 2,
-  },
-  calendarWrapper: {
-    backgroundColor: "#F8F9FB",
-    borderRadius: 20,
-    marginBottom: 20,
-    overflow: "hidden",
-    paddingBottom: 10,
-    marginHorizontal: 16,
-  },
-  timetableContainer: { paddingTop: 15, flex: 1 },
-  timetableInner: { flexDirection: "row", paddingHorizontal: 10 },
-  timeAxis: { width: 52, paddingRight: 4 },
-  timeLabelContainer: {
-    justifyContent: "flex-start",
-    alignItems: "center",
-  },
-  timeLabel: {
-    fontSize: 14,
-    color: "#A0B0D0",
-    transform: [{ translateY: -7 }],
-  },
-  timeLabelCurrent: { color: "#6C7FD8", fontWeight: "700", fontSize: 11 },
-  gridArea: {
-    flex: 1,
-    borderLeftWidth: 1,
-    borderTopWidth: 1,
-    borderRightWidth: 1,
-    borderColor: "#EDEEF1",
-    position: "relative",
-    overflow: "visible",
-  },
-  hourRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderColor: "#EDEEF1",
-    position: "relative",
-  },
-  gridColumn: {
-    flex: 1,
-    borderLeftWidth: 1,
-    borderColor: "rgba(237, 238, 241, 0.5)",
-  },
-  eventBlock: {
-    position: "absolute",
-    top: 6,
-    bottom: 6,
-    borderRadius: 12,
-    justifyContent: "center",
-    paddingHorizontal: 10,
-  },
-  eventTitle: { fontSize: 13, fontWeight: "600" },
-  currentTimeIndicator: {
-    position: "absolute",
-    width: 2,
-    backgroundColor: "#6C7FD8",
-    zIndex: 10,
-    borderRadius: 1,
-  },
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: theme.bg },
+    container: {
+      flex: 1,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      backgroundColor: theme.bg,
+    },
+    horizontalContent: { flexGrow: 1 },
+    page: { width: SCREEN_WIDTH - 32, flex: 1 },
+    mainCard: {
+      flex: 1,
+      backgroundColor: theme.card,
+      borderRadius: 30,
+      paddingBottom: 24,
+      marginBottom: 20,
+    },
+    topPanel: {
+      backgroundColor: theme.card,
+      borderTopLeftRadius: 30,
+      borderTopRightRadius: 30,
+      zIndex: 5,
+    },
+    todayButton: {
+      position: "absolute",
+      top: 10,
+      right: 20,
+      backgroundColor: theme.bg,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 14,
+      zIndex: 20,
+    },
+    todayButtonText: { fontSize: 12, color: theme.main, fontWeight: "700" },
+    daySelector: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingHorizontal: 12,
+      paddingTop: 20,
+      paddingBottom: 1,
+    },
+    dayButtonContainer: {
+      alignItems: "center",
+      justifyContent: "center",
+      width: 42,
+      paddingVertical: 8,
+      borderRadius: 16,
+    },
+    dateCircleSelected: { backgroundColor: theme.textMuted },
+    dayText: {
+      fontSize: 13,
+      color: theme.textMuted,
+      fontWeight: "600",
+      marginBottom: 4,
+    },
+    dateText: { fontSize: 16, color: theme.main, fontWeight: "700" },
+    dayTextSelected: { color: theme.main },
+    dateTextSelected: { color: theme.card },
+    dateCircle: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+    handleRow: {
+      position: "relative",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingTop: 6,
+      paddingBottom: 14,
+    },
+    swipeHandleContainer: { padding: 10 },
+    swipeHandle: {
+      width: 40,
+      height: 4,
+      backgroundColor: theme.handle,
+      borderRadius: 2,
+    },
+    calendarWrapper: {
+      backgroundColor: theme.cardAlt,
+      borderRadius: 20,
+      marginBottom: 20,
+      overflow: "hidden",
+      paddingBottom: 10,
+      marginHorizontal: 16,
+    },
+    timetableContainer: { paddingTop: 15, flex: 1 },
+    timetableInner: { flexDirection: "row", paddingHorizontal: 10 },
+    timeAxis: { width: 52, paddingRight: 4 },
+    timeLabelContainer: {
+      justifyContent: "flex-start",
+      alignItems: "center",
+    },
+    timeLabel: {
+      fontSize: 14,
+      color: theme.textMuted,
+      transform: [{ translateY: -7 }],
+    },
+    timeLabelCurrent: {
+      color: theme.currentTime,
+      fontWeight: "700",
+      fontSize: 11,
+    },
+    gridArea: {
+      flex: 1,
+      borderLeftWidth: 1,
+      borderTopWidth: 1,
+      borderRightWidth: 1,
+      borderColor: theme.divider,
+      position: "relative",
+      overflow: "visible",
+    },
+    hourRow: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderColor: theme.divider,
+      position: "relative",
+    },
+    gridColumn: {
+      flex: 1,
+      borderLeftWidth: 1,
+      borderColor: theme.divider + "80",
+    },
+    eventBlock: {
+      position: "absolute",
+      top: 6,
+      bottom: 6,
+      borderRadius: 12,
+      justifyContent: "center",
+      paddingHorizontal: 10,
+    },
+    eventTitle: { fontSize: 13, fontWeight: "600" },
+    currentTimeIndicator: {
+      position: "absolute",
+      width: 2,
+      backgroundColor: theme.currentTime,
+      zIndex: 10,
+      borderRadius: 1,
+    },
 
-  legendContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    flexWrap: "wrap",
-    gap: 16,
-    marginTop: 20,
-    paddingHorizontal: 20,
-  },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendText: { fontSize: 13, color: "#8A8C9A", fontWeight: "500" },
-});
+    legendContainer: {
+      flexDirection: "row",
+      justifyContent: "center",
+      flexWrap: "wrap",
+      gap: 16,
+      marginTop: 20,
+      paddingHorizontal: 20,
+    },
+    legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+    legendDot: { width: 10, height: 10, borderRadius: 5 },
+    legendText: { fontSize: 13, color: theme.textSecondary, fontWeight: "500" },
+  });

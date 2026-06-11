@@ -1,19 +1,25 @@
+import { useTheme } from "@/lib/constants/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname, useRouter } from "expo-router";
 import React from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
-
 interface HeaderProps {
   activeTab?: "left" | "right";
 }
 const LOGO = require("@/assets/images/logo_icon.png");
+const LOGO_DARK = require("@/assets/images/logo_icon_dark.png");
 export function Header({ activeTab = "left" }: HeaderProps) {
+  const { theme, mode } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const isIndex = pathname === "/" || pathname === "/index";
   return (
     <View style={styles.header}>
-      <Image source={LOGO} style={styles.logoImage} resizeMode="contain" />
+      <Image
+        source={mode === "dark" ? LOGO_DARK : LOGO}
+        style={styles.logoImage}
+        resizeMode="contain"
+      />
       <View style={styles.headerRight}>
         {isIndex && (
           <>
@@ -21,7 +27,8 @@ export function Header({ activeTab = "left" }: HeaderProps) {
               style={[
                 styles.dot,
                 {
-                  backgroundColor: activeTab === "left" ? "#405886" : "#E2E5EC",
+                  backgroundColor:
+                    activeTab === "left" ? theme.main : theme.handle,
                 },
               ]}
             />
@@ -30,7 +37,7 @@ export function Header({ activeTab = "left" }: HeaderProps) {
                 styles.dot,
                 {
                   backgroundColor:
-                    activeTab === "right" ? "#405886" : "#E2E5EC",
+                    activeTab === "right" ? theme.main : theme.handle,
                 },
               ]}
             />
@@ -40,7 +47,7 @@ export function Header({ activeTab = "left" }: HeaderProps) {
           style={styles.settingButton}
           onPress={() => router.push("/settings")}
         >
-          <Ionicons name="settings-outline" size={22} color="#405886" />
+          <Ionicons name="settings-outline" size={22} color={theme.main} />
         </Pressable>
       </View>
     </View>

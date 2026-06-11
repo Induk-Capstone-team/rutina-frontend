@@ -1,11 +1,11 @@
 //schedule_detail_modal.tsx
+import TimePickerModal from "@/components/time_picker_modal";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { getCategoryChipStyle, getCategoryStyle } from "@/lib/category";
+import { getCategoryStyle } from "@/lib/category";
+import { useTheme } from "@/lib/constants/ThemeContext";
 import { CategoryService } from "@/services/category_service";
 import { NotificationService } from "@/services/notification_service";
 import { RoutineService } from "@/services/routine_service";
-
-import TimePickerModal from "@/components/time_picker_modal";
 import type {
   RepeatType,
   RepeatUnit,
@@ -236,6 +236,402 @@ export function ScheduleDetailModal({
   onUpdated,
   readOnly = false,
 }: ScheduleDetailModalProps) {
+  const { theme, mode } = useTheme();
+
+  const styles = StyleSheet.create({
+    modalRoot: {
+      flex: 1,
+      justifyContent: "flex-end",
+      backgroundColor: "transparent",
+    },
+
+    detailOverlay: {
+      ...StyleSheet.absoluteFillObject, // ← 다시 absolute로
+      backgroundColor: "rgba(0, 0, 0, 0.4)",
+    },
+
+    detailCard: {
+      width: "100%",
+      maxHeight: SCREEN_HEIGHT * 0.82,
+      backgroundColor: theme.card,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+      elevation: 8,
+      overflow: "hidden",
+    },
+    detailHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    editButton: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+
+    cancelText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.textMuted,
+    },
+    saveButton: {
+      backgroundColor: theme.main,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 10,
+    },
+    saveText: {
+      color: "#FFFFFF",
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    detailTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.textFaint,
+      letterSpacing: 0.5,
+    },
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 20,
+    },
+    detailRoutineTitle: {
+      fontSize: 21,
+      fontWeight: "800",
+      color: theme.text,
+      lineHeight: 28,
+      flexShrink: 1,
+    },
+
+    tagBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 8,
+      alignSelf: "center",
+    },
+
+    tagText: {
+      fontSize: 11,
+      fontWeight: "800",
+    },
+
+    infoList: {
+      gap: 16,
+      marginBottom: 28,
+    },
+    detailInfoRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 16,
+    },
+    infoTextGroup: {
+      flex: 1,
+    },
+    detailLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.textMuted,
+      marginBottom: 6,
+      textTransform: "uppercase",
+    },
+    detailValue: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.main,
+    },
+
+    editScroll: {
+      flexGrow: 0,
+    },
+    editScrollContent: {
+      paddingBottom: Platform.OS === "ios" ? 340 : 180,
+    },
+    inputBlock: {
+      marginBottom: 16,
+    },
+    editSectionLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme.textMuted,
+      marginBottom: 10,
+    },
+    editSectionLabelInline: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme.textMuted,
+    },
+    titleInput: {
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.main,
+      backgroundColor: theme.inputBg,
+    },
+
+    categoryChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "transparent",
+    },
+
+    categoryChipText: {
+      fontSize: 12,
+      fontWeight: "700",
+    },
+
+    dateRangeBlock: {
+      gap: 8,
+    },
+    dateSelectButton: {
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      backgroundColor: theme.inputBg,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    dateSelectLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    dateSelectText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.main,
+    },
+    calendarContainer: {
+      backgroundColor: theme.inputBg,
+      borderRadius: 20,
+      marginTop: 10,
+      overflow: "hidden",
+      paddingBottom: 10,
+    },
+
+    notifyRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+      borderRadius: 14,
+      backgroundColor: theme.inputBg,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+    },
+    notifyLabelWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    notifySwitchRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    notifyStateText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.main,
+    },
+
+    dialLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.textMuted,
+      marginBottom: 8,
+    },
+
+    repeatOptionButton: {
+      borderWidth: 0.5,
+      borderColor: theme.borderStrong,
+      borderRadius: 14,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      backgroundColor: theme.inputBg,
+    },
+    repeatOptionButtonSelected: {
+      borderColor: theme.main,
+      backgroundColor: theme.mainLight,
+    },
+    repeatOptionText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.textSecondary,
+    },
+    repeatOptionTextSelected: {
+      color: theme.main,
+    },
+    deleteIconButton: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.bg,
+      borderWidth: 1,
+      borderColor: theme.borderMid,
+    },
+
+    weekdayRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    weekdayChip: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+      backgroundColor: theme.inputBg,
+    },
+    weekdayChipSelected: {
+      borderColor: theme.main,
+      backgroundColor: theme.mainLight,
+    },
+    weekdayChipText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textSecondary,
+    },
+    weekdayChipTextSelected: {
+      color: theme.main,
+    },
+
+    editIconButton: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.bg,
+      borderWidth: 1,
+      borderColor: theme.borderMid,
+    },
+
+    repeatCurrentChip: {
+      minHeight: 28,
+      borderRadius: 14,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      backgroundColor: theme.cardAlt,
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    repeatCurrentChipContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+
+    repeatCurrentChipText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme.main,
+    },
+
+    repeatCurrentChevron: {
+      fontSize: 10,
+      fontWeight: "900",
+      color: theme.textMuted,
+      marginTop: -1,
+    },
+    repeatIntervalStepper: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    repeatStepperButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.bg,
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+    },
+    repeatStepperButtonText: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: theme.main,
+    },
+    repeatIntervalInputBox: {
+      flex: 1,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: theme.borderMid,
+      backgroundColor: theme.inputBg,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 10,
+    },
+    repeatIntervalInput: {
+      minWidth: 28,
+      maxWidth: 52,
+      paddingVertical: 0,
+      paddingHorizontal: 0,
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.textBody,
+      textAlign: "center",
+    },
+    repeatIntervalSuffix: {
+      marginLeft: 4,
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textSecondary,
+    },
+
+    dragHandleArea: {
+      width: "100%",
+      height: 36,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: -10,
+      marginBottom: 2,
+    },
+
+    dragHandle: {
+      width: 42,
+      height: 4,
+      borderRadius: 999,
+      backgroundColor: theme.handle,
+    },
+  });
+
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const dragY = useRef(new Animated.Value(0)).current;
@@ -473,7 +869,7 @@ export function ScheduleDetailModal({
   ]);
 
   if (!routine || !previewRoutine) return null;
-  const categoryStyle = getCategoryStyle(previewRoutine);
+  const categoryStyle = getCategoryStyle(previewRoutine, mode === "dark");
 
   const selectedStartDateString = makeDate(
     startDateYear,
@@ -780,7 +1176,7 @@ export function ScheduleDetailModal({
                             <Ionicons
                               name="pencil-outline"
                               size={18}
-                              color="#405886"
+                              color={theme.main}
                             />
                           </TouchableOpacity>
 
@@ -798,7 +1194,11 @@ export function ScheduleDetailModal({
                       )}
 
                       <TouchableOpacity onPress={closeWithAnimation}>
-                        <IconSymbol name="xmark" size={20} color="#B4B6C0" />
+                        <IconSymbol
+                          name="xmark"
+                          size={20}
+                          color={theme.textFaint}
+                        />
                       </TouchableOpacity>
                     </>
                   ) : (
@@ -835,20 +1235,49 @@ export function ScheduleDetailModal({
                     </Text>
 
                     <View
-                      style={[
-                        styles.tagBadge,
-                        { backgroundColor: categoryStyle.bg },
-                      ]}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingHorizontal: 12,
+                        paddingVertical: 5,
+                        borderRadius: 999,
+                        backgroundColor:
+                          (previewRoutine.color ?? theme.main) + "22",
+
+                        alignSelf: "center",
+                      }}
                     >
-                      <Text style={[styles.tagText, { color: "#233255" }]}>
-                        {previewRoutine.categoryName ?? "카테고리 없음"}{" "}
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 999,
+                          backgroundColor: previewRoutine.color ?? theme.main,
+                          marginRight: 7,
+                        }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "800",
+                          color:
+                            mode === "dark"
+                              ? (previewRoutine.color ?? theme.main)
+                              : "#000000",
+                        }}
+                      >
+                        {previewRoutine.categoryName ?? "카테고리 없음"}
                       </Text>
                     </View>
                   </View>
 
                   <View style={styles.infoList}>
                     <View style={styles.detailInfoRow}>
-                      <IconSymbol name="calendar" size={18} color="#A0B0D0" />
+                      <IconSymbol
+                        name="calendar"
+                        size={18}
+                        color={theme.textMuted}
+                      />
                       <View style={styles.infoTextGroup}>
                         <Text style={styles.detailLabel}>날짜</Text>
                         <Text style={styles.detailValue}>
@@ -861,7 +1290,11 @@ export function ScheduleDetailModal({
                     </View>
 
                     <View style={styles.detailInfoRow}>
-                      <IconSymbol name="clock" size={18} color="#A0B0D0" />
+                      <IconSymbol
+                        name="clock"
+                        size={18}
+                        color={theme.textMuted}
+                      />
                       <View style={styles.infoTextGroup}>
                         <Text style={styles.detailLabel}>시간</Text>
                         <Text style={styles.detailValue}>
@@ -874,7 +1307,11 @@ export function ScheduleDetailModal({
                     </View>
 
                     <View style={styles.detailInfoRow}>
-                      <IconSymbol name="bell" size={18} color="#A0B0D0" />
+                      <IconSymbol
+                        name="bell"
+                        size={18}
+                        color={theme.textMuted}
+                      />
                       <View style={styles.infoTextGroup}>
                         <Text style={styles.detailLabel}>알림</Text>
                         <Text style={styles.detailValue}>
@@ -884,7 +1321,11 @@ export function ScheduleDetailModal({
                     </View>
 
                     <View style={styles.detailInfoRow}>
-                      <IconSymbol name="repeat" size={18} color="#A0B0D0" />
+                      <IconSymbol
+                        name="repeat"
+                        size={18}
+                        color={theme.textMuted}
+                      />
                       <View style={styles.infoTextGroup}>
                         <Text style={styles.detailLabel}>반복 설정</Text>
                         <Text style={styles.detailValue}>
@@ -910,7 +1351,7 @@ export function ScheduleDetailModal({
                       value={title}
                       onChangeText={setTitle}
                       placeholder="루틴 제목을 입력해 주세요"
-                      placeholderTextColor="#B4B6C0"
+                      placeholderTextColor={theme.textFaint}
                       style={styles.titleInput}
                     />
                   </View>
@@ -927,35 +1368,46 @@ export function ScheduleDetailModal({
                       }}
                     >
                       {categoryList.map((cat) => {
-                        const chipStyle = getCategoryChipStyle(
-                          cat,
-                          customCategoryColorMap,
-                        );
+                        const resolvedColor =
+                          customCategoryColorMap[cat] ?? theme.main;
                         const isSelected = categoryName === cat;
 
                         return (
                           <TouchableOpacity
                             key={cat}
-                            style={[
-                              styles.categoryChip,
-                              {
-                                backgroundColor: chipStyle.bg,
-                                borderColor: isSelected
-                                  ? chipStyle.dot
-                                  : "transparent",
-                                borderWidth: isSelected ? 1.5 : 1,
-                              },
-                            ]}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              paddingHorizontal: 12,
+                              paddingVertical: 5,
+                              borderRadius: 999,
+                              backgroundColor: resolvedColor + "22",
+                              borderColor: isSelected
+                                ? resolvedColor
+                                : "transparent",
+                              borderWidth: isSelected ? 1.5 : 1,
+                            }}
                             onPress={() => {
                               setCategoryName(cat);
-                              setSelectedColor(chipStyle.dot);
+                              setSelectedColor(resolvedColor);
                             }}
                           >
+                            <View
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 999,
+                                backgroundColor: resolvedColor,
+                                marginRight: 7,
+                              }}
+                            />
                             <Text
-                              style={[
-                                styles.categoryChipText,
-                                { color: "#233255" },
-                              ]}
+                              style={{
+                                fontSize: 13,
+                                fontWeight: "700",
+                                color:
+                                  mode === "dark" ? resolvedColor : "#000000",
+                              }}
                             >
                               {cat}
                             </Text>
@@ -981,7 +1433,7 @@ export function ScheduleDetailModal({
                           <IconSymbol
                             name="calendar"
                             size={18}
-                            color="#405886"
+                            color={theme.main}
                           />
                           <Text style={styles.dateSelectText}>
                             시작일 · {formatDate(selectedStartDateString)}
@@ -995,7 +1447,7 @@ export function ScheduleDetailModal({
                               : "chevron.down"
                           }
                           size={16}
-                          color="#A0B0D0"
+                          color={theme.textMuted}
                         />
                       </TouchableOpacity>
 
@@ -1016,7 +1468,7 @@ export function ScheduleDetailModal({
                           <IconSymbol
                             name="calendar"
                             size={18}
-                            color="#405886"
+                            color={theme.main}
                           />
                           <Text style={styles.dateSelectText}>
                             종료일 ·{" "}
@@ -1052,7 +1504,10 @@ export function ScheduleDetailModal({
                           markedDates={{
                             [selectedCalendarDateString]: {
                               selected: true,
-                              selectedColor: "#F1F1FB",
+                              selectedColor:
+                                mode === "dark"
+                                  ? theme.borderStrong
+                                  : "#F1F1FB",
                             },
                           }}
                           onDayPress={(day) => {
@@ -1101,7 +1556,11 @@ export function ScheduleDetailModal({
                         onPress={() => setShowTimeModal(true)}
                       >
                         <View style={styles.dateSelectLeft}>
-                          <IconSymbol name="clock" size={18} color="#405886" />
+                          <IconSymbol
+                            name="clock"
+                            size={18}
+                            color={theme.main}
+                          />
                           <Text style={styles.dateSelectText}>
                             {`${startHour.padStart(2, "0")}:${startMinute.padStart(2, "0")} ~ ${endHour.padStart(2, "0")}:${endMinute.padStart(2, "0")}`}
                           </Text>
@@ -1109,7 +1568,7 @@ export function ScheduleDetailModal({
                         <IconSymbol
                           name="chevron.right"
                           size={16}
-                          color="#A0B0D0"
+                          color={theme.textMuted}
                         />
                       </TouchableOpacity>
                     )}
@@ -1118,7 +1577,11 @@ export function ScheduleDetailModal({
                     <View style={styles.inputBlock}>
                       <View style={styles.notifyRow}>
                         <View style={styles.notifyLabelWrap}>
-                          <IconSymbol name="bell" size={18} color="#405886" />
+                          <IconSymbol
+                            name="bell"
+                            size={18}
+                            color={theme.main}
+                          />
                           <Text style={styles.editSectionLabelInline}>
                             알림
                           </Text>
@@ -1480,397 +1943,3 @@ export function ScheduleDetailModal({
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  modalRoot: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "transparent",
-  },
-
-  detailOverlay: {
-    ...StyleSheet.absoluteFillObject, // ← 다시 absolute로
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-  },
-
-  detailCard: {
-    width: "100%",
-    maxHeight: SCREEN_HEIGHT * 0.82,
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 8,
-    overflow: "hidden",
-  },
-  detailHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  editButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-
-  cancelText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#A0A6B5",
-  },
-  saveButton: {
-    backgroundColor: "#405886",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-  },
-  saveText: {
-    color: "#FFF",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  detailTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#B4B6C0",
-    letterSpacing: 0.5,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 20,
-  },
-  detailRoutineTitle: {
-    fontSize: 21,
-    fontWeight: "800",
-    color: "#2A3C6B",
-    lineHeight: 28,
-    flexShrink: 1,
-  },
-
-  tagBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: "center",
-  },
-
-  tagText: {
-    fontSize: 11,
-    fontWeight: "800",
-  },
-
-  infoList: {
-    gap: 16,
-    marginBottom: 28,
-  },
-  detailInfoRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 16,
-  },
-  infoTextGroup: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#A0B0D0",
-    marginBottom: 6,
-    textTransform: "uppercase",
-  },
-  detailValue: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#405886",
-  },
-
-  editScroll: {
-    flexGrow: 0,
-  },
-  editScrollContent: {
-    paddingBottom: Platform.OS === "ios" ? 340 : 180,
-  },
-  inputBlock: {
-    marginBottom: 16,
-  },
-  editSectionLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#A0B0D0",
-    marginBottom: 10,
-  },
-  editSectionLabelInline: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#A0B0D0",
-  },
-  titleInput: {
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#405886",
-    backgroundColor: "#FAFBFD",
-  },
-
-  categoryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-
-  categoryChipText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  dateRangeBlock: {
-    gap: 8,
-  },
-  dateSelectButton: {
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    backgroundColor: "#FAFBFD",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  dateSelectLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  dateSelectText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#405886",
-  },
-  calendarContainer: {
-    backgroundColor: "#F8F9FB",
-    borderRadius: 20,
-    marginTop: 10,
-    overflow: "hidden",
-    paddingBottom: 10,
-  },
-
-  notifyRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-    borderRadius: 14,
-    backgroundColor: "#FAFBFD",
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-  },
-  notifyLabelWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  notifySwitchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  notifyStateText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#405886",
-  },
-
-  dialLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#A0B0D0",
-    marginBottom: 8,
-  },
-
-  repeatOptionButton: {
-    borderWidth: 0.5,
-    borderColor: "#E4E7EE",
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: "#FAFBFD",
-  },
-  repeatOptionButtonSelected: {
-    borderColor: "#405886",
-    backgroundColor: "#F3F6FB",
-  },
-  repeatOptionText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6D7690",
-  },
-  repeatOptionTextSelected: {
-    color: "#405886",
-  },
-  deleteIconButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F3F4F8",
-    borderWidth: 1,
-    borderColor: "#E7EAF0",
-  },
-
-  weekdayRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  weekdayChip: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-    backgroundColor: "#FAFBFD",
-  },
-  weekdayChipSelected: {
-    borderColor: "#405886",
-    backgroundColor: "#EEF2FF",
-  },
-  weekdayChipText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#6D7690",
-  },
-  weekdayChipTextSelected: {
-    color: "#405886",
-  },
-
-  editIconButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F3F4F8",
-    borderWidth: 1,
-    borderColor: "#E7EAF0",
-  },
-
-  repeatCurrentChip: {
-    minHeight: 28,
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: "#F3F5FA",
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  repeatCurrentChipContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-
-  repeatCurrentChipText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#405886",
-  },
-
-  repeatCurrentChevron: {
-    fontSize: 10,
-    fontWeight: "900",
-    color: "#9AA3B2",
-    marginTop: -1,
-  },
-  repeatIntervalStepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  repeatStepperButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F3F4F8",
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-  },
-  repeatStepperButtonText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#405886",
-  },
-  repeatIntervalInputBox: {
-    flex: 1,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: "#E7EAF3",
-    backgroundColor: "#FAFBFD",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 10,
-  },
-  repeatIntervalInput: {
-    minWidth: 28,
-    maxWidth: 52,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#2F3550",
-    textAlign: "center",
-  },
-  repeatIntervalSuffix: {
-    marginLeft: 4,
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#6D7690",
-  },
-
-  dragHandleArea: {
-    width: "100%",
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: -10,
-    marginBottom: 2,
-  },
-
-  dragHandle: {
-    width: 42,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: "#D8DCE6",
-  },
-});

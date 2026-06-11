@@ -1,6 +1,9 @@
 // hooks/useAiRecommend.ts
 import type { RecommendedRoutine, UserProfile } from "@/lib/data/ai_api";
-import { requestRoutineRecommendation, requestTodayRecommendations } from "@/lib/data/ai_api";
+import {
+  requestRoutineRecommendation,
+  requestTodayRecommendations,
+} from "@/lib/data/ai_api";
 import { authApi } from "@/lib/data/auth_api";
 import { CategoryApi } from "@/lib/data/category_api";
 import { RoutineStorage } from "@/lib/storage";
@@ -53,7 +56,6 @@ export const HOBBY_OPTIONS = [
   "없음",
 ];
 
-
 function mapCategoryToActivityType(categoryName: string): string {
   const name = categoryName.trim();
   if (
@@ -80,7 +82,6 @@ function mapCategoryToActivityType(categoryName: string): string {
   }
   return "실내 활동";
 }
-
 
 export const useAiRecommend = () => {
   const [step, setStep] = useState<ConversationStep>("start");
@@ -123,9 +124,7 @@ export const useAiRecommend = () => {
     setMessages((prev) => [...prev, newMsg]);
   }, []);
 
-  useEffect(() => {
-    
-  }, [profile]);
+  useEffect(() => {}, [profile]);
 
   // ── 초기화: 유저 프로필 & 카테고리 목록 로드 ──
   useEffect(() => {
@@ -135,15 +134,26 @@ export const useAiRecommend = () => {
         const response = await authApi.getProfile();
         // 백엔드 응답 구조가 { success: true, data: { age: 25, job: "회사원", gender: 0, ... } } 형식인 경우 대응
         const userData = response?.data || response;
-        console.log("🤖 [Profile Response] 사용자 프로필 정보 수신 성공:", JSON.stringify(userData, null, 2));
+        console.log(
+          "🤖 [Profile Response] 사용자 프로필 정보 수신 성공:",
+          JSON.stringify(userData, null, 2),
+        );
         if (userData) {
           const age = Number(userData.age) || 0;
           const ageGroup = age > 0 ? `${Math.floor(age / 10) * 10}대` : "";
-          
+
           let genderStr = "";
-          if (userData.gender === 0 || userData.gender === "0" || userData.gender === "남성") {
+          if (
+            userData.gender === 0 ||
+            userData.gender === "0" ||
+            userData.gender === "남성"
+          ) {
             genderStr = "남성";
-          } else if (userData.gender === 1 || userData.gender === "1" || userData.gender === "여성") {
+          } else if (
+            userData.gender === 1 ||
+            userData.gender === "1" ||
+            userData.gender === "여성"
+          ) {
             genderStr = "여성";
           }
 
@@ -156,7 +166,10 @@ export const useAiRecommend = () => {
       } catch (err: any) {
         console.error("사용자 프로필 로드 에러:", err);
         if (err?.response) {
-          console.error("❌ [Profile Error Response Data]:", JSON.stringify(err.response.data, null, 2));
+          console.error(
+            "❌ [Profile Error Response Data]:",
+            JSON.stringify(err.response.data, null, 2),
+          );
           console.error("❌ [Profile Error Status]:", err.response.status);
         }
       }
@@ -164,14 +177,22 @@ export const useAiRecommend = () => {
 
     const loadCategories = async () => {
       try {
-        console.log("🤖 [Categories Request] 사용자 카테고리 목록 조회 시작...");
+        console.log(
+          "🤖 [Categories Request] 사용자 카테고리 목록 조회 시작...",
+        );
         const list = await CategoryApi.getAll();
-        console.log("🤖 [Categories Response] 사용자 카테고리 목록 수신 성공:", JSON.stringify(list, null, 2));
+        console.log(
+          "🤖 [Categories Response] 사용자 카테고리 목록 수신 성공:",
+          JSON.stringify(list, null, 2),
+        );
         setCategories(list);
       } catch (err: any) {
         console.error("카테고리 목록 로드 에러:", err);
         if (err?.response) {
-          console.error("❌ [Categories Error Response Data]:", JSON.stringify(err.response.data, null, 2));
+          console.error(
+            "❌ [Categories Error Response Data]:",
+            JSON.stringify(err.response.data, null, 2),
+          );
           console.error("❌ [Categories Error Status]:", err.response.status);
         }
       }
@@ -179,14 +200,14 @@ export const useAiRecommend = () => {
 
     loadProfile();
     loadCategories();
-    
+
     addMessage({
       role: "ai",
-      text: `안녕하세요! 🤖 맞춤 루틴 도우미입니다.\n오늘의 루틴을 새로 추천받으시겠어요, 아니면 이전에 불러온 오늘 기록을 확인하시겠어요?`,
+      text: `안녕하세요! 맞춤 루틴 도우미입니다.\n오늘의 루틴을 새로 추천받으시겠어요, 아니면 이전에 불러온 오늘 기록을 확인하시겠어요?`,
     });
   }, []);
 
-// ── 오늘 기록 조회 ──
+  // ── 오늘 기록 조회 ──
   const viewTodayRecords = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -217,21 +238,20 @@ export const useAiRecommend = () => {
 
     addMessage({
       role: "ai",
-      text: `안녕하세요! 🤖 맞춤 루틴 도우미입니다.\n오늘의 루틴을 새로 추천받으시겠어요, 아니면 이전에 불러온 오늘 기록을 확인하시겠어요?`,
+      text: `안녕하세요!  맞춤 루틴 도우미입니다.\n오늘의 루틴을 새로 추천받으시겠어요, 아니면 이전에 불러온 오늘 기록을 확인하시겠어요?`,
     });
 
     setStep("start"); // 💡 첫 진입 단계를 'start' 분기점으로 설정
   }, [addMessage]);
 
   // 훅 내부 하단에 추가
-const selectRecommendFlow = useCallback(() => {
-  addMessage({
-    role: "ai",
-    text: "좋습니다! 맞춤 루틴 추천을 시작합니다. 먼저 추천을 원하시는 루틴 카테고리를 선택해 주세요. 🎯",
-  });
-  setStep("goal"); // 💡 다음 단계인 카테고리 선택(goal)으로 명확히 전환
-}, [addMessage]);
-
+  const selectRecommendFlow = useCallback(() => {
+    addMessage({
+      role: "ai",
+      text: "좋습니다! 맞춤 루틴 추천을 시작합니다. 먼저 추천을 원하시는 루틴 카테고리를 선택해 주세요. 🎯",
+    });
+    setStep("goal"); // 💡 다음 단계인 카테고리 선택(goal)으로 명확히 전환
+  }, [addMessage]);
 
   // ── 카테고리 선택 완료 ──
   const submitCategory = useCallback(

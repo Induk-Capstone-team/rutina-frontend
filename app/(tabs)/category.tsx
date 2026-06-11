@@ -3,12 +3,12 @@ import { DraggableCategoryList } from "@/components/DraggableCategoryList";
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { Header } from "@/components/ui/_header";
 import {
-  getCategoryBadgeStyle,
   normalizeCategoryName,
   normalizeHexColor,
   uniqueColors,
   type CustomCategory,
 } from "@/lib/category";
+import { useTheme, type Theme } from "@/lib/constants/ThemeContext";
 import type { Category } from "@/services/category_service";
 import { CategoryService } from "@/services/category_service";
 import { RoutineService } from "@/services/routine_service";
@@ -216,6 +216,8 @@ const buildCategorySummaries = (
 };
 export default function CategoryScreen() {
   const router = useRouter();
+  const { theme, mode } = useTheme();
+  const styles = makeStyles(theme);
   const [selectedTab, setSelectedTab] = useState<CategoryTab>("ACTIVE");
   const [routines, setRoutines] = useState<ScheduleRoutine[]>([]);
   const [serverSortOrderMap, setServerSortOrderMap] = useState<
@@ -245,7 +247,7 @@ export default function CategoryScreen() {
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
   const categoryModalTranslateY = useRef(new Animated.Value(0)).current;
   const CATEGORY_MODAL_CLOSE_THRESHOLD = 120;
-
+  const [colorInputText, setColorInputText] = useState(DEFAULT_COLOR);
   const refreshData = useCallback(async () => {
     if (!authStore.isLoggedIn) return;
     try {
@@ -340,6 +342,7 @@ export default function CategoryScreen() {
     setSelectedColor(DEFAULT_COLOR);
     setPickerColor(DEFAULT_COLOR);
     setShowColorPickerModal(false);
+    setColorInputText(DEFAULT_COLOR);
   };
 
   const openAddCategoryModal = () => {
@@ -350,6 +353,7 @@ export default function CategoryScreen() {
     setPickerColor(DEFAULT_COLOR);
     setShowColorPickerModal(false);
     setIsCategoryModalVisible(true);
+    setColorInputText(DEFAULT_COLOR);
   };
 
   const openEditCategoryModal = (category: CategorySummary) => {
@@ -360,6 +364,7 @@ export default function CategoryScreen() {
     setPickerColor(category.color);
     setShowColorPickerModal(false);
     setIsCategoryModalVisible(true);
+    setColorInputText(category.color);
   };
 
   const closeCategoryModal = () => {
@@ -1021,7 +1026,15 @@ export default function CategoryScreen() {
               <Pressable
                 style={[
                   styles.tabButton,
-                  selectedTab === "ACTIVE" && styles.tabButtonActive,
+                  selectedTab === "ACTIVE" && {
+                    backgroundColor:
+                      mode === "dark" ? theme.borderStrong : theme.card,
+                    shadowColor: theme.textStrong,
+                    shadowOpacity: 0.06,
+                    shadowRadius: 8,
+                    shadowOffset: { width: 0, height: 2 },
+                    elevation: 1,
+                  },
                 ]}
                 onPress={() => setSelectedTab("ACTIVE")}
               >
@@ -1034,11 +1047,18 @@ export default function CategoryScreen() {
                   진행중
                 </Text>
               </Pressable>
-
               <Pressable
                 style={[
                   styles.tabButton,
-                  selectedTab === "COMPLETED" && styles.tabButtonActive,
+                  selectedTab === "COMPLETED" && {
+                    backgroundColor:
+                      mode === "dark" ? theme.borderStrong : theme.card,
+                    shadowColor: theme.textStrong,
+                    shadowOpacity: 0.06,
+                    shadowRadius: 8,
+                    shadowOffset: { width: 0, height: 2 },
+                    elevation: 1,
+                  },
                 ]}
                 onPress={() => setSelectedTab("COMPLETED")}
               >
@@ -1061,7 +1081,7 @@ export default function CategoryScreen() {
           </Pressable>
           {isLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="#405886" />
+              <ActivityIndicator size="small" color={theme.main} />
               <Text style={styles.loadingText}>카테고리를 불러오는 중...</Text>
             </View>
           ) : (
@@ -1153,7 +1173,7 @@ export default function CategoryScreen() {
                 <TextInput
                   style={styles.input}
                   placeholder="카테고리 이름을 입력하세요"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={theme.textMuted}
                   value={categoryNameInput}
                   onChangeText={setCategoryNameInput}
                   maxLength={20}
@@ -1164,47 +1184,50 @@ export default function CategoryScreen() {
                     <Text style={styles.inputLabel}>카테고리</Text>
                     <View style={styles.categoryGrid}>
                       {customCategories.map((item) => {
-                        const badgeStyle = getCategoryBadgeStyle(
-                          item.name,
-                          item.color,
-                        );
+                        const resolvedColor = item.color ?? theme.main;
                         const isSelected =
                           categoryNameInput.trim() === item.name;
 
                         return (
                           <Pressable
                             key={item.name}
-                            style={[
-                              styles.categoryBadge,
-                              {
-                                backgroundColor: badgeStyle.backgroundColor,
-                                borderColor: isSelected
-                                  ? badgeStyle.borderColor
-                                  : "transparent",
-                                borderWidth: isSelected ? 1.5 : 1,
-                              },
-                            ]}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              paddingHorizontal: 12,
+                              paddingVertical: 5,
+                              borderRadius: 999,
+                              backgroundColor: resolvedColor + "22",
+                              borderColor: isSelected
+                                ? resolvedColor
+                                : "transparent",
+                              borderWidth: isSelected ? 1.5 : 1,
+                            }}
                             onPress={() => {
                               setCategoryNameInput(item.name);
-                              setSelectedColor(item.color);
-                              setPickerColor(item.color);
+                              setSelectedColor(resolvedColor);
+                              setPickerColor(resolvedColor);
                             }}
-                            // 카테고리를 길게 누르면 삭제 확인창 표시
                             onLongPress={() =>
                               handleConfirmDeleteCustomCategory(item)
                             }
                           >
                             <View
-                              style={[
-                                styles.categoryBadgeDot,
-                                { backgroundColor: item.color },
-                              ]}
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 999,
+                                backgroundColor: resolvedColor,
+                                marginRight: 7,
+                              }}
                             />
                             <Text
-                              style={[
-                                styles.categoryBadgeText,
-                                { color: "#233255" },
-                              ]}
+                              style={{
+                                fontSize: 13,
+                                fontWeight: "700",
+                                color:
+                                  mode === "dark" ? resolvedColor : "#000000",
+                              }}
                             >
                               {item.name}
                             </Text>
@@ -1281,7 +1304,10 @@ export default function CategoryScreen() {
 
                     <ColorPicker
                       value={pickerColor}
-                      onCompleteJS={(color) => setPickerColor(color.hex)}
+                      onCompleteJS={(color) => {
+                        setPickerColor(color.hex);
+                        setColorInputText(color.hex.toUpperCase());
+                      }}
                       style={styles.colorPicker}
                     >
                       <Preview hideInitialColor style={styles.colorPreview} />
@@ -1298,17 +1324,20 @@ export default function CategoryScreen() {
                       />
                       <TextInput
                         style={styles.selectedColorHexInput}
-                        value={pickerColor.toUpperCase()}
+                        value={colorInputText}
                         onChangeText={(text) => {
                           const cleaned = text.startsWith("#")
                             ? text
                             : `#${text}`;
-                          setPickerColor(cleaned);
+                          setColorInputText(cleaned.toUpperCase());
+                          if (/^#[0-9A-Fa-f]{6}$/.test(cleaned)) {
+                            setPickerColor(cleaned);
+                          }
                         }}
                         maxLength={7}
                         autoCapitalize="characters"
                         placeholder="#000000"
-                        placeholderTextColor="#9CA3AF"
+                        placeholderTextColor={theme.textMuted}
                       />
                     </View>
                   </View>
@@ -1355,606 +1384,608 @@ export default function CategoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F3F4F8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F3F4F8",
-  },
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: theme.bg,
+    },
+    container: {
+      flex: 1,
+      backgroundColor: theme.bg,
+    },
 
-  headerWrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-  },
+    headerWrapper: {
+      paddingHorizontal: 16,
+      paddingTop: 10,
+    },
 
-  mainCard: {
-    flex: 1,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 30,
-    borderColor: "#EEF1F6",
-  },
+    mainCard: {
+      flex: 1,
+      marginHorizontal: 16,
+      marginBottom: 16,
+      backgroundColor: theme.card,
+      borderRadius: 30,
+      borderColor: theme.borderMid,
+      overflow: "hidden",
+    },
 
-  tabRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 14,
-  },
+    tabRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginHorizontal: 16,
+      marginTop: 8,
+      marginBottom: 14,
+    },
 
-  tabWrapper: {
-    flex: 1,
-    flexDirection: "row",
-    backgroundColor: "#EEF1F7",
-    borderRadius: 18,
-    padding: 4,
-    marginRight: 10,
-  },
-  tabButton: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 14,
-  },
-  tabButtonActive: {
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#233255",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#8A8C9A",
-  },
-  tabTextActive: {
-    color: "#233255",
-  },
+    tabWrapper: {
+      flex: 1,
+      flexDirection: "row",
+      backgroundColor: theme.tabBg,
+      borderRadius: 18,
+      padding: 4,
+      marginRight: 10,
+    },
+    tabButton: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 12,
+      borderRadius: 14,
+    },
+    tabButtonActive: {
+      backgroundColor: theme.card,
+      shadowColor: theme.textStrong,
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 1,
+    },
+    tabText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.textSecondary,
+    },
+    tabTextActive: {
+      color: theme.textStrong,
+    },
 
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingBottom: 40,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 14,
-    color: "#8A8C9A",
-  },
+    loadingContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingBottom: 40,
+    },
+    loadingText: {
+      marginTop: 10,
+      fontSize: 14,
+      color: theme.textSecondary,
+    },
 
-  list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 28,
-  },
+    list: {
+      flex: 1,
+    },
+    listContent: {
+      paddingHorizontal: 16,
+      paddingBottom: 80,
+    },
 
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#EEF1F6",
-    shadowColor: "#1F2937",
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  cardHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 14,
-  },
-  cardTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    marginRight: 12,
-  },
-  colorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 999,
-    marginRight: 10,
-    marginTop: 3,
-  },
-  cardTitleTextBox: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#233255",
-  },
-  cardCountText: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#8A8C9A",
-  },
+    card: {
+      backgroundColor: theme.card,
+      borderRadius: 20,
+      padding: 16,
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: theme.borderMid,
+      shadowColor: theme.textBody,
+      shadowOpacity: 0.03,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 1,
+    },
+    cardHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 14,
+    },
+    cardTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+      marginRight: 12,
+    },
+    colorDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 999,
+      marginRight: 10,
+      marginTop: 3,
+    },
+    cardTitleTextBox: {
+      flex: 1,
+    },
+    cardTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: theme.textStrong,
+    },
+    cardCountText: {
+      marginTop: 4,
+      fontSize: 13,
+      color: theme.textSecondary,
+    },
 
-  badge: {
-    backgroundColor: "#EEF2FF",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  badgeCompleted: {
-    backgroundColor: "#EDF7EE",
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#586B9A",
-  },
-  badgeTextCompleted: {
-    color: "#4C7A53",
-  },
-  routineContentBox: {
-    flex: 1,
-  },
-  routineBox: {
-    backgroundColor: "#F8F9FB",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  routineItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  routineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: "#CBD5E1",
-    marginRight: 10,
-    marginTop: 2,
-  },
-  routineTextWrapper: {
-    flex: 1,
-  },
-  routineTitle: {
-    fontSize: 14,
-    color: "#374151",
-    fontWeight: "500",
-  },
-  routineTitleCompleted: {
-    color: "#9CA3AF",
-    textDecorationLine: "line-through",
-  },
-  routineSubText: {
-    marginTop: 3,
-    fontSize: 12,
-    color: "#A0B0D0",
-  },
-  emptyRoutineText: {
-    fontSize: 14,
-    color: "#9CA3AF",
-  },
+    badge: {
+      backgroundColor: theme.mainLight,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    badgeCompleted: {
+      backgroundColor: theme.success,
+    },
+    badgeText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme.mainText,
+    },
+    badgeTextCompleted: {
+      color: theme.successText,
+    },
+    routineContentBox: {
+      flex: 1,
+    },
+    routineBox: {
+      backgroundColor: theme.cardAlt,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    routineItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 8,
+    },
+    routineDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      backgroundColor: theme.routineDot,
+      marginRight: 10,
+      marginTop: 2,
+    },
+    routineTextWrapper: {
+      flex: 1,
+    },
+    routineTitle: {
+      fontSize: 14,
+      color: theme.textBody,
+      fontWeight: "500",
+    },
+    routineTitleCompleted: {
+      color: theme.textFaint,
+      textDecorationLine: "line-through",
+    },
+    routineSubText: {
+      marginTop: 3,
+      fontSize: 12,
+      color: theme.textMuted,
+    },
+    emptyRoutineText: {
+      fontSize: 14,
+      color: theme.textMuted,
+    },
 
-  actionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  actionButton: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 11,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  editButton: {
-    backgroundColor: "#EEF2FF",
-    marginRight: 8,
-  },
-  hideButton: {
-    backgroundColor: "#F3F4F6",
-    marginRight: 8,
-  },
-  deleteButton: {
-    backgroundColor: "#FDECEC",
-  },
-  actionButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#4B5563",
-  },
-  editButtonText: {
-    color: "#4D5F8E",
-  },
-  deleteButtonText: {
-    color: "#C35F5F",
-  },
+    actionRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    actionButton: {
+      flex: 1,
+      borderRadius: 14,
+      paddingVertical: 11,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    editButton: {
+      backgroundColor: theme.mainLight,
+      marginRight: 8,
+    },
+    hideButton: {
+      backgroundColor: theme.cardAlt,
+      marginRight: 8,
+    },
+    deleteButton: {
+      backgroundColor: theme.danger,
+    },
+    actionButtonText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textSecondary,
+    },
+    editButtonText: {
+      color: theme.mainText,
+    },
+    deleteButtonText: {
+      color: theme.dangerText,
+    },
 
-  emptyContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 24,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EEF1F6",
-    marginTop: 8,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#374151",
-    marginBottom: 6,
-  },
-  emptyDescription: {
-    fontSize: 14,
-    color: "#8A8C9A",
-    textAlign: "center",
-    lineHeight: 20,
-  },
+    emptyContainer: {
+      backgroundColor: theme.card,
+      borderRadius: 20,
+      padding: 24,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.borderMid,
+      marginTop: 8,
+    },
+    emptyTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: theme.textBody,
+      marginBottom: 6,
+    },
+    emptyDescription: {
+      fontSize: 14,
+      color: theme.textSecondary,
+      textAlign: "center",
+      lineHeight: 20,
+    },
 
-  footerSection: {
-    marginTop: 2,
-  },
-  hiddenToggleButton: {
-    backgroundColor: "#EEF2FF",
-    borderRadius: 16,
-    paddingVertical: 13,
-    alignItems: "center",
-  },
-  hiddenToggleButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#233255",
-  },
+    footerSection: {
+      marginTop: 2,
+    },
+    hiddenToggleButton: {
+      backgroundColor: theme.mainLight,
+      borderRadius: 16,
+      paddingVertical: 13,
+      alignItems: "center",
+    },
+    hiddenToggleButtonText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.textStrong,
+    },
 
-  hiddenSection: {
-    marginTop: 12,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#EEF1F6",
-  },
-  hiddenSectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#233255",
-    marginBottom: 12,
-  },
-  hiddenEmptyText: {
-    fontSize: 14,
-    color: "#9CA3AF",
-  },
+    hiddenSection: {
+      marginTop: 12,
+      backgroundColor: theme.card,
+      borderRadius: 20,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: theme.borderMid,
+    },
+    hiddenSectionTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: theme.textStrong,
+      marginBottom: 12,
+    },
+    hiddenEmptyText: {
+      fontSize: 14,
+      color: theme.textMuted,
+    },
 
-  hiddenCard: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#F8F9FB",
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 10,
-  },
-  hiddenLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    marginRight: 12,
-  },
-  hiddenTextBox: {
-    flex: 1,
-  },
-  hiddenTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  hiddenDescription: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#8A8C9A",
-  },
-  restoreButton: {
-    backgroundColor: "#EEF2FF",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  restoreButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#233255",
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(15, 23, 42, 0.28)",
-  },
+    hiddenCard: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      backgroundColor: theme.cardAlt,
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 10,
+    },
+    hiddenLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+      marginRight: 12,
+    },
+    hiddenTextBox: {
+      flex: 1,
+    },
+    hiddenTitle: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.textBody,
+    },
+    hiddenDescription: {
+      marginTop: 4,
+      fontSize: 12,
+      color: theme.textSecondary,
+    },
+    restoreButton: {
+      backgroundColor: theme.mainLight,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    restoreButtonText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textStrong,
+    },
+    modalBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(15, 23, 42, 0.28)",
+    },
 
-  modalHandle: {
-    alignSelf: "center",
-    width: 44,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: "#D9DEE8",
-    marginTop: 10,
-    marginBottom: 6,
-  },
+    modalHandle: {
+      alignSelf: "center",
+      width: 44,
+      height: 5,
+      borderRadius: 999,
+      backgroundColor: theme.borderStrong,
+      marginTop: 10,
+      marginBottom: 6,
+    },
 
-  modalContainer: {
-    maxHeight: "88%",
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 100,
-    marginBottom: -100,
-  },
-  modalContent: {
-    padding: 20,
-    paddingBottom: 32,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#233255",
-    marginBottom: 18,
-  },
+    modalContainer: {
+      maxHeight: "88%",
+      backgroundColor: theme.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingBottom: 100,
+      marginBottom: -100,
+    },
+    modalContent: {
+      padding: 20,
+      paddingBottom: 32,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: theme.textStrong,
+      marginBottom: 18,
+    },
 
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 8,
-    marginTop: 10,
-  },
-  input: {
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#D7DEEA",
-    paddingHorizontal: 14,
-    fontSize: 15,
-    color: "#1F2937",
-    backgroundColor: "#FFFFFF",
-  },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.textBody,
+      marginBottom: 8,
+      marginTop: 10,
+    },
+    input: {
+      height: 48,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+      paddingHorizontal: 14,
+      fontSize: 15,
+      color: theme.text,
+      backgroundColor: theme.card,
+    },
 
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 2,
-    gap: 6,
-  },
-  categoryBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-  },
-  categoryBadgeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    marginRight: 7,
-  },
-  categoryBadgeText: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
+    categoryGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      marginTop: 2,
+      gap: 6,
+    },
+    categoryBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 999,
+    },
+    categoryBadgeDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      marginRight: 7,
+    },
+    categoryBadgeText: {
+      fontSize: 13,
+      fontWeight: "700",
+    },
 
-  colorRowWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  colorItem: {
-    position: "relative",
-    marginRight: 12,
-    marginBottom: 12,
-  },
-  colorButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-  },
-  colorButtonSelected: {
-    borderWidth: 3,
-    borderColor: "#1F2937",
-  },
-  colorDeleteMiniButton: {
-    position: "absolute",
-    top: -5,
-    right: -5,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#D9534F",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  colorDeleteMiniButtonText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "700",
-    lineHeight: 11,
-  },
-  plusColorCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-    backgroundColor: "#EEF2FF",
-    borderWidth: 1,
-    borderColor: "#D7E4FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-    marginBottom: 12,
-  },
-  plusColorCircleActive: {
-    backgroundColor: "#DCE6FF",
-    borderColor: "#9FB6E9",
-  },
-  plusColorCircleText: {
-    color: "#405886",
-    fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 21,
-    marginTop: -1,
-  },
+    colorRowWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      marginTop: 4,
+    },
+    colorItem: {
+      position: "relative",
+      marginRight: 12,
+      marginBottom: 12,
+    },
+    colorButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 999,
+    },
+    colorButtonSelected: {
+      borderWidth: 3,
+      borderColor: theme.textStrong,
+    },
+    colorDeleteMiniButton: {
+      position: "absolute",
+      top: -5,
+      right: -5,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: "#D9534F",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    colorDeleteMiniButtonText: {
+      color: theme.card,
+      fontSize: 10,
+      fontWeight: "700",
+      lineHeight: 11,
+    },
+    plusColorCircle: {
+      width: 34,
+      height: 34,
+      borderRadius: 999,
+      backgroundColor: theme.mainLight,
+      borderWidth: 1,
+      borderColor: theme.borderMid,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12,
+      marginBottom: 12,
+    },
+    plusColorCircleActive: {
+      backgroundColor: theme.mainLight,
+      borderColor: "#9FB6E9",
+    },
+    plusColorCircleText: {
+      color: theme.main,
+      fontSize: 20,
+      fontWeight: "700",
+      lineHeight: 21,
+      marginTop: -1,
+    },
 
-  inlineColorPickerBox: {
-    marginTop: 6,
-    padding: 14,
-    borderRadius: 18,
-    backgroundColor: "#F8F9FB",
-    borderWidth: 1,
-    borderColor: "#E7ECF4",
-  },
-  inlineColorPickerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  inlineColorPickerTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#233255",
-  },
-  inlineColorPickerSaveText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#405886",
-  },
+    inlineColorPickerBox: {
+      marginTop: 6,
+      padding: 14,
+      borderRadius: 18,
+      backgroundColor: theme.cardAlt,
+      borderWidth: 1,
+      borderColor: theme.borderMid,
+    },
+    inlineColorPickerHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    inlineColorPickerTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: theme.textStrong,
+    },
+    inlineColorPickerSaveText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.main,
+    },
 
-  colorPicker: {
-    width: "100%",
-  },
-  colorPreview: {
-    marginBottom: 16,
-  },
-  colorPanel: {
-    width: "100%",
-    height: 180,
-    borderRadius: 16,
-    marginBottom: 16,
-  },
-  hueSlider: {
-    width: "100%",
-    height: 36,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  selectedColorInfoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 4,
-    justifyContent: "center",
-  },
-  selectedColorPreviewDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-  },
-  selectedColorHexText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#405886",
-  },
+    colorPicker: {
+      width: "100%",
+    },
+    colorPreview: {
+      marginBottom: 16,
+    },
+    colorPanel: {
+      width: "100%",
+      height: 180,
+      borderRadius: 16,
+      marginBottom: 16,
+    },
+    hueSlider: {
+      width: "100%",
+      height: 36,
+      borderRadius: 12,
+      marginBottom: 16,
+    },
+    selectedColorInfoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 4,
+      justifyContent: "center",
+    },
+    selectedColorPreviewDot: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+    },
+    selectedColorHexText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.main,
+    },
 
-  modalButtonRow: {
-    flexDirection: "row",
-    marginTop: 22,
-  },
-  modalButton: {
-    flex: 1,
-    height: 50,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cancelButton: {
-    backgroundColor: "#F3F4F6",
-    marginRight: 10,
-  },
-  saveButton: {
-    backgroundColor: "#233255",
-  },
-  cancelButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#4B5563",
-  },
-  saveButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
+    modalButtonRow: {
+      flexDirection: "row",
+      marginTop: 22,
+    },
+    modalButton: {
+      flex: 1,
+      height: 50,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    cancelButton: {
+      backgroundColor: theme.cardAlt,
+      marginRight: 10,
+    },
+    saveButton: {
+      backgroundColor: theme.textStrong,
+    },
+    cancelButtonText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: theme.textSecondary,
+    },
+    saveButtonText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: theme.card,
+    },
+    keyboardAvoidingView: {
+      flex: 1,
+      justifyContent: "flex-end",
+    },
 
-  headerArea: { marginBottom: 10, paddingHorizontal: 25, paddingTop: 25 },
-  screenTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#2A3C6B",
-    marginBottom: 6,
-  },
-  screenSubTitle: { fontSize: 13, color: "#A0B0D0", fontWeight: "500" },
-  addCategoryButton: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#F8F9FB",
-    alignItems: "center",
-    backgroundColor: "#F8F9FB",
-  },
-  addCategoryButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#405886",
-  },
+    headerArea: { marginBottom: 10, paddingHorizontal: 25, paddingTop: 25 },
+    screenTitle: {
+      fontSize: 24,
+      fontWeight: "800",
+      color: theme.text,
+      marginBottom: 6,
+    },
+    screenSubTitle: { fontSize: 13, color: theme.textMuted, fontWeight: "500" },
+    addCategoryButton: {
+      marginHorizontal: 16,
+      marginBottom: 12,
+      paddingVertical: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.cardAlt,
+      alignItems: "center",
+      backgroundColor: theme.cardAlt,
+    },
+    addCategoryButtonText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.main,
+    },
 
-  emptyRoutineAddButton: {
-    width: 28,
-    height: 28,
+    emptyRoutineAddButton: {
+      width: 28,
+      height: 28,
 
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyRoutineAddButtonText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#405886",
-    lineHeight: 20,
-  },
-  selectedColorHexInput: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#405886",
-    borderBottomWidth: 1,
-    borderBottomColor: "#D7DEEA",
-    paddingVertical: 2,
-    minWidth: 80,
-    textAlign: "center",
-  },
-});
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyRoutineAddButtonText: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: theme.main,
+      lineHeight: 20,
+    },
+    selectedColorHexInput: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.main,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.borderStrong,
+      paddingVertical: 2,
+      minWidth: 80,
+      textAlign: "center",
+    },
+  });
