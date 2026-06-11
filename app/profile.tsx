@@ -1,4 +1,5 @@
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
+import { useTheme, type Theme } from "@/lib/constants/ThemeContext";
 import { authApi } from "@/lib/data/auth_api";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -29,7 +30,10 @@ const getEmailDisplay = (emailStr: string) => {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { updateProfile, updateNickname, deleteAccount, isLoading: isViewModelLoading, error } = useAuthViewModel();
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
+
+  const { updateProfile, updateNickname, deleteAccount } = useAuthViewModel();
 
   // Mode state: false = View Mode (조회), true = Edit Mode (수정)
   const [isEditing, setIsEditing] = useState(false);
@@ -55,22 +59,30 @@ export default function ProfileScreen() {
       setIsFetching(true);
       const response = await authApi.getProfile();
       const userData = response?.data || response;
-      
+
       if (userData) {
         setEmail(userData.email || "");
         setNickname(userData.nickname || "");
         setAge(userData.age ? String(userData.age) : "");
         setJob(userData.job || "");
-        
+
         let genderStr = "";
-        if (userData.gender === 0 || userData.gender === "0" || userData.gender === "남성") {
+        if (
+          userData.gender === 0 ||
+          userData.gender === "0" ||
+          userData.gender === "남성"
+        ) {
           genderStr = "남성";
-        } else if (userData.gender === 1 || userData.gender === "1" || userData.gender === "여성") {
+        } else if (
+          userData.gender === 1 ||
+          userData.gender === "1" ||
+          userData.gender === "여성"
+        ) {
           genderStr = "여성";
         }
         setGender(genderStr);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("내 정보 불러오기 에러:", err);
       Alert.alert("오류", "프로필 정보를 불러오지 못했습니다.");
     } finally {
@@ -97,12 +109,12 @@ export default function ProfileScreen() {
   };
 
   // Form Validation
-  const isFormValid = 
+  const isFormValid =
     editNickname.trim().length > 0 &&
-    editAge.trim().length > 0 && 
-    !isNaN(Number(editAge)) && 
+    editAge.trim().length > 0 &&
+    !isNaN(Number(editAge)) &&
     Number(editAge) > 0 &&
-    editJob.trim().length > 0 && 
+    editJob.trim().length > 0 &&
     editGender.trim().length > 0;
 
   // Save changes
@@ -115,11 +127,9 @@ export default function ProfileScreen() {
     try {
       setIsSaving(true);
 
-      let nicknameChanged = editNickname.trim() !== nickname;
-      let profileChanged = 
-        editAge.trim() !== age || 
-        editJob !== job || 
-        editGender !== gender;
+      const nicknameChanged = editNickname.trim() !== nickname;
+      const profileChanged =
+        editAge.trim() !== age || editJob !== job || editGender !== gender;
 
       // 1. Update Nickname if changed
       if (nicknameChanged) {
@@ -137,9 +147,17 @@ export default function ProfileScreen() {
         if (editGender === "남성") mappedGender = 0;
         else if (editGender === "여성") mappedGender = 1;
 
-        const profileSuccess = await updateProfile(Number(editAge), editJob, mappedGender);
+        const profileSuccess = await updateProfile(
+          Number(editAge),
+          editJob,
+          mappedGender,
+        );
+
         if (!profileSuccess) {
-          Alert.alert("수정 실패", "프로필 정보 업데이트 중 오류가 발생했습니다.");
+          Alert.alert(
+            "수정 실패",
+            "프로필 정보 업데이트 중 오류가 발생했습니다.",
+          );
           setIsSaving(false);
           return;
         }
@@ -182,27 +200,36 @@ export default function ProfileScreen() {
               setIsFetching(true);
               const success = await deleteAccount();
               if (success) {
-                Alert.alert("탈퇴 완료", "회원 탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.");
+                Alert.alert(
+                  "탈퇴 완료",
+                  "회원 탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.",
+                );
               } else {
-                Alert.alert("탈퇴 실패", "회원 탈퇴 처리 중 오류가 발생했습니다.");
+                Alert.alert(
+                  "탈퇴 실패",
+                  "회원 탈퇴 처리 중 오류가 발생했습니다.",
+                );
               }
             } catch (err) {
               console.error("회원탈퇴 에러:", err);
-              Alert.alert("오류", "탈퇴 처리 중 예상치 못한 에러가 발생했습니다.");
+              Alert.alert(
+                "오류",
+                "탈퇴 처리 중 예상치 못한 에러가 발생했습니다.",
+              );
             } finally {
               setIsFetching(false);
             }
           },
         },
       ],
-      { cancelable: true }
+      { cancelable: true },
     );
   };
 
   if (isFetching) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2A3C6B" />
+        <ActivityIndicator size="large" color={theme.main} />
         <Text style={styles.loadingText}>정보를 불러오는 중입니다...</Text>
       </SafeAreaView>
     );
@@ -221,9 +248,13 @@ export default function ProfileScreen() {
             onPress={() => router.back()}
             activeOpacity={0.7}
           >
-            <Ionicons name="arrow-back" size={26} color="#2A3C6B" />
+            <Ionicons name="arrow-back" size={26} color={theme.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isEditing ? "내 정보 수정" : "내 정보 보기"}</Text>
+
+          <Text style={styles.headerTitle}>
+            {isEditing ? "내 정보 수정" : "내 정보 보기"}
+          </Text>
+
           <View style={{ width: 40 }} />
         </View>
 
@@ -237,23 +268,35 @@ export default function ProfileScreen() {
                ======================================================== */
             <View>
               <Text style={styles.sectionTitle}>계정 정보 수정</Text>
+
               <View style={styles.card}>
                 {/* Email (Read-only even in Edit Mode) */}
                 <View style={styles.infoRow}>
                   <View style={styles.infoLabelContainer}>
-                    <Ionicons name="mail-outline" size={18} color="#8A8C9A" style={styles.infoIcon} />
+                    <Ionicons
+                      name="mail-outline"
+                      size={18}
+                      color={theme.textSecondary}
+                      style={styles.infoIcon}
+                    />
                     <Text style={styles.infoLabel}>계정 구분</Text>
                   </View>
+
                   <View style={styles.readOnlyValueContainer}>
-                    <Text style={styles.readOnlyValue}>{getEmailDisplay(email).text}</Text>
-                    <View style={[styles.badge, getEmailDisplay(email).isSocial && { backgroundColor: "#EBF0FA" }]}>
-                      <Text style={[styles.badgeText, getEmailDisplay(email).isSocial && { color: "#405886" }]}>
-                        {getEmailDisplay(email).isSocial ? "소셜 연동" : "이메일 가입"}
+                    <Text style={styles.readOnlyValue}>
+                      {getEmailDisplay(email).text}
+                    </Text>
+
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>
+                        {getEmailDisplay(email).isSocial
+                          ? "소셜 연동"
+                          : "이메일 가입"}
                       </Text>
                     </View>
                   </View>
                 </View>
-                
+
                 <View style={styles.divider} />
 
                 {/* Nickname Input */}
@@ -264,12 +307,13 @@ export default function ProfileScreen() {
                     placeholder="닉네임을 입력해 주세요"
                     value={editNickname}
                     onChangeText={setEditNickname}
-                    placeholderTextColor="#A0B0D0"
+                    placeholderTextColor={theme.textPlaceholder}
                   />
                 </View>
               </View>
 
               <Text style={styles.sectionTitle}>추가 정보 수정</Text>
+
               <View style={styles.card}>
                 {/* Age Input */}
                 <View style={styles.inputWrapper}>
@@ -280,13 +324,14 @@ export default function ProfileScreen() {
                     value={editAge}
                     onChangeText={setEditAge}
                     keyboardType="number-pad"
-                    placeholderTextColor="#A0B0D0"
+                    placeholderTextColor={theme.textPlaceholder}
                   />
                 </View>
 
                 {/* Gender Selection */}
                 <View style={styles.inputWrapper}>
                   <Text style={styles.inputLabel}>성별</Text>
+
                   <View style={styles.genderContainer}>
                     {["남성", "여성"].map((item) => (
                       <TouchableOpacity
@@ -301,7 +346,8 @@ export default function ProfileScreen() {
                         <Text
                           style={[
                             styles.genderButtonText,
-                            editGender === item && styles.genderButtonTextActive,
+                            editGender === item &&
+                              styles.genderButtonTextActive,
                           ]}
                         >
                           {item}
@@ -314,6 +360,7 @@ export default function ProfileScreen() {
                 {/* Job Selection */}
                 <View style={styles.inputWrapper}>
                   <Text style={styles.inputLabel}>직업</Text>
+
                   <View style={styles.jobGrid}>
                     {[
                       "학생",
@@ -382,53 +429,93 @@ export default function ProfileScreen() {
                ======================================================== */
             <View>
               <Text style={styles.sectionTitle}>계정 정보</Text>
+
               <View style={styles.card}>
                 <View style={styles.infoRow}>
                   <View style={styles.infoLabelContainer}>
-                    <Ionicons name="mail-outline" size={18} color="#8A8C9A" style={styles.infoIcon} />
+                    <Ionicons
+                      name="mail-outline"
+                      size={18}
+                      color={theme.textSecondary}
+                      style={styles.infoIcon}
+                    />
                     <Text style={styles.infoLabel}>계정 구분</Text>
                   </View>
-                  <Text style={styles.readOnlyValue}>{getEmailDisplay(email).text}</Text>
+
+                  <Text style={styles.readOnlyValue}>
+                    {getEmailDisplay(email).text}
+                  </Text>
                 </View>
-                
+
                 <View style={styles.divider} />
 
                 <View style={styles.infoRow}>
                   <View style={styles.infoLabelContainer}>
-                    <Ionicons name="person-outline" size={18} color="#8A8C9A" style={styles.infoIcon} />
+                    <Ionicons
+                      name="person-outline"
+                      size={18}
+                      color={theme.textSecondary}
+                      style={styles.infoIcon}
+                    />
                     <Text style={styles.infoLabel}>닉네임</Text>
                   </View>
-                  <Text style={styles.readOnlyValue}>{nickname || "닉네임 정보 없음"}</Text>
+
+                  <Text style={styles.readOnlyValue}>
+                    {nickname || "닉네임 정보 없음"}
+                  </Text>
                 </View>
               </View>
 
               <Text style={styles.sectionTitle}>추가 정보</Text>
+
               <View style={styles.card}>
                 <View style={styles.infoRow}>
                   <View style={styles.infoLabelContainer}>
-                    <Ionicons name="calendar-outline" size={18} color="#8A8C9A" style={styles.infoIcon} />
+                    <Ionicons
+                      name="calendar-outline"
+                      size={18}
+                      color={theme.textSecondary}
+                      style={styles.infoIcon}
+                    />
                     <Text style={styles.infoLabel}>나이</Text>
                   </View>
-                  <Text style={styles.readOnlyValue}>{age ? `${age}세` : "정보 없음"}</Text>
+
+                  <Text style={styles.readOnlyValue}>
+                    {age ? `${age}세` : "정보 없음"}
+                  </Text>
                 </View>
-                
+
                 <View style={styles.divider} />
 
                 <View style={styles.infoRow}>
                   <View style={styles.infoLabelContainer}>
-                    <Ionicons name="transgender-outline" size={18} color="#8A8C9A" style={styles.infoIcon} />
+                    <Ionicons
+                      name="transgender-outline"
+                      size={18}
+                      color={theme.textSecondary}
+                      style={styles.infoIcon}
+                    />
                     <Text style={styles.infoLabel}>성별</Text>
                   </View>
-                  <Text style={styles.readOnlyValue}>{gender || "정보 없음"}</Text>
+
+                  <Text style={styles.readOnlyValue}>
+                    {gender || "정보 없음"}
+                  </Text>
                 </View>
 
                 <View style={styles.divider} />
 
                 <View style={styles.infoRow}>
                   <View style={styles.infoLabelContainer}>
-                    <Ionicons name="briefcase-outline" size={18} color="#8A8C9A" style={styles.infoIcon} />
+                    <Ionicons
+                      name="briefcase-outline"
+                      size={18}
+                      color={theme.textSecondary}
+                      style={styles.infoIcon}
+                    />
                     <Text style={styles.infoLabel}>직업</Text>
                   </View>
+
                   <Text style={styles.readOnlyValue}>{job || "정보 없음"}</Text>
                 </View>
               </View>
@@ -458,259 +545,263 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F8FAFF",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F8FAFF",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "#5C6E91",
-    fontWeight: "600",
-    fontFamily: "PretendardMedium",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#EBF0FA",
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#2A3C6B",
-    fontFamily: "PretendardBold",
-  },
-  scrollContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 40,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#5C6E91",
-    marginLeft: 8,
-    marginBottom: 8,
-    fontFamily: "PretendardSemiBold",
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: "#2A3C6B",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  infoLabelContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  infoIcon: {
-    marginRight: 8,
-  },
-  infoLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#8A8C9A",
-    fontFamily: "PretendardMedium",
-  },
-  readOnlyValueContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  readOnlyValue: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#2A3C6B",
-    fontFamily: "PretendardSemiBold",
-  },
-  badge: {
-    backgroundColor: "#F1F4F9",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginLeft: 8,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#8A8C9A",
-    fontFamily: "PretendardSemiBold",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#F1F4F9",
-    marginVertical: 12,
-  },
-  inputWrapper: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#5C6E91",
-    marginBottom: 8,
-    marginLeft: 4,
-    fontFamily: "PretendardSemiBold",
-  },
-  input: {
-    backgroundColor: "#F1F4F9",
-    padding: 14,
-    borderRadius: 14,
-    fontSize: 16,
-    color: "#333333",
-    fontFamily: "Pretendard",
-  },
-  genderContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  genderButton: {
-    flex: 1,
-    backgroundColor: "#F1F4F9",
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: "center",
-    marginHorizontal: 4,
-  },
-  genderButtonActive: {
-    backgroundColor: "#2A3C6B",
-  },
-  genderButtonText: {
-    fontSize: 15,
-    color: "#A0B0D0",
-    fontWeight: "600",
-    fontFamily: "PretendardSemiBold",
-  },
-  genderButtonTextActive: {
-    color: "#FFFFFF",
-  },
-  jobGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  jobButton: {
-    width: "48%",
-    backgroundColor: "#F1F4F9",
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  jobButtonActive: {
-    backgroundColor: "#2A3C6B",
-  },
-  jobButtonText: {
-    fontSize: 15,
-    color: "#A0B0D0",
-    fontWeight: "600",
-    fontFamily: "PretendardSemiBold",
-  },
-  jobButtonTextActive: {
-    color: "#FFFFFF",
-  },
-  editModeButton: {
-    backgroundColor: "#2A3C6B",
-    padding: 16,
-    borderRadius: 16,
-    alignItems: "center",
-    marginTop: 10,
-    shadowColor: "#2A3C6B",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  editModeButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
-    fontFamily: "PretendardBold",
-  },
-  buttonRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-  saveButton: {
-    flex: 2,
-    backgroundColor: "#2A3C6B",
-    padding: 16,
-    borderRadius: 16,
-    alignItems: "center",
-    marginLeft: 8,
-    shadowColor: "#2A3C6B",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  disabledSaveButton: {
-    backgroundColor: "#BCC8E0",
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  saveButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
-    fontFamily: "PretendardBold",
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: "#E2E5EC",
-    padding: 16,
-    borderRadius: 16,
-    alignItems: "center",
-    marginRight: 8,
-  },
-  cancelButtonText: {
-    color: "#5C6E91",
-    fontSize: 16,
-    fontWeight: "700",
-    fontFamily: "PretendardSemiBold",
-  },
-  deleteButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 24,
-    paddingVertical: 8,
-  },
-  deleteButtonText: {
-    color: "#E79A95",
-    fontSize: 14,
-    fontWeight: "600",
-    fontFamily: "PretendardSemiBold",
-    textDecorationLine: "underline",
-  },
-  rejoinNotice: { fontSize: 14, color: "#FF3B30", marginTop: 6, fontWeight: "600" },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: theme.bg,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: theme.bg,
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 16,
+      color: theme.textSecondary,
+      fontWeight: "600",
+      fontFamily: "PretendardMedium",
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 12,
+      borderBottomColor: theme.border,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: theme.text,
+      fontFamily: "PretendardBold",
+    },
+    scrollContainer: {
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 40,
+    },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: theme.textSecondary,
+      marginLeft: 8,
+      marginBottom: 8,
+      fontFamily: "PretendardSemiBold",
+    },
+    card: {
+      backgroundColor: theme.card,
+      borderRadius: 24,
+      padding: 20,
+      marginBottom: 24,
+      shadowColor: theme.text,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.04,
+      shadowRadius: 12,
+      elevation: 2,
+    },
+    infoRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 8,
+    },
+    infoLabelContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    infoIcon: {
+      marginRight: 8,
+    },
+    infoLabel: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.textSecondary,
+      fontFamily: "PretendardMedium",
+    },
+    readOnlyValueContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    readOnlyValue: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.text,
+      fontFamily: "PretendardSemiBold",
+    },
+    badge: {
+      backgroundColor: theme.mainLight,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      marginLeft: 8,
+    },
+    badgeText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: theme.mainText,
+      fontFamily: "PretendardSemiBold",
+    },
+    divider: {
+      height: 1,
+      backgroundColor: theme.divider,
+      marginVertical: 12,
+    },
+    inputWrapper: {
+      marginBottom: 20,
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.textSecondary,
+      marginBottom: 8,
+      marginLeft: 4,
+      fontFamily: "PretendardSemiBold",
+    },
+    input: {
+      backgroundColor: theme.inputBg,
+      padding: 14,
+      borderRadius: 14,
+      fontSize: 16,
+      color: theme.textBody,
+      fontFamily: "Pretendard",
+    },
+    genderContainer: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    genderButton: {
+      flex: 1,
+      backgroundColor: theme.inputBg,
+      paddingVertical: 14,
+      borderRadius: 14,
+      alignItems: "center",
+      marginHorizontal: 4,
+    },
+    genderButtonActive: {
+      backgroundColor: theme.main,
+    },
+    genderButtonText: {
+      fontSize: 15,
+      color: theme.textMuted,
+      fontWeight: "600",
+      fontFamily: "PretendardSemiBold",
+    },
+    genderButtonTextActive: {
+      color: "#FFFFFF",
+    },
+    jobGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+    },
+    jobButton: {
+      width: "48%",
+      backgroundColor: theme.inputBg,
+      paddingVertical: 14,
+      borderRadius: 14,
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    jobButtonActive: {
+      backgroundColor: theme.main,
+    },
+    jobButtonText: {
+      fontSize: 15,
+      color: theme.textMuted,
+      fontWeight: "600",
+      fontFamily: "PretendardSemiBold",
+    },
+    jobButtonTextActive: {
+      color: "#FFFFFF",
+    },
+    editModeButton: {
+      backgroundColor: theme.main,
+      padding: 16,
+      borderRadius: 16,
+      alignItems: "center",
+      marginTop: 10,
+      shadowColor: theme.main,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    editModeButtonText: {
+      color: "#FFFFFF",
+      fontSize: 16,
+      fontWeight: "800",
+      fontFamily: "PretendardBold",
+    },
+    buttonRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 10,
+    },
+    saveButton: {
+      flex: 2,
+      backgroundColor: theme.main,
+      padding: 16,
+      borderRadius: 16,
+      alignItems: "center",
+      marginLeft: 8,
+      shadowColor: theme.main,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    disabledSaveButton: {
+      backgroundColor: theme.textMuted,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    saveButtonText: {
+      color: "#FFFFFF",
+      fontSize: 16,
+      fontWeight: "800",
+      fontFamily: "PretendardBold",
+    },
+    cancelButton: {
+      flex: 1,
+      backgroundColor: theme.cardAlt,
+      padding: 16,
+      borderRadius: 16,
+      alignItems: "center",
+      marginRight: 8,
+    },
+    cancelButtonText: {
+      color: theme.textSecondary,
+      fontSize: 16,
+      fontWeight: "700",
+      fontFamily: "PretendardSemiBold",
+    },
+    deleteButton: {
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 24,
+      paddingVertical: 8,
+    },
+    deleteButtonText: {
+      color: theme.warning,
+      fontSize: 14,
+      fontWeight: "600",
+      fontFamily: "PretendardSemiBold",
+      textDecorationLine: "underline",
+    },
+    rejoinNotice: {
+      fontSize: 14,
+      color: theme.dangerText,
+      marginTop: 6,
+      fontWeight: "600",
+    },
+  });

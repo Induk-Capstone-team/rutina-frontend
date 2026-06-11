@@ -1,28 +1,27 @@
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { ThemeProvider as RutinaThemeProvider } from "@/lib/constants/ThemeContext";
+import { authApi } from "@/lib/data/auth_api";
+import { NotificationService } from "@/services/notification_service";
+import { RoutineService } from "@/services/routine_service";
+import { authStore } from "@/store/authStore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   DarkTheme,
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
+import { useFonts } from "expo-font";
 import {
   Stack,
   useRootNavigationState,
   useRouter,
   useSegments,
 } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import "react-native-reanimated";
-
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SplashScreen from "expo-splash-screen";
-
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { authApi } from "@/lib/data/auth_api";
-import { NotificationService } from "@/services/notification_service";
-import { RoutineService } from "@/services/routine_service";
-import { authStore } from "@/store/authStore";
-import { useFonts } from "expo-font";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import "react-native-reanimated";
 // 스플래시 화면이 자동으로 숨겨지는 것을 방지
 SplashScreen.preventAutoHideAsync();
 
@@ -70,7 +69,8 @@ export default function RootLayout() {
             const response = await authApi.checkNewUser();
 
             // 백엔드 데이터 구조 가공 (true/false)
-            const isNewUser = response?.isNewUser ?? response?.data?.isNewUser ?? false;
+            const isNewUser =
+              response?.isNewUser ?? response?.data?.isNewUser ?? false;
             console.log("📱 백엔드 검증 결과 - 신규 유저 여부:", isNewUser);
 
             if (isNewUser == true) {
@@ -83,11 +83,9 @@ export default function RootLayout() {
                 await AsyncStorage.removeItem("refreshToken");
                 authStore.setLoggedIn(false);
               }, 1000);
-
             } else {
               authStore.setLoggedIn(true);
             }
-
           } catch (apiError) {
             console.warn("만료되었거나 서버 인증에 실패한 토큰입니다.");
             await AsyncStorage.removeItem("userToken");
@@ -162,40 +160,44 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="settings" options={{ headerShown: false }} />
-          <Stack.Screen name="profile" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="onboarding/login"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="onboarding/signup"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="onboarding/signup2"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="onboarding/[terms]"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="modal"
-            options={{
-              presentation: "transparentModal",
-              headerShown: false,
-              gestureEnabled: true,
-              animation: "slide_from_bottom",
-            }}
-          />
-        </Stack>
+      <RutinaThemeProvider>
+        <ThemeProvider
+          value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+        >
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="settings" options={{ headerShown: false }} />
+            <Stack.Screen name="profile" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="onboarding/login"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="onboarding/signup"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="onboarding/signup2"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="onboarding/[terms]"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="modal"
+              options={{
+                presentation: "transparentModal",
+                headerShown: false,
+                gestureEnabled: true,
+                animation: "slide_from_bottom",
+              }}
+            />
+          </Stack>
 
-        <StatusBar style="auto" />
-      </ThemeProvider>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </RutinaThemeProvider>
     </GestureHandlerRootView>
   );
 }

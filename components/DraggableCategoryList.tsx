@@ -6,8 +6,7 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
-  type SharedValue,
+  type SharedValue
 } from "react-native-reanimated";
 
 export interface DraggableItem {
@@ -95,7 +94,7 @@ function DraggableRow<T extends DraggableItem>({
 
     if (draggingIndex === null || hoverIndex === null) {
       return {
-        transform: [{ translateY: withSpring(0, SPRING_CONFIG) }],
+        transform: [{ translateY: 0 }],
         zIndex: 1,
         opacity: 1,
       };
@@ -106,7 +105,7 @@ function DraggableRow<T extends DraggableItem>({
 
     if (from > to && index >= to && index < from) {
       return {
-        transform: [{ translateY: withSpring(draggedHeight, SPRING_CONFIG) }],
+        transform: [{ translateY: draggedHeight }],
         zIndex: 1,
         opacity: 1,
       };
@@ -114,14 +113,14 @@ function DraggableRow<T extends DraggableItem>({
 
     if (from < to && index > from && index <= to) {
       return {
-        transform: [{ translateY: withSpring(-draggedHeight, SPRING_CONFIG) }],
+        transform: [{ translateY: -draggedHeight }],
         zIndex: 1,
         opacity: 1,
       };
     }
 
     return {
-      transform: [{ translateY: withSpring(0, SPRING_CONFIG) }],
+      transform: [{ translateY: 0 }],
       zIndex: 1,
       opacity: 1,
     };
@@ -285,7 +284,7 @@ export function DraggableCategoryList<T extends DraggableItem>({
     const to = hoverIndexRef.current;
 
     isDragging.value = false;
-    dragY.value = withSpring(0, { damping: 20, stiffness: 100, mass: 0.6 });
+    dragY.value = 0;
 
     if (from !== null && to !== null && from !== to) {
       const currentItems = [...itemsRef.current];

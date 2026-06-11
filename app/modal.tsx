@@ -6,6 +6,7 @@ import AppCalendar from "@/components/ui/app_calendar";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRoutineForm } from "@/hooks/use_routine_form";
 import { type CustomCategory } from "@/lib/category";
+import { useTheme, type Theme } from "@/lib/constants/ThemeContext";
 import { CategoryService } from "@/services/category_service";
 import { RoutineService } from "@/services/routine_service";
 import type {
@@ -52,29 +53,755 @@ const WEEKDAY_OPTIONS: { label: string; value: RepeatWeekday }[] = [
 const WEEK_REPEAT_EVERY_OPTIONS = ["1", "2"];
 
 //공통 색상 상수
-const FIXED_PRIMARY_COLOR = "#405886";
 const FIXED_SWITCH_COLOR = "#9FA2D6";
-const CALENDAR_SELECTED_COLOR = "#405886";
 //미저장 루틴/카테고리 캐시 저장
 const DRAFT_STORAGE_KEY = "@rutina/routine_draft";
-//캘린더 테마
-const CALENDAR_THEME = {
-  backgroundColor: "#F8F9FB",
-  calendarBackground: "#F8F9FB",
-  selectedDayBackgroundColor: CALENDAR_SELECTED_COLOR,
-  selectedDayTextColor: "#FFFFFF",
-  todayTextColor: CALENDAR_SELECTED_COLOR,
-  dayTextColor: "#2A3C6B",
-  textDisabledColor: "#C9CED8",
-  monthTextColor: "#2A3C6B",
-  arrowColor: CALENDAR_SELECTED_COLOR,
-  textDayFontWeight: "500" as const,
-  textMonthFontWeight: "800" as const,
-  textDayHeaderFontWeight: "700" as const,
-  textMonthFontSize: 17,
-  textDayFontSize: 15,
-  textDayHeaderFontSize: 13,
-};
+
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: "flex-end",
+      backgroundColor: "transparent",
+    },
+
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.18)",
+    },
+
+    keyboardView: {
+      width: "100%",
+      justifyContent: "flex-end",
+      flex: 1,
+    },
+
+    bottomSheet: {
+      width: "100%",
+      alignSelf: "stretch",
+      backgroundColor: theme.card,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
+      paddingHorizontal: 24,
+      paddingTop: 0,
+      paddingBottom: 100,
+      marginBottom: -100,
+      maxHeight: "92%",
+      overflow: "hidden",
+    },
+
+    indicator: {
+      width: 40,
+      height: 5,
+      backgroundColor: theme.handle,
+      borderRadius: 3,
+      alignSelf: "center",
+      marginTop: 8,
+      marginBottom: 12,
+    },
+
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 18,
+      paddingTop: 0,
+    },
+
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: theme.text,
+    },
+
+    scrollContent: {
+      paddingBottom: 20,
+    },
+
+    mainInput: {
+      fontSize: 24,
+      fontWeight: "800",
+      color: theme.text,
+      paddingVertical: 15,
+      borderBottomWidth: 2,
+      borderBottomColor: theme.bg,
+      marginBottom: 25,
+    },
+
+    section: {
+      marginBottom: 25,
+    },
+
+    label: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textMuted,
+      marginBottom: 12,
+    },
+
+    selectorButton: {
+      backgroundColor: theme.cardAlt,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      borderRadius: 14,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+
+    selectorLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+
+    selectorText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.text,
+    },
+
+    calendarCard: {
+      marginTop: 12,
+      backgroundColor: theme.cardAlt,
+      borderRadius: 20,
+      overflow: "hidden",
+      padding: 8,
+    },
+
+    calendar: {
+      borderRadius: 12,
+    },
+
+    rowBetween: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+
+    categoryGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      marginTop: 2,
+      gap: 3,
+    },
+
+    categoryBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 999,
+    },
+    categoryBadgeDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      marginRight: 7,
+    },
+
+    categoryBadgeText: {
+      fontSize: 13,
+      fontWeight: "700",
+    },
+
+    optionCard: {
+      backgroundColor: theme.cardAlt,
+      borderRadius: 20,
+      padding: 16,
+      marginBottom: 25,
+    },
+
+    iconLabel: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+
+    optionLabel: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: theme.main,
+    },
+
+    timeSettingArea: {
+      marginTop: 15,
+      gap: 12,
+    },
+
+    innerOptionRow: {
+      minHeight: 60,
+      paddingTop: 12,
+      paddingBottom: 10,
+      borderTopWidth: 1,
+      borderTopColor: theme.divider,
+    },
+
+    repeatRowOnly: {
+      marginTop: 14,
+      paddingTop: 14,
+      borderTopWidth: 1,
+      borderTopColor: theme.divider,
+    },
+
+    valueButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 12,
+      backgroundColor: theme.card,
+    },
+
+    valueButtonText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.main,
+    },
+
+    requiredValueButton: {
+      borderWidth: 1,
+      borderColor: theme.main,
+    },
+
+    requiredValueText: {
+      color: theme.main,
+    },
+
+    notifySwitchRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+
+    notifyStateText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.main,
+    },
+
+    saveButton: {
+      paddingVertical: 18,
+      borderRadius: 16,
+      alignItems: "center",
+      marginTop: 10,
+      backgroundColor: theme.main,
+    },
+
+    saveButtonText: {
+      color: theme.card,
+      fontSize: 16,
+      fontWeight: "800",
+    },
+
+    inlineModalOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.18)",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 20,
+    },
+
+    inlineModalCard: {
+      width: "100%",
+      maxWidth: 360,
+      maxHeight: "70%",
+      backgroundColor: theme.card,
+      borderRadius: 24,
+      padding: 18,
+    },
+
+    inlineModalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+
+    inlineModalTitle: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: theme.text,
+    },
+
+    inlineModalDone: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: theme.main,
+    },
+
+    inlinePickerRow: {
+      flexDirection: "row",
+      gap: 12,
+    },
+
+    optionColumn: {
+      flex: 1,
+    },
+
+    optionColumnTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textMuted,
+      marginBottom: 10,
+      textAlign: "center",
+    },
+
+    optionColumnScroll: {
+      maxHeight: 260,
+    },
+
+    optionChip: {
+      backgroundColor: theme.card,
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: "center",
+      marginBottom: 8,
+      borderColor: theme.divider,
+    },
+
+    optionChipSelected: {
+      backgroundColor: theme.mainLight,
+      borderColor: theme.borderMid,
+    },
+
+    optionChipText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.main,
+    },
+
+    optionChipTextSelected: {
+      color: theme.text,
+    },
+
+    optionList: {
+      gap: 8,
+    },
+
+    optionListItem: {
+      backgroundColor: theme.card,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderColor: theme.divider,
+    },
+
+    optionListItemText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: theme.text,
+    },
+
+    optionListItemTextSelected: {
+      color: theme.main,
+    },
+
+    weekdaySection: {
+      marginTop: 16,
+      paddingTop: 14,
+      borderTopWidth: 1,
+      borderTopColor: theme.divider,
+    },
+
+    weekdayTitleRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+
+    weekdayTitle: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: theme.text,
+    },
+
+    weekdayHelperText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: theme.textMuted,
+    },
+
+    weekdayGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    weekdayRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      width: "100%",
+    },
+
+    weekdayChip: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: theme.bg,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    weekdayChipSelected: {
+      borderColor: theme.main,
+      backgroundColor: theme.main,
+    },
+    weekdayChipText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: theme.textSecondary,
+    },
+
+    weekdayChipTextSelected: {
+      color: theme.card,
+    },
+
+    dateRangeColumn: {
+      gap: 10,
+    },
+
+    dateSelectorActive: {
+      borderWidth: 1.5,
+      borderColor: theme.borderMid,
+    },
+
+    errorText: {
+      marginTop: 8,
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#D06C68",
+    },
+
+    calendarHelperText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme.textMuted,
+      marginBottom: 8,
+      paddingHorizontal: 4,
+    },
+    repeatPanel: {
+      marginTop: 10,
+      gap: 6,
+    },
+
+    customRepeatPanel: {
+      marginTop: 12,
+      gap: 14,
+    },
+
+    dialLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.textMuted,
+      marginBottom: 8,
+    },
+
+    repeatOptionButton: {
+      borderWidth: 0.5,
+      borderColor: theme.borderStrong,
+      borderRadius: 11,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      minHeight: 34,
+      backgroundColor: theme.inputBg,
+    },
+
+    repeatOptionButtonSelected: {
+      borderColor: theme.main,
+      backgroundColor: theme.mainLight,
+    },
+
+    repeatOptionText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.textSecondary,
+    },
+
+    repeatOptionTextSelected: {
+      color: theme.main,
+    },
+
+    repeatTwoColumnRow: {
+      flexDirection: "row",
+      gap: 6,
+    },
+
+    repeatFlexButton: {
+      flex: 1,
+      alignItems: "center",
+    },
+
+    frequencyGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+
+    frequencyChip: {
+      minWidth: 42,
+      paddingVertical: 9,
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+      backgroundColor: theme.inputBg,
+      alignItems: "center",
+    },
+
+    frequencyChipSelected: {
+      borderColor: theme.main,
+      backgroundColor: theme.mainLight,
+    },
+
+    frequencyChipText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textSecondary,
+    },
+
+    frequencyChipTextSelected: {
+      color: theme.main,
+    },
+    customRepeatFooter: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      marginTop: -2,
+    },
+
+    customRepeatDoneButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 999,
+      backgroundColor: theme.mainLight,
+    },
+
+    customRepeatDoneText: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: theme.main,
+    },
+
+    repeatSection: {
+      width: "100%",
+    },
+
+    repeatHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+
+    repeatSelectButton: {
+      minWidth: 96,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+      borderRadius: 14,
+      paddingVertical: 9,
+      paddingHorizontal: 12,
+      backgroundColor: theme.card,
+    },
+
+    repeatIntervalValueBox: {
+      flex: 1,
+      height: 42,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.inputBg,
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+    },
+
+    repeatIntervalValueText: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: theme.main,
+    },
+    repeatIntervalStepper: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+
+    repeatStepperButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.bg,
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+    },
+
+    repeatStepperButtonText: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: theme.main,
+    },
+
+    repeatIntervalInputBox: {
+      flex: 1,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: "#E7EAF3",
+      backgroundColor: theme.inputBg,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 10,
+    },
+    repeatIntervalInput: {
+      minWidth: 28,
+      maxWidth: 52,
+      paddingVertical: 0,
+      paddingHorizontal: 0,
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.textBody,
+      textAlign: "center",
+    },
+
+    repeatIntervalSuffix: {
+      marginLeft: 4,
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textSecondary,
+    },
+    existingRoutineSection: {
+      borderRadius: 14,
+      overflow: "hidden",
+      backgroundColor: theme.cardAlt,
+    },
+    existingRoutineHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: 12,
+      paddingHorizontal: 14,
+    },
+    existingRoutineTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textMuted,
+    },
+    previewTabRow: {
+      flexDirection: "row",
+      gap: 6,
+      padding: 10,
+      paddingHorizontal: 14,
+      borderTopWidth: 1,
+      borderTopColor: theme.divider,
+    },
+    previewTab: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+      backgroundColor: theme.inputBg,
+    },
+    previewTabActive: {
+      backgroundColor: theme.mainLight,
+      borderColor: theme.main,
+    },
+    previewTabText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme.textSecondary,
+    },
+    previewTabTextActive: {
+      color: theme.main,
+    },
+    previewDateLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.textMuted,
+    },
+    existingEmpty: {
+      padding: 16,
+      alignItems: "center",
+    },
+    existingEmptyText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: theme.textMuted,
+    },
+    existingItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 10,
+      paddingHorizontal: 14,
+      gap: 10,
+      borderTopWidth: 1,
+      borderTopColor: theme.divider,
+    },
+    existingItemConflict: {
+      backgroundColor: "#FFF3F2",
+    },
+    existingColorBar: {
+      width: 3,
+      height: 32,
+      borderRadius: 2,
+    },
+    existingInfo: {
+      flex: 1,
+    },
+    existingName: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.text,
+    },
+    existingNameConflict: {
+      color: "#C0392B",
+    },
+    existingTime: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: theme.textMuted,
+      marginTop: 1,
+    },
+    existingTimeConflict: {
+      color: "#E07068",
+    },
+    conflictBadge: {
+      backgroundColor: "#FFE8E7",
+      borderRadius: 6,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+    },
+    conflictBadgeText: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: "#C0392B",
+    },
+    conflictWarning: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: "#E07068",
+      padding: 10,
+      paddingHorizontal: 14,
+      borderTopWidth: 1,
+      borderTopColor: theme.divider,
+    },
+    categoryChip: {
+      borderRadius: 15,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+    },
+    categoryChipText: {
+      fontSize: 10,
+      fontWeight: "800",
+    },
+  });
 
 //시간 한 칸 표시용
 function formatTimeLabel(hour: string, minute: string) {
@@ -168,6 +895,8 @@ function UnitOptionColumn({
   selectedValue: RepeatUnit;
   onSelect: (value: RepeatUnit) => void;
 }) {
+  const { theme, mode } = useTheme();
+  const styles = makeStyles(theme);
   return (
     <View style={styles.optionColumn}>
       <ThemedText style={styles.optionColumnTitle}>{title}</ThemedText>
@@ -216,6 +945,8 @@ function NumberOptionColumn({
   selectedValue: string;
   onSelect: (value: string) => void;
 }) {
+  const { theme, mode } = useTheme();
+  const styles = makeStyles(theme);
   return (
     <View style={styles.optionColumn}>
       <ThemedText style={styles.optionColumnTitle}>{title}</ThemedText>
@@ -253,6 +984,26 @@ function NumberOptionColumn({
 }
 
 export default function ModalScreen() {
+  const { theme, mode } = useTheme();
+  const styles = makeStyles(theme);
+  //캘린더 테마
+  const CALENDAR_THEME = {
+    backgroundColor: theme.cardAlt,
+    calendarBackground: theme.cardAlt,
+    selectedDayBackgroundColor: theme.main,
+    selectedDayTextColor: theme.card,
+    todayTextColor: theme.main,
+    dayTextColor: theme.text,
+    textDisabledColor: "#C9CED8",
+    monthTextColor: theme.text,
+    arrowColor: theme.main,
+    textDayFontWeight: "500" as const,
+    textMonthFontWeight: "800" as const,
+    textDayHeaderFontWeight: "700" as const,
+    textMonthFontSize: 17,
+    textDayFontSize: 15,
+    textDayHeaderFontSize: 13,
+  };
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -402,7 +1153,7 @@ export default function ModalScreen() {
       return {
         [startDate]: {
           selected: true,
-          selectedColor: CALENDAR_SELECTED_COLOR,
+          selectedColor: theme.main,
         },
       };
     }
@@ -410,7 +1161,7 @@ export default function ModalScreen() {
     return {
       [startDate]: {
         selected: true,
-        selectedColor: CALENDAR_SELECTED_COLOR,
+        selectedColor: theme.main,
       },
       [endDate]: {
         selected: true,
@@ -760,7 +1511,11 @@ export default function ModalScreen() {
             </ThemedText>
 
             <TouchableOpacity onPress={closeModal}>
-              <IconSymbol name="xmark.circle.fill" size={28} color="#EDEEF1" />
+              <IconSymbol
+                name="xmark.circle.fill"
+                size={28}
+                color={theme.handle}
+              />
             </TouchableOpacity>
           </View>
 
@@ -804,7 +1559,7 @@ export default function ModalScreen() {
                   }}
                 >
                   <View style={styles.selectorLeft}>
-                    <IconSymbol name="calendar" size={18} color="#405886" />
+                    <IconSymbol name="calendar" size={18} color={theme.main} />
                     <ThemedText style={styles.selectorText}>
                       시작 날짜 · {formatDateLabel(startDate)}
                     </ThemedText>
@@ -817,7 +1572,7 @@ export default function ModalScreen() {
                         : "chevron.down"
                     }
                     size={16}
-                    color="#A0B0D0"
+                    color={theme.textMuted}
                   />
                 </TouchableOpacity>
 
@@ -899,7 +1654,11 @@ export default function ModalScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.iconLabel}>
-                  <IconSymbol name="calendar" size={15} color="#7A87A6" />
+                  <IconSymbol
+                    name="calendar"
+                    size={15}
+                    color={theme.textMuted}
+                  />
                   <ThemedText style={styles.existingRoutineTitle}>
                     이 날의 루틴 확인
                   </ThemedText>
@@ -923,7 +1682,7 @@ export default function ModalScreen() {
                   <IconSymbol
                     name={showExistingRoutines ? "chevron.up" : "chevron.down"}
                     size={14}
-                    color="#A0B0D0"
+                    color={theme.textMuted}
                   />
                 </View>
               </TouchableOpacity>
@@ -980,7 +1739,9 @@ export default function ModalScreen() {
                             <View
                               style={[
                                 styles.existingColorBar,
-                                { backgroundColor: routine.color ?? "#405886" },
+                                {
+                                  backgroundColor: routine.color ?? theme.main,
+                                },
                               ]}
                             />
                             <View style={styles.existingInfo}>
@@ -989,7 +1750,10 @@ export default function ModalScreen() {
                                   styles.existingName,
                                   // 겹침이 아닐 때만 카테고리 색 적용
                                   !conflict && {
-                                    color: routine.color ?? "#405886",
+                                    color:
+                                      mode === "dark"
+                                        ? (routine.color ?? theme.main)
+                                        : "#000000",
                                   },
                                   conflict && styles.existingNameConflict,
                                 ]}
@@ -1015,14 +1779,19 @@ export default function ModalScreen() {
                                   styles.categoryChip,
                                   {
                                     backgroundColor:
-                                      (routine.color ?? "#405886") + "22",
+                                      (routine.color ?? theme.main) + "22",
                                   },
                                 ]}
                               >
                                 <ThemedText
                                   style={[
                                     styles.categoryChipText,
-                                    { color: routine.color ?? "#405886" },
+                                    {
+                                      color:
+                                        mode === "dark"
+                                          ? (routine.color ?? theme.main)
+                                          : "#000000",
+                                    },
                                   ]}
                                 >
                                   {routine.categoryName}
@@ -1061,7 +1830,7 @@ export default function ModalScreen() {
                 >
                   {categoryList.map((cat) => {
                     const resolvedColor =
-                      customCategoryColorMap[cat] ?? "#405886";
+                      customCategoryColorMap[cat] ?? theme.main;
                     const isSelected = category === cat;
 
                     return (
@@ -1091,7 +1860,10 @@ export default function ModalScreen() {
                         <ThemedText
                           style={[
                             styles.categoryBadgeText,
-                            { color: resolvedColor },
+                            {
+                              color:
+                                mode === "dark" ? resolvedColor : "#000000",
+                            },
                           ]}
                         >
                           {cat}
@@ -1106,7 +1878,7 @@ export default function ModalScreen() {
             <View style={styles.optionCard}>
               <View style={styles.rowBetween}>
                 <View style={styles.iconLabel}>
-                  <IconSymbol name="clock.fill" size={18} color="#405886" />
+                  <IconSymbol name="clock.fill" size={18} color={theme.main} />
                   <ThemedText style={styles.optionLabel}>시간 설정</ThemedText>
                 </View>
 
@@ -1124,7 +1896,7 @@ export default function ModalScreen() {
                     onPress={() => setShowTimeModal(true)}
                   >
                     <View style={styles.selectorLeft}>
-                      <IconSymbol name="clock" size={18} color="#405886" />
+                      <IconSymbol name="clock" size={18} color={theme.main} />
                       <ThemedText style={styles.selectorText}>
                         {formatTimeRangeLabel(
                           startHour,
@@ -1138,13 +1910,17 @@ export default function ModalScreen() {
                     <IconSymbol
                       name="chevron.right"
                       size={16}
-                      color="#A0B0D0"
+                      color={theme.textMuted}
                     />
                   </TouchableOpacity>
 
                   <View style={[styles.rowBetween, styles.innerOptionRow]}>
                     <View style={styles.iconLabel}>
-                      <IconSymbol name="bell.fill" size={18} color="#405886" />
+                      <IconSymbol
+                        name="bell.fill"
+                        size={18}
+                        color={theme.main}
+                      />
                       <ThemedText style={styles.optionLabel}>알림</ThemedText>
                     </View>
 
@@ -1451,748 +2227,3 @@ export default function ModalScreen() {
     </ThemedView>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "transparent",
-  },
-
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.18)",
-  },
-
-  keyboardView: {
-    width: "100%",
-    justifyContent: "flex-end",
-    flex: 1,
-  },
-
-  bottomSheet: {
-    width: "100%",
-    alignSelf: "stretch",
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingHorizontal: 24,
-    paddingTop: 0,
-    paddingBottom: 100,
-    marginBottom: -100,
-    maxHeight: "92%",
-    overflow: "hidden",
-  },
-
-  indicator: {
-    width: 40,
-    height: 5,
-    backgroundColor: "#EDEEF1",
-    borderRadius: 3,
-    alignSelf: "center",
-    marginTop: 8,
-    marginBottom: 12,
-  },
-
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 18,
-    paddingTop: 0,
-  },
-
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#2A3C6B",
-  },
-
-  scrollContent: {
-    paddingBottom: 20,
-  },
-
-  mainInput: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#2A3C6B",
-    paddingVertical: 15,
-    borderBottomWidth: 2,
-    borderBottomColor: "#F3F4F8",
-    marginBottom: 25,
-  },
-
-  section: {
-    marginBottom: 25,
-  },
-
-  label: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#A0B0D0",
-    marginBottom: 12,
-  },
-
-  selectorButton: {
-    backgroundColor: "#F8F9FB",
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 14,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  selectorLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  selectorText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#2A3C6B",
-  },
-
-  calendarCard: {
-    marginTop: 12,
-    backgroundColor: "#F8F9FB",
-    borderRadius: 20,
-    overflow: "hidden",
-    padding: 8,
-  },
-
-  calendar: {
-    borderRadius: 12,
-  },
-
-  rowBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 2,
-    gap: 3,
-  },
-
-  categoryBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  categoryBadgeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    marginRight: 7,
-  },
-
-  categoryBadgeText: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-
-  optionCard: {
-    backgroundColor: "#F8F9FB",
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 25,
-  },
-
-  iconLabel: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  optionLabel: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#405886",
-  },
-
-  timeSettingArea: {
-    marginTop: 15,
-    gap: 12,
-  },
-
-  innerOptionRow: {
-    minHeight: 60,
-    paddingTop: 12,
-    paddingBottom: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#EEF1F5",
-  },
-
-  repeatRowOnly: {
-    marginTop: 14,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#EEF1F5",
-  },
-
-  valueButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
-  },
-
-  valueButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#405886",
-  },
-
-  requiredValueButton: {
-    borderWidth: 1,
-    borderColor: "#405886",
-  },
-
-  requiredValueText: {
-    color: "#405886",
-  },
-
-  notifySwitchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  notifyStateText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#405886",
-  },
-
-  saveButton: {
-    paddingVertical: 18,
-    borderRadius: 16,
-    alignItems: "center",
-    marginTop: 10,
-    backgroundColor: FIXED_PRIMARY_COLOR,
-  },
-
-  saveButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-
-  inlineModalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.18)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-
-  inlineModalCard: {
-    width: "100%",
-    maxWidth: 360,
-    maxHeight: "70%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 18,
-  },
-
-  inlineModalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-
-  inlineModalTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#2A3C6B",
-  },
-
-  inlineModalDone: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#405886",
-  },
-
-  inlinePickerRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-
-  optionColumn: {
-    flex: 1,
-  },
-
-  optionColumnTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#A0B0D0",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-
-  optionColumnScroll: {
-    maxHeight: 260,
-  },
-
-  optionChip: {
-    backgroundColor: "#FFFFFF",
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 8,
-    borderColor: "#EEF1F5",
-  },
-
-  optionChipSelected: {
-    backgroundColor: "#EAF1FF",
-    borderColor: "#D7E4FF",
-  },
-
-  optionChipText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#405886",
-  },
-
-  optionChipTextSelected: {
-    color: "#2A3C6B",
-  },
-
-  optionList: {
-    gap: 8,
-  },
-
-  optionListItem: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderColor: "#EEF1F5",
-  },
-
-  optionListItemText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#2A3C6B",
-  },
-
-  optionListItemTextSelected: {
-    color: "#405886",
-  },
-
-  weekdaySection: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#EEF1F5",
-  },
-
-  weekdayTitleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-
-  weekdayTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#2A3C6B",
-  },
-
-  weekdayHelperText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#A0B0D0",
-  },
-
-  weekdayGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  weekdayRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-  },
-
-  weekdayChip: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#F3F4F8",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  weekdayChipSelected: {
-    borderColor: "#405886",
-    backgroundColor: "#405886",
-  },
-  weekdayChipText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#8A8C9A",
-  },
-
-  weekdayChipTextSelected: {
-    color: "#FFFFFF",
-  },
-
-  dateRangeColumn: {
-    gap: 10,
-  },
-
-  dateSelectorActive: {
-    borderWidth: 1.5,
-    borderColor: "#D7E4FF",
-  },
-
-  errorText: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#D06C68",
-  },
-
-  calendarHelperText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#7A87A6",
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  repeatPanel: {
-    marginTop: 10,
-    gap: 6,
-  },
-
-  customRepeatPanel: {
-    marginTop: 12,
-    gap: 14,
-  },
-
-  dialLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#A0B0D0",
-    marginBottom: 8,
-  },
-
-  repeatOptionButton: {
-    borderWidth: 0.5,
-    borderColor: "#E4E7EE",
-    borderRadius: 11,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    minHeight: 34,
-    backgroundColor: "#FAFBFD",
-  },
-
-  repeatOptionButtonSelected: {
-    borderColor: "#405886",
-    backgroundColor: "#F3F6FB",
-  },
-
-  repeatOptionText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6D7690",
-  },
-
-  repeatOptionTextSelected: {
-    color: "#405886",
-  },
-
-  repeatTwoColumnRow: {
-    flexDirection: "row",
-    gap: 6,
-  },
-
-  repeatFlexButton: {
-    flex: 1,
-    alignItems: "center",
-  },
-
-  frequencyGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-
-  frequencyChip: {
-    minWidth: 42,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-    backgroundColor: "#FAFBFD",
-    alignItems: "center",
-  },
-
-  frequencyChipSelected: {
-    borderColor: "#405886",
-    backgroundColor: "#EEF2FF",
-  },
-
-  frequencyChipText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#6D7690",
-  },
-
-  frequencyChipTextSelected: {
-    color: "#405886",
-  },
-  customRepeatFooter: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: -2,
-  },
-
-  customRepeatDoneButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: "#EEF2FF",
-  },
-
-  customRepeatDoneText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#405886",
-  },
-
-  repeatSection: {
-    width: "100%",
-  },
-
-  repeatHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  repeatSelectButton: {
-    minWidth: 96,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-    borderRadius: 14,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    backgroundColor: "#FFFFFF",
-  },
-
-  repeatIntervalValueBox: {
-    flex: 1,
-    height: 42,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FAFBFD",
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-  },
-
-  repeatIntervalValueText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#405886",
-  },
-  repeatIntervalStepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  repeatStepperButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F3F4F8",
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-  },
-
-  repeatStepperButtonText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#405886",
-  },
-
-  repeatIntervalInputBox: {
-    flex: 1,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: "#E7EAF3",
-    backgroundColor: "#FAFBFD",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 10,
-  },
-  repeatIntervalInput: {
-    minWidth: 28,
-    maxWidth: 52,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#2F3550",
-    textAlign: "center",
-  },
-
-  repeatIntervalSuffix: {
-    marginLeft: 4,
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#6D7690",
-  },
-  existingRoutineSection: {
-    borderRadius: 14,
-    overflow: "hidden",
-    backgroundColor: "#F8F9FB",
-  },
-  existingRoutineHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 12,
-    paddingHorizontal: 14,
-  },
-  existingRoutineTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#7A87A6",
-  },
-  previewTabRow: {
-    flexDirection: "row",
-    gap: 6,
-    padding: 10,
-    paddingHorizontal: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#EEF1F5",
-  },
-  previewTab: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E4E7EE",
-    backgroundColor: "#FAFBFD",
-  },
-  previewTabActive: {
-    backgroundColor: "#EEF2FF",
-    borderColor: "#405886",
-  },
-  previewTabText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#6D7690",
-  },
-  previewTabTextActive: {
-    color: "#405886",
-  },
-  previewDateLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#7A87A6",
-  },
-  existingEmpty: {
-    padding: 16,
-    alignItems: "center",
-  },
-  existingEmptyText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#A0B0D0",
-  },
-  existingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 10,
-    paddingHorizontal: 14,
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#EEF1F5",
-  },
-  existingItemConflict: {
-    backgroundColor: "#FFF3F2",
-  },
-  existingColorBar: {
-    width: 3,
-    height: 32,
-    borderRadius: 2,
-  },
-  existingInfo: {
-    flex: 1,
-  },
-  existingName: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#2A3C6B",
-  },
-  existingNameConflict: {
-    color: "#C0392B",
-  },
-  existingTime: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#A0B0D0",
-    marginTop: 1,
-  },
-  existingTimeConflict: {
-    color: "#E07068",
-  },
-  conflictBadge: {
-    backgroundColor: "#FFE8E7",
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  conflictBadgeText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#C0392B",
-  },
-  conflictWarning: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#E07068",
-    padding: 10,
-    paddingHorizontal: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#EEF1F5",
-  },
-  categoryChip: {
-    borderRadius: 15,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  categoryChipText: {
-    fontSize: 10,
-    fontWeight: "800",
-  },
-});

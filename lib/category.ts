@@ -85,10 +85,11 @@ export function normalizeCategoryName(categoryName?: string | null): string {
 }
 
 // 루틴 기반 스타일 반환
-export function getCategoryStyle(routine: ScheduleRoutine): EventTypeStyle {
-  const name = routine.categoryName ?? DEFAULT_CATEGORY_NAME;
-  const fixed = EVENT_TYPES[name];
-  if (fixed) return fixed;
+export function getCategoryStyle(
+  routine: ScheduleRoutine,
+  isDark = false,
+): EventTypeStyle {
+  // 서버 색상이 있으면 항상 우선 적용
   if (routine.color) {
     return {
       bg: hexToRgba(routine.color, 0.14),
@@ -96,16 +97,23 @@ export function getCategoryStyle(routine: ScheduleRoutine): EventTypeStyle {
       text: routine.color,
     };
   }
-  return EVENT_TYPES[DEFAULT_CATEGORY_NAME];
+  const name = routine.categoryName ?? DEFAULT_CATEGORY_NAME;
+  const fixed = EVENT_TYPES[name];
+  if (fixed)
+    return isDark ? { ...fixed, bg: hexToRgba(fixed.dot, 0.2) } : fixed;
+  const fallback = EVENT_TYPES[DEFAULT_CATEGORY_NAME];
+  return isDark ? { ...fallback, bg: hexToRgba(fallback.dot, 0.2) } : fallback;
 }
 
 // 카테고리명 + 커스텀 색상 맵 기반 스타일 반환
 export function getCategoryChipStyle(
   categoryName: string,
   customCategoryColorMap: Record<string, string>,
+  isDark = false,
 ): EventTypeStyle {
   const fixed = EVENT_TYPES[categoryName];
-  if (fixed) return fixed;
+  if (fixed)
+    return isDark ? { ...fixed, bg: hexToRgba(fixed.dot, 0.2) } : fixed;
   const customColor = customCategoryColorMap[categoryName];
   if (customColor) {
     return {
@@ -114,5 +122,6 @@ export function getCategoryChipStyle(
       text: customColor,
     };
   }
-  return EVENT_TYPES[DEFAULT_CATEGORY_NAME];
+  const fallback = EVENT_TYPES[DEFAULT_CATEGORY_NAME];
+  return isDark ? { ...fallback, bg: hexToRgba(fallback.dot, 0.2) } : fallback;
 }
