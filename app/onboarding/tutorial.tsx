@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { DeviceEventEmitter, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -7,18 +8,24 @@ export default function TutorialScreen() {
   const [page, setPage] = useState(0); // 현재 페이지 상태
 
   const handleNext = async () => {
-  console.log("현재 페이지", page);
+    console.log("현재 페이지", page);
 
-  if (page < pages.length - 1) {
-    setPage(page + 1);
-  } else {
-    console.log("튜토리얼 종료");
+    if (page < pages.length - 1) {
+      setPage(page + 1);
+    } else {
+      console.log("튜토리얼 종료");
 
-    await AsyncStorage.setItem("tutorialCompleted", "true");
-    DeviceEventEmitter.emit('TutorialCompletedEvent');
-    router.replace("/(tabs)");
-  }
-};
+      await AsyncStorage.setItem("tutorialCompleted", "true");
+      DeviceEventEmitter.emit('TutorialCompletedEvent');
+      router.replace("/(tabs)");
+    }
+  };
+
+  const handlePrev = () => {
+    if (page > 0) {
+      setPage(page - 1);
+    }
+  };
 
   const handleFinishTutorial = async () => {
     try {
@@ -36,37 +43,37 @@ export default function TutorialScreen() {
   };
 
   const pages = [
-  {
-    //image: require("../assets/tutorial/tutorial1.png"),
-    title: "환영합니다",
-    description: "Rutina에 오신 것을 환영합니다.",
-  },
-  {
-   // image: require("../assets/tutorial/tutorial2.png"),
-    title: "루틴 생성",
-    description: "원하는 루틴을 쉽게 만들 수 있습니다.",
-  },
-  {
-    //image: require("../assets/tutorial/tutorial3.png"),
-    title: "타임 테이블",
-    description: "나의 성장 과정을 확인해보세요.",
-  },
-  {
-    //image: require("../assets/tutorial/tutorial1.png"),
-    title: "카테고리",
-    description: "Rutina에 오신 것을 환영합니다.",
-  },
-  {
-   // image: require("../assets/tutorial/tutorial2.png"),
-    title: "히트맵",
-    description: "원하는 루틴을 쉽게 만들 수 있습니다.",
-  },
-  {
-    //image: require("../assets/tutorial/tutorial3.png"),
-    title: "사용자 맞춤형 루틴 추천",
-    description: "나의 성장 과정을 확인해보세요.",
-  },
-];
+    {
+      images: [
+        require("../../assets/images/intro/timetable_1.png"),
+        require("../../assets/images/intro/timetable_2.png"),
+      ],
+      title: "시간표 및 일정 관리",
+      description: "스와이프를 통해서 시간표를 쉽게 확인하고, \n일정과 할 일을 한눈에 관리할 수 있습니다.",
+    },
+    {
+      images: [
+        require("../../assets/images/intro/routine.png"),
+      ],
+      title: "루틴 생성 및 관리",
+      description: "나의 하루를 이끌 루틴을 \n생성하고 매일 꾸준히 실천해 보세요.",
+    },
+    {
+      images: [
+        require("../../assets/images/intro/category_1.png"),
+        require("../../assets/images/intro/category_2.png"),
+      ],
+      title: "카테고리",
+      description: "루틴을 카테고리별로 분류하여 \n나만의 루틴을 체계적으로 관리할 수 있습니다.",
+    },
+    {
+      images: [
+        require("../../assets/images/intro/ai.png"),
+      ],
+      title: "AI 루틴 제안",
+      description: "AI에게 맞춤 루틴을 추천 받으세요. \n나의 생활 패턴에 맞는 루틴을 제안해 드립니다.",
+    },
+  ];
 
 
   return (
@@ -80,11 +87,29 @@ export default function TutorialScreen() {
     </TouchableOpacity>
 
     <View style={styles.content}>
-      {/* <Image
-        source={pages[page].image}
-        style={styles.image}
-        resizeMode="contain"
-      /> */}
+      <View style={styles.imageContainer}>
+        {pages.map((p, pIdx) => (
+          <View
+            key={pIdx}
+            style={[
+              styles.imageRow,
+              { display: pIdx === page ? "flex" : "none" }
+            ]}
+          >
+            {p.images.map((img, idx) => (
+              <Image
+                key={idx}
+                source={img}
+                style={[
+                  styles.image,
+                  p.images.length > 1 ? styles.halfImage : styles.fullImage,
+                ]}
+                contentFit="contain"
+              />
+            ))}
+          </View>
+        ))}
+      </View>
 
       <Text style={styles.title}>
         {pages[page].title}
@@ -108,16 +133,24 @@ export default function TutorialScreen() {
         ))}
       </View>
 
-      <TouchableOpacity
-        style={styles.nextButton}
-        onPress={handleNext}
-      >
-        <Text style={styles.nextButtonText}>
-          {page === pages.length - 1
-            ? "시작하기"
-            : "다음"}
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.buttonRow}>
+        {page > 0 && (
+          <TouchableOpacity
+            style={styles.prevButton}
+            onPress={handlePrev}
+          >
+            <Text style={styles.prevButtonText}>이전</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={styles.nextButton}
+          onPress={handleNext}
+        >
+          <Text style={styles.nextButtonText}>
+            {page === pages.length - 1 ? "시작하기" : "다음"}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   </View>
 </SafeAreaView>
@@ -189,11 +222,28 @@ content: {
   justifyContent: "center",
   alignItems: "center",
 },
-
+imageContainer: {
+  justifyContent: "center",
+  alignItems: "center",
+  marginBottom: 24,
+  width: "100%",
+},
+imageRow: {
+  flexDirection: "row",
+  justifyContent: "center",
+  alignItems: "center",
+  width: "100%",
+  gap: 12,
+},
 image: {
+  height: 380,
+},
+fullImage: {
   width: 280,
-  height: 280,
-  marginBottom: 40,
+},
+halfImage: {
+  flex: 1,
+  maxWidth: 160,
 },
 
 title: {
@@ -234,16 +284,32 @@ activeIndicator: {
   backgroundColor: "#007AFF",
 },
 
-nextButton: {
-  backgroundColor: "#007AFF",
-  borderRadius: 16,
-  paddingVertical: 16,
-  alignItems: "center",
-},
-
-nextButtonText: {
-  color: "#fff",
-  fontSize: 16,
-  fontWeight: "600",
-},
+  buttonRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  prevButton: {
+    flex: 1,
+    backgroundColor: "#F2F4F7",
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  prevButtonText: {
+    color: "#475467",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  nextButton: {
+    flex: 1,
+    backgroundColor: "#007AFF",
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  nextButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
 });
