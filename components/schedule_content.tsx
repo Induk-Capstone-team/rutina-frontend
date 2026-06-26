@@ -1,6 +1,7 @@
 //schedule_content.tsx
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { DEFAULT_CATEGORY_NAME, getCategoryStyle } from "@/lib/category";
+import { useTheme, type Theme } from "@/lib/constants/ThemeContext";
 import { normalizeRepeatDays } from "@/lib/storage";
 import { RoutineService } from "@/services/routine_service";
 import { authStore } from "@/store/authStore";
@@ -113,7 +114,8 @@ export default function ScheduleContent({
   const [selectedRoutine, setSelectedRoutine] =
     useState<ScheduleRoutine | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-
+  const { theme, mode } = useTheme();
+  const styles = makeStyles(theme);
   const selectedDateString = [
     selectedDate.getFullYear(),
     String(selectedDate.getMonth() + 1).padStart(2, "0"),
@@ -228,7 +230,7 @@ export default function ScheduleContent({
     isTimed: boolean;
   }) => {
     const typeLabel = item.categoryName ?? DEFAULT_CATEGORY_NAME;
-    const typeStyle = getCategoryStyle(item);
+    const typeStyle = getCategoryStyle(item, mode === "dark");
     const isCompletedToday = isCompletedOnDate(item, selectedDateString);
     const parsedStartTime = parseTimeString(item.startTime);
     const parsedEndTime = parseTimeString(item.endTime);
@@ -252,14 +254,17 @@ export default function ScheduleContent({
               style={[
                 styles.tagBadge,
                 {
-                  backgroundColor: typeStyle.bg,
+                  backgroundColor: typeStyle.dot + "75",
                   borderColor: typeStyle.dot,
                   alignSelf: "stretch",
                 },
               ]}
             >
               <Text
-                style={[styles.tagText, { color: "#233255" }]}
+                style={[
+                  styles.tagText,
+                  { color: mode === "dark" ? typeStyle.dot : "#000000" },
+                ]}
                 numberOfLines={1}
               >
                 {typeLabel}
@@ -323,7 +328,11 @@ export default function ScheduleContent({
             <View style={styles.dateControlRow}>
               <View style={styles.dateInfoContainer}>
                 <TouchableOpacity onPress={() => changeDate(-1)}>
-                  <Ionicons name="chevron-back" size={22} color="#A0B0D0" />
+                  <Ionicons
+                    name="chevron-back"
+                    size={22}
+                    color={theme.textMuted}
+                  />
                 </TouchableOpacity>
 
                 <View style={styles.dateRow}>
@@ -337,7 +346,11 @@ export default function ScheduleContent({
                 </View>
 
                 <TouchableOpacity onPress={() => changeDate(1)}>
-                  <Ionicons name="chevron-forward" size={22} color="#A0B0D0" />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={22}
+                    color={theme.textMuted}
+                  />
                 </TouchableOpacity>
               </View>
 
@@ -358,7 +371,11 @@ export default function ScheduleContent({
                   ]}
                   onPress={() => setShowDatePicker(!showDatePicker)}
                 >
-                  <Ionicons name="calendar-outline" size={18} color="#A0B0D0" />
+                  <Ionicons
+                    name="calendar-outline"
+                    size={18}
+                    color={theme.textMuted}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -370,7 +387,8 @@ export default function ScheduleContent({
                   markedDates={{
                     [selectedDateString]: {
                       selected: true,
-                      selectedColor: "#F1F1FB",
+                      selectedColor:
+                        mode === "dark" ? theme.borderStrong : "#F1F1FB",
                     },
                   }}
                   onDayPress={onDayPress}
@@ -423,182 +441,184 @@ export default function ScheduleContent({
         }}
         onUpdated={async () => {
           await loadRoutines();
+          await onRoutineUpdated?.();
         }}
       />
     </>
   );
 }
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: 32,
-    padding: 24,
-    marginBottom: 20,
-  },
-  dateControlRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  dateInfoContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 15,
-  },
-  dateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    minWidth: 120,
-  },
-  dayNum: {
-    fontSize: 44,
-    fontWeight: "800",
-    color: "#2A3C6B",
-  },
-  monthYear: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#A0B0D0",
-  },
-  subInfo: {
-    fontSize: 13,
-    color: "#B4B6C0",
-  },
-  calendarBtn: {
-    padding: 8,
-    backgroundColor: "#F3F4F8",
-    borderRadius: 10,
-  },
-  calendarBtnActive: {
-    backgroundColor: "#405886",
-  },
-  pickerContainer: {
-    backgroundColor: "#F8F9FB",
-    borderRadius: 20,
-    marginBottom: 20,
-    overflow: "hidden",
-    paddingBottom: 10,
-    marginHorizontal: -4,
-  },
-  progressArea: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  progressBar: {
-    flex: 1,
-    height: 6,
-    backgroundColor: "#EDEEF1",
-    borderRadius: 3,
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#405886",
-    borderRadius: 3,
-  },
-  progressPercent: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#A0B0D0",
-  },
-  sectionTitle: {
-    fontSize: 13,
-    color: "#B4B6C0",
-    fontWeight: "600",
-    marginTop: 15,
-    marginBottom: 10,
-  },
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingBottom: 20,
+    },
+    card: {
+      backgroundColor: theme.card,
+      borderRadius: 32,
+      padding: 24,
+      marginBottom: 20,
+    },
+    dateControlRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 20,
+    },
+    dateInfoContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 15,
+    },
+    dateRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      minWidth: 120,
+    },
+    dayNum: {
+      fontSize: 44,
+      fontWeight: "800",
+      color: theme.text,
+    },
+    monthYear: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: theme.textMuted,
+    },
+    subInfo: {
+      fontSize: 13,
+      color: theme.textFaint,
+    },
+    calendarBtn: {
+      padding: 8,
+      backgroundColor: theme.bg,
+      borderRadius: 10,
+    },
+    calendarBtnActive: {
+      backgroundColor: theme.main,
+    },
+    pickerContainer: {
+      backgroundColor: theme.cardAlt,
+      borderRadius: 20,
+      marginBottom: 20,
+      overflow: "hidden",
+      paddingBottom: 10,
+      marginHorizontal: -4,
+    },
+    progressArea: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 15,
+      marginBottom: 10,
+    },
+    progressBar: {
+      flex: 1,
+      height: 6,
+      backgroundColor: theme.divider,
+      borderRadius: 3,
+    },
+    progressFill: {
+      height: "100%",
+      backgroundColor: theme.main,
+      borderRadius: 3,
+    },
+    progressPercent: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.textMuted,
+    },
+    sectionTitle: {
+      fontSize: 13,
+      color: theme.textFaint,
+      fontWeight: "600",
+      marginTop: 15,
+      marginBottom: 10,
+    },
 
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: "#E2E5EC",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkboxActive: {
-    backgroundColor: "#A0B0D0",
-    borderColor: "#A0B0D0",
-  },
-  itemContent: {
-    flex: 1,
-    marginLeft: 0,
-  },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#444",
-  },
-  textCompleted: {
-    color: "#B4B6C0",
-    textDecorationLine: "line-through",
-  },
-  itemTime: {
-    fontSize: 12,
-    color: "#B4B6C0",
-    marginTop: 2,
-  },
-  itemSubInfo: {
-    fontSize: 12,
-    color: "#A0B0D0",
-    marginTop: 2,
-  },
-  tagBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  tagText: {
-    fontSize: 12,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#F3F4F8",
-    marginVertical: 10,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#B4B6C0",
-    paddingVertical: 8,
-  },
-  headerActionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
+    itemRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+    },
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: theme.checkboxBorder,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    checkboxActive: {
+      backgroundColor: theme.textMuted,
+      borderColor: theme.textMuted,
+    },
+    itemContent: {
+      flex: 1,
+      marginLeft: 0,
+    },
+    itemTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: theme.textBody,
+    },
+    textCompleted: {
+      color: theme.textFaint,
+      textDecorationLine: "line-through",
+    },
+    itemTime: {
+      fontSize: 12,
+      color: theme.textFaint,
+      marginTop: 2,
+    },
+    itemSubInfo: {
+      fontSize: 12,
+      color: theme.textMuted,
+      marginTop: 2,
+    },
+    tagBadge: {
+      paddingHorizontal: 7,
+      paddingVertical: 4,
+      borderRadius: 8,
+    },
+    tagText: {
+      fontSize: 12,
+      fontWeight: "700",
+      textAlign: "center",
+    },
+    divider: {
+      height: 1,
+      backgroundColor: theme.bg,
+      marginVertical: 10,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: theme.textFaint,
+      paddingVertical: 8,
+    },
+    headerActionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
 
-  todayButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: "#F3F4F8",
-  },
+    todayButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: theme.bg,
+    },
 
-  todayButtonText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#405886",
-  },
-});
+    todayButtonText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme.main,
+    },
+  });

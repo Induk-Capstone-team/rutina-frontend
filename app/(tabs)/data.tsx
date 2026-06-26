@@ -2,6 +2,7 @@
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
 import { Header } from "@/components/ui/_header";
 import { getCategoryStyle } from "@/lib/category";
+import { useTheme, type Theme } from "@/lib/constants/ThemeContext";
 import { RoutineService } from "@/services/routine_service";
 import { authStore } from "@/store/authStore";
 import type { HeatmapRoutine, ScheduleRoutine } from "@/types/routine";
@@ -32,8 +33,6 @@ type CalendarCell = {
   label: string;
   isEmpty?: boolean;
 };
-
-const MAIN_COLOR = "#405886";
 
 const WEEK_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -206,6 +205,9 @@ function HeatmapRow({
   selectedWeekDate: Date;
   onPress: (routineId: number) => void;
 }) {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
+
   const categoryStyle = getCategoryStyle({
     categoryName: routine.category.name,
     color: routine.category.colorCode,
@@ -252,13 +254,14 @@ function HeatmapRow({
                 flex: 1,
                 flexDirection: "column",
                 justifyContent: "space-between",
+                backgroundColor: theme.card,
               }}
             >
               {col.cells.map((cell, dayIndex) =>
                 cell === null ? (
                   <View
                     key={`empty-${col.weekIndex}-${dayIndex}`}
-                    style={{ flex: 1 }}
+                    style={{ flex: 1, backgroundColor: theme.card }}
                   />
                 ) : (
                   <View
@@ -268,9 +271,11 @@ function HeatmapRow({
                         flex: 1,
                         margin: 0.5,
                         borderRadius: 1.5,
-                        backgroundColor: "#ECEEF3",
+                        backgroundColor: theme.heatmapEmpty,
                       },
-                      cell.filled && { backgroundColor: categoryStyle.dot },
+                      cell.filled && {
+                        backgroundColor: categoryStyle.dot + "90",
+                      },
                     ]}
                   />
                 ),
@@ -297,7 +302,7 @@ function HeatmapRow({
                   styles.monthCalendarCell,
                   cell.isEmpty && styles.monthCalendarCellEmpty,
                   cell.filled && {
-                    backgroundColor: categoryStyle.bg,
+                    backgroundColor: categoryStyle.dot + "50",
                     borderColor: categoryStyle.dot,
                   },
                 ]}
@@ -331,8 +336,8 @@ function HeatmapRow({
                   style={[
                     styles.weekHeatmapCell,
                     cell.filled && {
-                      backgroundColor: categoryStyle.dot,
-                      borderColor: categoryStyle.dot,
+                      backgroundColor: categoryStyle.dot + "50",
+                      borderColor: categoryStyle.dot + "50",
                     },
                   ]}
                 />
@@ -352,6 +357,8 @@ function HeatmapRow({
   );
 }
 export default function DataScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const today = new Date();
   // 저장된 루틴 목록
   const [heatmapData, setHeatmapData] = useState<HeatmapRoutine[]>([]);
@@ -696,148 +703,162 @@ export default function DataScreen() {
     </SafeAreaView>
   );
 }
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F3F4F8" },
-  container: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
-  scrollView: { flex: 1 },
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: 32,
-    padding: 24,
-    marginBottom: 20,
-  },
-  headerArea: { marginBottom: 18 },
-  screenTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#2A3C6B",
-    marginBottom: 6,
-  },
-  screenSubTitle: { fontSize: 13, color: "#A0B0D0", fontWeight: "500" },
-  viewTabRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
-  viewTabButton: {
-    flex: 1,
-    backgroundColor: "#F3F4F8",
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  viewTabButtonActive: { backgroundColor: MAIN_COLOR },
-  viewTabText: { fontSize: 14, fontWeight: "700", color: "#6D7690" },
-  viewTabTextActive: { color: "#FFF" },
-  periodRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 18,
-  },
-  periodMoveButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#F3F4F8",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  periodMoveText: { fontSize: 20, fontWeight: "700", color: MAIN_COLOR },
-  periodText: { fontSize: 16, fontWeight: "700", color: "#2A3C6B" },
-  emptyBox: {
-    backgroundColor: "#F8F9FB",
-    borderRadius: 20,
-    paddingVertical: 40,
-    alignItems: "center",
-  },
-  emptyText: { fontSize: 14, color: "#B4B6C0", fontWeight: "600" },
-  categorySection: { marginBottom: 14 },
-  categoryHeader: {
-    backgroundColor: "#F8F9FB",
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  categoryHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  categoryTitle: { fontSize: 15, fontWeight: "800", color: "#2A3C6B" },
-  categoryCount: { fontSize: 12, color: "#A0B0D0", fontWeight: "700" },
-  categoryToggle: { fontSize: 13, color: MAIN_COLOR, fontWeight: "700" },
-  categoryBody: { marginTop: 8, gap: 6 },
-  routineCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 18,
-    padding: 8,
-    paddingBottom: 6,
-    borderWidth: 1,
-    borderColor: "#F1F3F7",
-  },
-  routineHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  routineColorDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  routineTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: "#2A3C6B" },
-  monthWeekLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  monthWeekLabel: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 10,
-    color: "#A0B0D0",
-    fontWeight: "700",
-  },
-  monthCalendarWrap: { flexDirection: "row", flexWrap: "wrap", rowGap: 2 },
-  monthCalendarCell: {
-    width: "14.28%",
-    aspectRatio: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  monthCalendarCellEmpty: { backgroundColor: "transparent" },
-  monthCalendarTextWrap: {
-    flex: 1,
-    width: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: theme.bg },
+    container: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
+    scrollView: { flex: 1 },
+    card: {
+      backgroundColor: theme.card,
+      borderRadius: 32,
+      padding: 24,
+      marginBottom: 20,
+    },
+    headerArea: { marginBottom: 18 },
+    screenTitle: {
+      fontSize: 24,
+      fontWeight: "800",
+      color: theme.text,
+      marginBottom: 6,
+    },
+    screenSubTitle: { fontSize: 13, color: theme.textMuted, fontWeight: "500" },
+    viewTabRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
+    viewTabButton: {
+      flex: 1,
+      backgroundColor: theme.tabBg,
+      borderRadius: 14,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    viewTabButtonActive: { backgroundColor: theme.main },
+    viewTabText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.textSecondary,
+    },
+    viewTabTextActive: { color: theme.card },
+    periodRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 18,
+    },
+    periodMoveButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.tabBg,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    periodMoveText: { fontSize: 20, fontWeight: "700", color: theme.main },
+    periodText: { fontSize: 16, fontWeight: "700", color: theme.text },
+    emptyBox: {
+      backgroundColor: theme.cardAlt,
+      borderRadius: 20,
+      paddingVertical: 40,
+      alignItems: "center",
+    },
+    emptyText: { fontSize: 14, color: theme.textFaint, fontWeight: "600" },
+    categorySection: { marginBottom: 14 },
+    categoryHeader: {
+      backgroundColor: theme.cardAlt,
+      borderRadius: 18,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    categoryHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+    categoryTitle: { fontSize: 15, fontWeight: "800", color: theme.text },
+    categoryCount: { fontSize: 12, color: theme.textMuted, fontWeight: "700" },
+    categoryToggle: { fontSize: 13, color: theme.main, fontWeight: "700" },
+    categoryBody: { marginTop: 8, gap: 6 },
+    routineCard: {
+      backgroundColor: theme.card,
+      borderRadius: 18,
+      padding: 8,
+      paddingBottom: 6,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    routineHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    routineColorDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+    routineTitle: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.text,
+    },
+    monthWeekLabelRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 6,
+      marginBottom: 4,
+    },
+    monthWeekLabel: {
+      flex: 1,
+      textAlign: "center",
+      fontSize: 10,
+      color: theme.textMuted,
+      fontWeight: "700",
+    },
+    monthCalendarWrap: { flexDirection: "row", flexWrap: "wrap", rowGap: 2 },
+    monthCalendarCell: {
+      width: "14.28%",
+      aspectRatio: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      borderRadius: 40,
+      borderColor: "transparent",
+    },
+    monthCalendarCellEmpty: { backgroundColor: "transparent" },
+    monthCalendarTextWrap: {
+      flex: 1,
+      width: "100%",
+      justifyContent: "center",
+      alignItems: "center",
+    },
 
-  monthCalendarCellText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: MAIN_COLOR,
-    textAlign: "center",
-    includeFontPadding: false,
-    textAlignVertical: "center",
-  },
-  monthCalendarCellTextFilled: {
-    color: MAIN_COLOR,
-    fontWeight: "800",
-  },
+    monthCalendarCellText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: theme.main,
+      textAlign: "center",
+      includeFontPadding: false,
+      textAlignVertical: "center",
+    },
+    monthCalendarCellTextFilled: {
+      color: theme.main,
+      fontWeight: "800",
+    },
 
-  weekHeatmapWrap: { flexDirection: "row", justifyContent: "space-between" },
-  weekHeatmapCell: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#DADFE8",
-  },
-  weekLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 4,
-  },
-  weekLabel: { width: 20, textAlign: "center", fontSize: 10, color: "#A0B0D0" },
-  weekContainer: {
-    paddingBottom: 8,
-    paddingTop: 4,
-  },
-});
+    weekHeatmapWrap: { flexDirection: "row", justifyContent: "space-between" },
+    weekHeatmapCell: {
+      width: 20,
+      height: 20,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: theme.checkboxBorder,
+    },
+    weekLabelRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 4,
+    },
+    weekLabel: {
+      width: 20,
+      textAlign: "center",
+      fontSize: 10,
+      color: theme.textMuted,
+    },
+    weekContainer: {
+      paddingBottom: 8,
+      paddingTop: 4,
+    },
+  });
