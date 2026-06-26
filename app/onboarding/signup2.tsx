@@ -69,30 +69,30 @@ export default function SignupStep2Screen() {
     isSocial?: string;
   }>();
 
-  const {updateProfile, isLoading, error } = useAuthViewModel();
+  const { updateProfile, isLoading, error } = useAuthViewModel();
 
   const [age, setAge] = useState("");
   const [job, setJob] = useState("");
   const [gender, setGender] = useState("");
-const [ageError, setAgeError] = useState("");
+  const [ageError, setAgeError] = useState("");
 
-const ageDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ageDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-useEffect(() => {
-  if (ageDebounceRef.current) clearTimeout(ageDebounceRef.current);
-  ageDebounceRef.current = setTimeout(() => {
-    if (age && Number(age) < 13) {
-      setAgeError("13세 미만은 입력할 수 없습니다.");
-    } else {
-      setAgeError("");
-    }
-  }, 500);
-  return () => {
-    if (ageDebounceRef.current) {
-      clearTimeout(ageDebounceRef.current);
-    }
-  };
-}, [age]);
+  useEffect(() => {
+    if (ageDebounceRef.current) clearTimeout(ageDebounceRef.current);
+    ageDebounceRef.current = setTimeout(() => {
+      if (age && Number(age) < 13) {
+        setAgeError("13세 미만은 입력할 수 없습니다.");
+      } else {
+        setAgeError("");
+      }
+    }, 500);
+    return () => {
+      if (ageDebounceRef.current) {
+        clearTimeout(ageDebounceRef.current);
+      }
+    };
+  }, [age]);
 
   const isFormValid = age && job && gender;
 

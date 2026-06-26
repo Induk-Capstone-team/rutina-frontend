@@ -78,8 +78,11 @@ export default function LoginScreen() {
                 <Text style={styles.linkText}>회원가입</Text>
               </TouchableOpacity>
               <Text style={styles.linkDivider}>|</Text>
-              <TouchableOpacity>
-                <Text style={styles.linkText}>비밀번호 찾기</Text>
+              <TouchableOpacity
+                onPress={() => router.push("/onboarding/password_reset")}>
+                <Text style={styles.linkText} >
+                  비밀번호 찾기
+                </Text>
               </TouchableOpacity>
             </View>
 

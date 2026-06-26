@@ -1,9 +1,10 @@
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
 import { useTheme, type Theme } from "@/lib/constants/ThemeContext";
 import { authApi } from "@/lib/data/auth_api";
+import * as Application from 'expo-application';
 import { useFocusEffect, useRouter } from "expo-router";
 import { Bell, HelpCircle, Info, Megaphone, Moon } from "lucide-react-native";
-import React, { useCallback, useState } from "react";
+import { default as React, useCallback, useState } from "react";
 import {
   Alert,
   SafeAreaView,
@@ -21,6 +22,7 @@ type SettingItemProps = {
   value?: string | boolean;
   type?: "link" | "switch" | "text";
   onToggle?: (val: boolean) => void;
+  onPress?: () => void;
 };
 
 const SettingItem = ({
@@ -29,6 +31,7 @@ const SettingItem = ({
   value,
   type = "link",
   onToggle = () => {},
+  onPress,
 }: SettingItemProps) => {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
@@ -36,6 +39,8 @@ const SettingItem = ({
     <TouchableOpacity
       style={styles.settingItem}
       activeOpacity={type === "link" ? 0.7 : 1}
+      onPress={onPress}
+      disabled={!onPress}
     >
       <View style={styles.settingItemLeft}>
         <View style={styles.iconContainer}>{icon}</View>
@@ -312,7 +317,7 @@ export default function SettingsScreen() {
         {/* Profile Section */}
         <TouchableOpacity
           style={styles.profileSection}
-          onPress={() => router.push("/profile")}
+          onPress={() => router.push("/settings/profile")}
           activeOpacity={0.7}
         >
           <View style={styles.profileInfo}>
@@ -324,6 +329,7 @@ export default function SettingsScreen() {
           <View style={styles.editProfileBtn}>
             <Text style={styles.editProfileText}>수정</Text>
           </View>
+
         </TouchableOpacity>
 
         {/* General Settings */}
@@ -351,18 +357,18 @@ export default function SettingsScreen() {
           <SettingItem
             icon={<Megaphone size={18} color="#405886" />}
             title="공지사항"
-          />
+          onPress={() => router.push("/settings/notice")} />
           <View style={styles.divider} />
           <SettingItem
             icon={<HelpCircle size={18} color="#405886" />}
             title="고객센터 / 도움말"
-          />
+          onPress={() => router.push("/settings/contact")} />
           <View style={styles.divider} />
           <SettingItem
             icon={<Info size={18} color="#405886" />}
             title="앱 버전"
             type="text"
-            value="1.0.0"
+            value={`Ver ${Application.nativeApplicationVersion}`}
           />
         </View>
 
