@@ -10,6 +10,7 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
+import axios from "axios";
 import { useFonts } from "expo-font";
 import {
   Stack,
@@ -89,11 +90,24 @@ export default function RootLayout() {
             } else {
               authStore.setLoggedIn(true);
             }
-          } catch (apiError) {
-            console.warn("만료되었거나 서버 인증에 실패한 토큰입니다.");
-            await AsyncStorage.removeItem("userToken");
-            await AsyncStorage.removeItem("refreshToken");
-            authStore.setLoggedIn(false);
+          } catch (apiError: unknown) {
+            const status = axios.isAxiosError(apiError)
+              ? apiError.response?.status
+              : null;
+
+            if (status === 401) {
+              // refresh도 실패한 진짜 인증 만료 → 로그아웃
+              console.warn("토큰 만료, 로그아웃 처리");
+              await AsyncStorage.multiRemove(["userToken", "refreshToken"]);
+              authStore.setLoggedIn(false);
+            } else {
+              // 네트워크 오류, 서버 500 등 → 토큰 유지하고 로그인 상태 복구
+              console.warn(
+                "checkNewUser 실패 (네트워크/서버 오류), 로그인 유지:",
+                apiError,
+              );
+              authStore.setLoggedIn(true);
+            }
           }
         } else {
           authStore.setLoggedIn(false);
@@ -132,7 +146,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     // 1. 모든 데이터가 로드되었는지 확인
-    if (!navigationState?.key || !loaded || !isReady || !isTutorialReady) return;
+    if (!navigationState?.key || !loaded || !isReady || !isTutorialReady)
+      return;
 
     const timeout = setTimeout(() => {
       // 2. 로그인 안 된 경우
@@ -145,7 +160,7 @@ export default function RootLayout() {
       if (isLoggedIn) {
         if (!tutorialCompleted) {
           // 튜토리얼 미완료 시 튜토리얼로
-          if (segments[1] !== "tutorial") {
+          if ((segments[1] as string) !== "tutorial") {
             router.replace("/onboarding/tutorial");
           }
         } else {
@@ -161,7 +176,16 @@ export default function RootLayout() {
     }, 0);
 
     return () => clearTimeout(timeout);
-  }, [isLoggedIn, inAuthGroup, navigationState?.key, loaded, isReady, isTutorialReady, tutorialCompleted, segments]);
+  }, [
+    isLoggedIn,
+    inAuthGroup,
+    navigationState?.key,
+    loaded,
+    isReady,
+    isTutorialReady,
+    tutorialCompleted,
+    segments,
+  ]);
   useEffect(() => {
     if (loaded && isReady) {
       SplashScreen.hideAsync();
@@ -184,9 +208,12 @@ export default function RootLayout() {
     checkTutorialStatus();
 
     // 💡 튜토리얼 완료 신호를 들으면 상태를 true로 즉시 업데이트!
-    const subscription = DeviceEventEmitter.addListener('TutorialCompletedEvent', () => {
-      setTutorialCompleted(true);
-    });
+    const subscription = DeviceEventEmitter.addListener(
+      "TutorialCompletedEvent",
+      () => {
+        setTutorialCompleted(true);
+      },
+    );
 
     // 컴포넌트가 언마운트될 때 리스너 정리
     return () => {
@@ -195,7 +222,13 @@ export default function RootLayout() {
   }, []); // 💡 의존성 배열을 빈 배열로 변경
 
   // 4. 리소스가 완전히 로드될 때까지 렌더링을 지연시킵니다.
-  if (!navigationState?.key || !loaded || !isReady || !isNavigationReady || !isTutorialReady) {
+  if (
+    !navigationState?.key ||
+    !loaded ||
+    !isReady ||
+    !isNavigationReady ||
+    !isTutorialReady
+  ) {
     return null;
   }
 
@@ -207,8 +240,14 @@ export default function RootLayout() {
         >
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="settings/settings" options={{ headerShown: false }} />
-            <Stack.Screen name="settings/profile" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="settings/settings"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="settings/profile"
+              options={{ headerShown: false }}
+            />
             <Stack.Screen
               name="onboarding/login"
               options={{ headerShown: false }}
@@ -226,10 +265,10 @@ export default function RootLayout() {
               options={{ headerShown: false }}
             />
             <Stack.Screen
-            name="onboarding/password_reset"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
+              name="onboarding/password_reset"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
               name="modal"
               options={{
                 presentation: "transparentModal",
@@ -239,10 +278,10 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen
-            name="onboarding/tutorial"
-            options={{ headerShown: false }}
-          />
-        </Stack>
+              name="onboarding/tutorial"
+              options={{ headerShown: false }}
+            />
+          </Stack>
 
           <StatusBar style="auto" />
         </ThemeProvider>
