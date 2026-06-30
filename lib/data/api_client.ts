@@ -71,6 +71,11 @@ apiClient.interceptors.response.use(
 
     // 🔥 401(인증 만료) 에러 발생 시 자동 갱신 처리
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // PUBLIC_ENDPOINTS는 refresh 시도 없이 바로 reject
+      const isPublic = PUBLIC_ENDPOINTS.some((ep) =>
+        originalRequest.url?.includes(ep),
+      );
+      if (isPublic) return Promise.reject(error);
       // 재발급 요청 주소 자체에서 401이 터진 거라면 무한 루프 방지를 위해 즉시 로그아웃
       if (originalRequest.url?.includes("/api/v1/auth/reissue")) {
         await AsyncStorage.removeItem("userToken");
@@ -84,7 +89,7 @@ apiClient.interceptors.response.use(
       try {
         // 1. 저장소에서 리프레시 토큰 가져오기
         const refreshToken = await AsyncStorage.getItem("refreshToken");
-        
+
         if (!refreshToken) {
           throw new Error("리프레시 토큰이 없습니다.");
         }
@@ -97,12 +102,14 @@ apiClient.interceptors.response.use(
             headers: {
               Authorization: `Bearer ${refreshToken}`,
             },
-          }
+          },
         );
 
         // 3. 새로 발급받은 토큰 추출 (백엔드 응답 포맷인 accessToken / refreshToken 구조에 맞춰 확인 필요)
-        const newAccessToken = response.data?.accessToken || response.data?.data?.accessToken;
-        const newRefreshToken = response.data?.refreshToken || response.data?.data?.refreshToken;
+        const newAccessToken =
+          response.data?.accessToken || response.data?.data?.accessToken;
+        const newRefreshToken =
+          response.data?.refreshToken || response.data?.data?.refreshToken;
 
         if (newAccessToken) {
           // 4. 새 토큰 저장소에 업데이트
@@ -136,3 +143,4 @@ apiClient.interceptors.response.use(
 
 export default apiClient;
 export { publicClient };
+
