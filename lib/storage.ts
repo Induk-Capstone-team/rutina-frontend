@@ -357,3 +357,24 @@ export const RoutineStorage = {
     }
   },
 };
+const HIDE_TODO_KEY = "hideTodoInSchedule";
+
+export const SettingsStorage = {
+  getHideTodoInSchedule: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(HIDE_TODO_KEY);
+      return value === "true";
+    } catch (e) {
+      console.error("설정 로드 실패", e);
+      return false;
+    }
+  },
+
+  setHideTodoInSchedule: async (value: boolean) => {
+    try {
+      await AsyncStorage.setItem(HIDE_TODO_KEY, String(value));
+    } catch (e) {
+      console.error("설정 저장 실패", e);
+    }
+  },
+};

@@ -1,15 +1,18 @@
 //schedule_content.tsx
 import { ScheduleDetailModal } from "@/components/schedule_detail_modal";
+import { TodoDetailModal } from "@/components/todo_detail_modal";
 import { DEFAULT_CATEGORY_NAME, getCategoryStyle } from "@/lib/category";
 import { useTheme, type Theme } from "@/lib/constants/ThemeContext";
-import { normalizeRepeatDays } from "@/lib/storage";
+import { normalizeRepeatDays, SettingsStorage } from "@/lib/storage";
 import { RoutineService } from "@/services/routine_service";
+import { TodoService } from "@/services/todo_service";
 import { authStore } from "@/store/authStore";
 import type {
   CalendarDay,
   RepeatWeekday,
   ScheduleRoutine,
 } from "@/types/routine";
+import type { Todo } from "@/types/todo";
 import { Ionicons } from "@expo/vector-icons";
 import { isSameDay } from "date-fns";
 import { useFocusEffect } from "expo-router";
@@ -107,10 +110,13 @@ export default function ScheduleContent({
   onRoutineUpdated,
 }: ScheduleContentProps) {
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [hideTodoInSchedule, setHideTodoInSchedule] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [noTimeRoutines, setNoTimeRoutines] = useState<ScheduleRoutine[]>([]);
   const [timedRoutines, setTimedRoutines] = useState<ScheduleRoutine[]>([]);
-
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
+  const [showTodoDetailModal, setShowTodoDetailModal] = useState(false);
   const [selectedRoutine, setSelectedRoutine] =
     useState<ScheduleRoutine | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -196,6 +202,36 @@ export default function ScheduleContent({
       setNoTimeRoutines([]);
     }
   }, [selectedDateString]);
+
+  // 선택된 날짜의 Todo 불러오기
+  const loadTodos = useCallback(async () => {
+    if (!authStore.isLoggedIn) return;
+    try {
+      const list = await TodoService.getByDate(selectedDateString);
+
+      // 시간 있는 Todo는 시간순, 시간 없는 Todo는 뒤에 붙도록 정렬
+      const sorted = [...list].sort((a, b) => {
+        const aTime = parseTimeString(a.todoTime);
+        const bTime = parseTimeString(b.todoTime);
+        if (aTime && bTime) return aTime.totalMinutes - bTime.totalMinutes;
+        if (aTime && !bTime) return -1;
+        if (!aTime && bTime) return 1;
+        return 0;
+      });
+
+      setTodos(sorted);
+    } catch (error) {
+      if ((error as any)?.name === "NoTokenError") return;
+      if (
+        (error as any)?.response?.status === 401 ||
+        (error as any)?.response?.status === 403
+      )
+        return;
+      console.error("할 일 불러오기 실패", error);
+      setTodos([]);
+    }
+  }, [selectedDateString]);
+
   // 날짜가 바뀔 때마다 루틴 새로 불러오기
   useEffect(() => {
     onToggleComplete?.(loadRoutines);
@@ -205,7 +241,9 @@ export default function ScheduleContent({
   useFocusEffect(
     useCallback(() => {
       loadRoutines();
-    }, [loadRoutines]),
+      loadTodos();
+      SettingsStorage.getHideTodoInSchedule().then(setHideTodoInSchedule);
+    }, [loadRoutines, loadTodos]),
   );
   const toggleComplete = async (id: number) => {
     try {
@@ -217,11 +255,26 @@ export default function ScheduleContent({
     }
   };
 
+  // Todo 완료 상태 토글
+  const toggleTodoComplete = async (item: Todo) => {
+    try {
+      await TodoService.updateCompleted(item.id, {
+        completed: !item.completed,
+      });
+      await loadTodos();
+    } catch (error) {
+      console.error("할 일 완료 상태 변경 실패", error);
+    }
+  };
+
   const handlePressRoutine = (item: ScheduleRoutine) => {
     setSelectedRoutine(item);
     setShowDetailModal(true);
   };
-
+  const handlePressTodo = (item: Todo) => {
+    setSelectedTodo(item);
+    setShowTodoDetailModal(true);
+  };
   const RenderItem = ({
     item,
     isTimed,
@@ -307,12 +360,80 @@ export default function ScheduleContent({
     );
   };
 
-  const allRoutines = [...noTimeRoutines, ...timedRoutines];
-  const totalCount = allRoutines.length;
-  const completedCount = allRoutines.filter((item) =>
-    isCompletedOnDate(item, selectedDateString),
-  ).length;
+  // Todo 아이템 렌더링 (카테고리 뱃지 없이, 시간만 표시)
+  const RenderTodoItem = ({ item }: { item: Todo }) => {
+    const parsedTime = parseTimeString(item.todoTime);
 
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => handlePressTodo(item)}
+      >
+        <View style={styles.itemRow}>
+          <View
+            style={{
+              width: 80,
+              marginRight: 10,
+              flexShrink: 0,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <View
+              style={[
+                styles.tagBadge,
+                {
+                  backgroundColor: theme.textMuted + "25",
+                  borderColor: theme.textMuted,
+                  alignSelf: "stretch",
+                },
+              ]}
+            >
+              <Text
+                style={[styles.tagText, { color: theme.textMuted }]}
+                numberOfLines={1}
+              >
+                할 일
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.itemContent}>
+            <Text
+              style={[styles.itemTitle, item.completed && styles.textCompleted]}
+            >
+              {item.content}
+            </Text>
+            {parsedTime && (
+              <Text style={styles.itemTime}>
+                {String(parsedTime.hour).padStart(2, "0")}:
+                {String(parsedTime.minute).padStart(2, "0")}
+              </Text>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.checkbox, item.completed && styles.checkboxActive]}
+            onPress={() => toggleTodoComplete(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            {item.completed && (
+              <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+            )}
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // 진행률 계산에 Todo까지 포함 (숨김 설정 시 제외)
+  const allRoutines = [...noTimeRoutines, ...timedRoutines];
+  const totalCount =
+    allRoutines.length + (hideTodoInSchedule ? 0 : todos.length);
+  const completedCount =
+    allRoutines.filter((item) => isCompletedOnDate(item, selectedDateString))
+      .length +
+    (hideTodoInSchedule ? 0 : todos.filter((item) => item.completed).length);
   // 진행률 바 계산용
   const progressPercentage =
     totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
@@ -409,6 +530,20 @@ export default function ScheduleContent({
                 {completedCount} / {totalCount}
               </Text>
             </View>
+            {!hideTodoInSchedule && (
+              <>
+                <Text style={styles.sectionTitle}>할 일</Text>
+                {todos.length === 0 ? (
+                  <Text style={styles.emptyText}>등록된 할 일이 없어요.</Text>
+                ) : (
+                  todos.map((item) => (
+                    <RenderTodoItem key={`todo-${item.id}`} item={item} />
+                  ))
+                )}
+
+                <View style={styles.divider} />
+              </>
+            )}
 
             <Text style={styles.sectionTitle}>시간 없는 루틴</Text>
             {noTimeRoutines.length === 0 ? (
@@ -442,6 +577,17 @@ export default function ScheduleContent({
         onUpdated={async () => {
           await loadRoutines();
           await onRoutineUpdated?.();
+        }}
+      />
+      <TodoDetailModal
+        visible={showTodoDetailModal}
+        todo={selectedTodo}
+        onClose={() => {
+          setShowTodoDetailModal(false);
+          setSelectedTodo(null);
+        }}
+        onUpdated={async () => {
+          await loadTodos();
         }}
       />
     </>
