@@ -1,5 +1,6 @@
-//components/time_picker_modal.tsx
+// components/single_time_picker_modal.tsx
 import { ThemedText } from "@/components/themed-text";
+import { HourStepperPicker } from "@/components/time_picker_modal";
 import { useTheme } from "@/lib/constants/ThemeContext";
 import React, { useEffect, useState } from "react";
 import {
@@ -14,35 +15,20 @@ import {
   View,
 } from "react-native";
 
-type TimePickerModalProps = {
+type SingleTimePickerModalProps = {
   visible: boolean;
-  startHour: string;
-  startMinute: string;
-  endHour: string;
-  endMinute: string;
-
+  hour: string;
+  minute: string;
   onClose: () => void;
-  onApply: (time: {
-    startHour: string;
-    startMinute: string;
-    endHour: string;
-    endMinute: string;
-  }) => void;
+  onApply: (time: { hour: string; minute: string }) => void;
 };
-
-const MINUTE_OPTIONS = ["00", "10", "20", "30", "40", "50"];
 
 function padTwo(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function formatRangeLabel(
-  startHour: string,
-  startMinute: string,
-  endHour: string,
-  endMinute: string,
-) {
-  return `${startHour}:${startMinute} ~ ${endHour}:${endMinute}`;
+function formatLabel(hour: string, minute: string) {
+  return `${hour}:${minute}`;
 }
 
 function getNextHour(hour: string) {
@@ -54,133 +40,21 @@ function getPrevHour(hour: string) {
 }
 
 function getNextMinute(minute: string) {
-  const currentIndex = MINUTE_OPTIONS.indexOf(minute);
-  const nextIndex = (currentIndex + 1) % MINUTE_OPTIONS.length;
-  return MINUTE_OPTIONS[nextIndex];
+  return padTwo((Number(minute) + 1) % 60);
 }
 
 function getPrevMinute(minute: string) {
-  const currentIndex = MINUTE_OPTIONS.indexOf(minute);
-  const prevIndex =
-    (currentIndex - 1 + MINUTE_OPTIONS.length) % MINUTE_OPTIONS.length;
-  return MINUTE_OPTIONS[prevIndex];
+  return padTwo((Number(minute) - 1 + 60) % 60);
 }
-export function StepperPicker({
-  label,
-  value,
-  onIncrease,
-  onDecrease,
-}: {
+type MinuteStepperPickerProps = {
   label: string;
   value: string;
   onIncrease: () => void;
   onDecrease: () => void;
-}) {
-  const { theme } = useTheme();
-  return (
-    <View
-      style={{
-        flex: 1,
-        borderRadius: 14,
-        paddingVertical: 6,
-        paddingHorizontal: 6,
-        alignItems: "center",
-      }}
-    >
-      <ThemedText
-        style={{
-          fontSize: 12,
-          fontWeight: "700",
-          color: theme.textMuted,
-          marginBottom: 8,
-        }}
-      >
-        {label}
-      </ThemedText>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 6,
-        }}
-      >
-        <TouchableOpacity
-          style={{
-            width: 30,
-            height: 34,
-            borderRadius: 8,
-            backgroundColor: theme.cardAlt,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onPress={onDecrease}
-        >
-          <ThemedText
-            style={{
-              fontSize: 18,
-              fontWeight: "800",
-              color: theme.main,
-              textAlign: "center",
-              includeFontPadding: false,
-              lineHeight: 18,
-            }}
-          >
-            -
-          </ThemedText>
-        </TouchableOpacity>
-        <View
-          style={{
-            flex: 2,
-            height: 40,
-            borderRadius: 12,
-            alignItems: "center",
-            justifyContent: "center",
-            marginVertical: 6,
-          }}
-        >
-          <ThemedText
-            style={{
-              fontSize: 18,
-              fontWeight: "800",
-              color: theme.text,
-              textAlign: "center",
-              includeFontPadding: false,
-              lineHeight: 20,
-            }}
-          >
-            {value}
-          </ThemedText>
-        </View>
-        <TouchableOpacity
-          style={{
-            width: 30,
-            height: 34,
-            borderRadius: 8,
-            backgroundColor: theme.cardAlt,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onPress={onIncrease}
-        >
-          <ThemedText
-            style={{
-              fontSize: 18,
-              fontWeight: "800",
-              color: theme.main,
-              textAlign: "center",
-              includeFontPadding: false,
-              lineHeight: 18,
-            }}
-          >
-            +
-          </ThemedText>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-export function HourStepperPicker({
+  onChange: (value: string) => void;
+};
+
+export function MinuteStepperPicker({
   label,
   value,
   onIncrease,
@@ -207,11 +81,10 @@ export function HourStepperPicker({
     const cleaned = text.replace(/[^0-9]/g, "").slice(0, 2);
     setInputValue(cleaned);
 
-    // 숫자가 입력될 때마다 바로 반영
     if (cleaned.length > 0) {
       const num = parseInt(cleaned, 10);
       if (!isNaN(num)) {
-        const clamped = Math.min(23, Math.max(0, num));
+        const clamped = Math.min(59, Math.max(0, num));
         onChange(padTwo(clamped));
       }
     }
@@ -220,6 +93,7 @@ export function HourStepperPicker({
       Keyboard.dismiss();
     }
   };
+
   const handleBlur = () => {
     setIsFocused(false);
     const num = parseInt(inputValue, 10);
@@ -227,11 +101,12 @@ export function HourStepperPicker({
       setInputValue(value);
       return;
     }
-    const clamped = Math.min(23, Math.max(0, num));
+    const clamped = Math.min(59, Math.max(0, num));
     const padded = padTwo(clamped);
     setInputValue(padded);
     onChange(padded);
   };
+
   return (
     <View
       style={{
@@ -336,15 +211,13 @@ export function HourStepperPicker({
     </View>
   );
 }
-const TimePickerModal = ({
+const SingleTimePickerModal = ({
   visible,
-  startHour,
-  startMinute,
-  endHour,
-  endMinute,
+  hour,
+  minute,
   onClose,
   onApply,
-}: TimePickerModalProps) => {
+}: SingleTimePickerModalProps) => {
   const { theme } = useTheme();
 
   const styles = StyleSheet.create({
@@ -442,11 +315,10 @@ const TimePickerModal = ({
     },
   });
 
-  const [tempStartHour, setTempStartHour] = useState(startHour);
-  const [tempStartMinute, setTempStartMinute] = useState(startMinute);
-  const [tempEndHour, setTempEndHour] = useState(endHour);
-  const [tempEndMinute, setTempEndMinute] = useState(endMinute);
+  const [tempHour, setTempHour] = useState(hour);
+  const [tempMinute, setTempMinute] = useState(minute);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
   useEffect(() => {
     const showEvent =
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -466,22 +338,16 @@ const TimePickerModal = ({
       hideSub.remove();
     };
   }, []);
+
   useEffect(() => {
     if (visible) {
-      setTempStartHour(startHour);
-      setTempStartMinute(startMinute);
-      setTempEndHour(endHour);
-      setTempEndMinute(endMinute);
+      setTempHour(hour);
+      setTempMinute(minute);
     }
-  }, [visible, startHour, startMinute, endHour, endMinute]);
+  }, [visible, hour, minute]);
 
   const handleApply = () => {
-    onApply({
-      startHour: tempStartHour,
-      startMinute: tempStartMinute,
-      endHour: tempEndHour,
-      endMinute: tempEndMinute,
-    });
+    onApply({ hour: tempHour, minute: tempMinute });
   };
 
   return (
@@ -516,61 +382,26 @@ const TimePickerModal = ({
             <View style={styles.previewBox}>
               <ThemedText style={styles.previewLabel}>선택된 시간</ThemedText>
               <ThemedText style={styles.previewValue}>
-                {formatRangeLabel(
-                  tempStartHour,
-                  tempStartMinute,
-                  tempEndHour,
-                  tempEndMinute,
-                )}
+                {formatLabel(tempHour, tempMinute)}
               </ThemedText>
             </View>
 
             <View style={styles.section}>
-              <ThemedText style={styles.sectionTitle}>시작 시간</ThemedText>
+              <ThemedText style={styles.sectionTitle}>시간</ThemedText>
               <View style={styles.pickerRow}>
                 <HourStepperPicker
                   label="시"
-                  value={tempStartHour}
-                  onIncrease={() =>
-                    setTempStartHour(getNextHour(tempStartHour))
-                  }
-                  onDecrease={() =>
-                    setTempStartHour(getPrevHour(tempStartHour))
-                  }
-                  onChange={setTempStartHour}
+                  value={tempHour}
+                  onIncrease={() => setTempHour(getNextHour(tempHour))}
+                  onDecrease={() => setTempHour(getPrevHour(tempHour))}
+                  onChange={setTempHour}
                 />
-                <StepperPicker
+                <MinuteStepperPicker
                   label="분"
-                  value={tempStartMinute}
-                  onIncrease={() =>
-                    setTempStartMinute(getNextMinute(tempStartMinute))
-                  }
-                  onDecrease={() =>
-                    setTempStartMinute(getPrevMinute(tempStartMinute))
-                  }
-                />
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <ThemedText style={styles.sectionTitle}>종료 시간</ThemedText>
-              <View style={styles.pickerRow}>
-                <HourStepperPicker
-                  label="시"
-                  value={tempEndHour}
-                  onIncrease={() => setTempEndHour(getNextHour(tempEndHour))}
-                  onDecrease={() => setTempEndHour(getPrevHour(tempEndHour))}
-                  onChange={setTempEndHour}
-                />
-                <StepperPicker
-                  label="분"
-                  value={tempEndMinute}
-                  onIncrease={() =>
-                    setTempEndMinute(getNextMinute(tempEndMinute))
-                  }
-                  onDecrease={() =>
-                    setTempEndMinute(getPrevMinute(tempEndMinute))
-                  }
+                  value={tempMinute}
+                  onIncrease={() => setTempMinute(getNextMinute(tempMinute))}
+                  onDecrease={() => setTempMinute(getPrevMinute(tempMinute))}
+                  onChange={setTempMinute}
                 />
               </View>
             </View>
@@ -585,4 +416,4 @@ const TimePickerModal = ({
   );
 };
 
-export default TimePickerModal;
+export default SingleTimePickerModal;

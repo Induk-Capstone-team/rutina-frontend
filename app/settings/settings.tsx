@@ -1,10 +1,12 @@
 import { useAuthViewModel } from "@/hooks/useAuthViewModel";
 import { useTheme, type Theme } from "@/lib/constants/ThemeContext";
 import { authApi } from "@/lib/data/auth_api";
-import * as Application from 'expo-application';
+import { SettingsStorage } from "@/lib/storage";
+import { Ionicons } from "@expo/vector-icons";
+import * as Application from "expo-application";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Bell, HelpCircle, Info, Megaphone, Moon } from "lucide-react-native";
-import { default as React, useCallback, useState } from "react";
+import { default as React, useCallback, useEffect, useState } from "react";
 import {
   Alert,
   SafeAreaView,
@@ -260,6 +262,7 @@ export default function SettingsScreen() {
   const styles = makeStyles(theme);
   const router = useRouter();
   const [notifications, setNotifications] = useState(true);
+  const [hideTodoInSchedule, setHideTodoInSchedule] = useState(false);
   const { mode, setMode } = useTheme();
   const { logout } = useAuthViewModel();
 
@@ -285,7 +288,13 @@ export default function SettingsScreen() {
       loadProfile();
     }, []),
   );
-
+  useEffect(() => {
+    SettingsStorage.getHideTodoInSchedule().then(setHideTodoInSchedule);
+  }, []);
+  const handleToggleHideTodo = (value: boolean) => {
+    setHideTodoInSchedule(value);
+    SettingsStorage.setHideTodoInSchedule(value);
+  };
   const handleLogout = () => {
     Alert.alert("로그아웃", "정말 로그아웃 하시겠습니까?", [
       {
@@ -329,7 +338,6 @@ export default function SettingsScreen() {
           <View style={styles.editProfileBtn}>
             <Text style={styles.editProfileText}>수정</Text>
           </View>
-
         </TouchableOpacity>
 
         {/* General Settings */}
@@ -349,6 +357,19 @@ export default function SettingsScreen() {
             value={mode === "dark"}
             onToggle={(val) => setMode(val ? "dark" : "light")}
           />
+          <SettingItem
+            icon={
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={20}
+                color="#405886"
+              />
+            }
+            title="목록에서 할 일 숨기기"
+            type="switch"
+            value={hideTodoInSchedule}
+            onToggle={handleToggleHideTodo}
+          />
         </View>
 
         {/* Support & Info empty */}
@@ -357,12 +378,14 @@ export default function SettingsScreen() {
           <SettingItem
             icon={<Megaphone size={18} color="#405886" />}
             title="공지사항"
-          onPress={() => router.push("/settings/notice")} />
+            onPress={() => router.push("/settings/notice")}
+          />
           <View style={styles.divider} />
           <SettingItem
             icon={<HelpCircle size={18} color="#405886" />}
             title="고객센터 / 도움말"
-          onPress={() => router.push("/settings/contact")} />
+            onPress={() => router.push("/settings/contact")}
+          />
           <View style={styles.divider} />
           <SettingItem
             icon={<Info size={18} color="#405886" />}

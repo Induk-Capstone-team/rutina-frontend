@@ -45,6 +45,18 @@ export function Header({ activeTab = "left" }: HeaderProps) {
         )}
         <Pressable
           style={styles.settingButton}
+          onPress={() => router.push("/todos")}
+        >
+          <Ionicons
+            name="checkmark-circle-outline"
+            size={26}
+            color={theme.main}
+            style={{ marginLeft: 10 }}
+          />
+        </Pressable>
+
+        <Pressable
+          style={styles.settingButton}
           onPress={() => router.push("/settings/settings")}
         >
           <Ionicons name="settings-outline" size={22} color={theme.main} />

@@ -95,15 +95,9 @@ apiClient.interceptors.response.use(
         }
 
         // 2. 인증 헤더가 없는 publicClient를 사용해 reissue API 호출
-        const response = await publicClient.post(
-          "/api/v1/auth/reissue",
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${refreshToken}`,
-            },
-          },
-        );
+        const response = await publicClient.post("/api/v1/auth/reissue", {
+          refreshToken,
+        });
 
         // 3. 새로 발급받은 토큰 추출 (백엔드 응답 포맷인 accessToken / refreshToken 구조에 맞춰 확인 필요)
         const newAccessToken =

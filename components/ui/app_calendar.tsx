@@ -50,6 +50,7 @@ interface AppCalendarProps {
   current: string;
   markedDates: MarkedDates;
   onDayPress: (day: DateData) => void;
+  onMonthChange?: (month: DateData) => void;
   enableSwipeMonths?: boolean;
   theme?: CalendarTheme;
   style?: StyleProp<ViewStyle>;
@@ -58,14 +59,15 @@ export default function AppCalendar({
   current,
   markedDates,
   onDayPress,
+  onMonthChange,
   enableSwipeMonths = false,
   theme,
   style,
 }: AppCalendarProps) {
   const { theme: appTheme } = useTheme();
   const DEFAULT_CALENDAR_THEME = {
-    backgroundColor: appTheme.cardAlt,
-    calendarBackground: appTheme.cardAlt,
+    backgroundColor: "transparent",
+    calendarBackground: "transparent",
     textSectionTitleColor: appTheme.textFaint,
     selectedDayTextColor: appTheme.text,
     todayTextColor: appTheme.main,
@@ -81,6 +83,7 @@ export default function AppCalendar({
     <Calendar
       current={current}
       onDayPress={onDayPress}
+      onMonthChange={onMonthChange}
       monthFormat={"yyyy년 MM월"}
       markedDates={markedDates}
       enableSwipeMonths={enableSwipeMonths}
